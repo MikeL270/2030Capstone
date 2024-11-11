@@ -156,7 +156,6 @@ def auto_crop(image: np.ndarray, points: list, crop_size: int, num_clusters: int
 
 
 save_folder = "/home/mlance/School/UWYO/Fall_Semester_2024/ProngHornCNN/AnnotationSoftware/annotation_crops/"
-        # check if crop fits on image (Unsure if first two check work as expected as I could not test)
 os.makedirs(save_folder, exist_ok=True)
 
 min_score = .7
