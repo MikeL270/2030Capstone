@@ -3,7 +3,6 @@ import json
 import os
 
 
-from cv2.gapi import crop
 from dotenv import load_dotenv
 import cv2
 import matplotlib.pyplot as plt
@@ -142,8 +141,6 @@ def auto_crop(image: np.ndarray, points: list, crop_size: int, num_clusters: int
         for point in points:
             if ((point[0] >= x_start) and (point[0] <= x_end)) and ((point[1] >= y_start) and (point[1] <= y_end)):
                 count += 1
-            else:
-                crops.remove(crop)
 
         crops.append(crop)
     if count == len(points):
@@ -155,7 +152,7 @@ def auto_crop(image: np.ndarray, points: list, crop_size: int, num_clusters: int
         return crops
 
 
-save_folder = "/home/mlance/School/UWYO/Fall_Semester_2024/ProngHornCNN/AnnotationSoftware/annotation_crops/"
+save_folder = "/home/mlance/School/UWYO/Fall_Semester_2024/ProngHornCNN/pronghorn-census/AnnotationSoftware/annotation_crops/"
 os.makedirs(save_folder, exist_ok=True)
 
 min_score = .7
