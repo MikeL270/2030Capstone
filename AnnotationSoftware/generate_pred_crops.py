@@ -8,7 +8,11 @@ import numpy as np
 from sklearn.cluster import KMeans
 import database
 #---------------------------------------------------------------------------------------------------------------------------#
+# Paths and other environment related things
 database.create_tables()
+
+# Assumes we have a local .env file that stores things like ROOT
+load_dotenv()
 
 images_folder = "/mnt/nfsshare/WGFD LT 2/Pronghorn Vertical Imagery/2024/PR527/"
 research_project = "pronghorn-survey"
@@ -17,8 +21,6 @@ model_name = "10-25-2024-16-50-17"
 image_files = sorted(glob.glob(os.path.join(images_folder, f"*.[jJ][pP][gG]")))
 print(f"{len(image_files)} files found.")
 
-# Assumes we have a local .env file that stores things like ROOT
-load_dotenv()
 root = os.environ.get("ROOT")
 
 output_folder = os.path.join(root, "data")  # type: ignore
