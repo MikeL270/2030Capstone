@@ -1,14 +1,14 @@
 import glob
 import json
 import os
-
-
 from dotenv import load_dotenv
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-
 from sklearn.cluster import KMeans
+import database
+#---------------------------------------------------------------------------------------------------------------------------#
+database.create_tables()
 
 images_folder = "/mnt/nfsshare/WGFD LT 2/Pronghorn Vertical Imagery/2024/PR527/"
 research_project = "pronghorn-survey"
@@ -24,75 +24,17 @@ root = os.environ.get("ROOT")
 output_folder = os.path.join(root, "data")  # type: ignore
 train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
 
-with open(train_json_path) as f:
-    train_json = json.load(f)
+save_folder = "/home/mlance/School/UWYO/Fall_Semester_2024/ProngHornCNN/pronghorn-census/AnnotationSoftware/annotation_crops/"
+os.makedirs(save_folder, exist_ok=True)
 
-training_image_names = [os.path.splitext(image_info['file_name'])[0] for image_info in train_json['images']]
+#---------------------------------------------------------------------------------------------------------------------------#
 
+min_score = .7
+draw_box = True
+crop_size = 2100
 predictions = []
-for image_file in image_files:
-    image_name = os.path.splitext(os.path.basename(image_file))[0]
-    # Get corresponding box file for image
-    box_file = os.path.join(output_folder, f"{image_name}_boxes.npy")
-    if not os.path.exists(box_file):
-        print(f"{image_name} missing box file.")
-        boxes = None
-    else:
-        boxes = np.load(box_file)
-    # Get corresponding score file for image
-    score_file = os.path.join(output_folder, f"{image_name}_scores.npy")
-    if not os.path.exists(score_file):
-        print(f"{image_name} missing score file.")
-        scores = None
-    else:
-        scores = np.load(score_file)
-    # Get corresponding object class file for image
-    label_file = os.path.join(output_folder, f"{image_name}_labels.npy")
-    if not os.path.exists(label_file):
-        print(f"{image_name} missing labels file.")
-        labels = None
-    else:
-        labels = np.load(label_file)
-    
-    image_info = {
-        "image_file": image_file,
-        "boxes": boxes,
-        "scores": scores,
-        "labels": labels
-    }
-    predictions.append(image_info)
 
-pronghorn_class = 2
-count = 0
-for pred in predictions:
-    pred["max_pronghorn_score"] = -1
-    if len(pred['labels']) == 0:
-        continue
-    is_pronghorn = pred['labels'] == pronghorn_class
-    if not np.any(is_pronghorn):
-        continue
-    max_score = np.max(pred['scores'][is_pronghorn])
-    pred['max_pronghorn_score'] = max_score
-    if max_score > .7:
-        count += 1
-print(f"{count} images with pronghorn above min confidence score.")
-
-# Sort images based on max pronghorn score
-predictions = sorted(predictions, key=lambda x: x['max_pronghorn_score'], reverse=True)
-
-def is_in_training_set(image_name, training_names):
-    """ Check if image name is origin of one of the training images. 
-    
-    Args:
-        image_name: name of target image with extension removed
-        training_names: list of all image names in the training set
-        
-    Returns true if image_name is origin of one of the training images.
-    """
-    for training_name in training_names:
-        if image_name in training_name:
-            return True
-    return False
+#---------------------------------------------------------------------------------------------------------------------------#
 
 def auto_crop(image: np.ndarray, points: list, crop_size: int, num_clusters: int) -> list:
     crops = []
@@ -151,14 +93,86 @@ def auto_crop(image: np.ndarray, points: list, crop_size: int, num_clusters: int
         print("Could not generate any crops...")
         return crops
 
+def is_in_training_set(image_name, training_names):
+    """ Check if image name is origin of one of the training images. 
+    
+    Args:
+        image_name: name of target image with extension removed
+        training_names: list of all image names in the training set
+        
+    Returns true if image_name is origin of one of the training images.
+    """
+    for training_name in training_names:
+        if image_name in training_name:
+            return True
+    return False
 
-save_folder = "/home/mlance/School/UWYO/Fall_Semester_2024/ProngHornCNN/pronghorn-census/AnnotationSoftware/annotation_crops/"
-os.makedirs(save_folder, exist_ok=True)
+#---------------------------------------------------------------------------------------------------------------------------#
 
-min_score = .7
-draw_box = True
-crop_size = 2100
+with open(train_json_path) as f:
+    train_json = json.load(f)
 
+training_image_names = [os.path.splitext(image_info['file_name'])[0] for image_info in train_json['images']]
+
+for image_file in image_files:
+    image_name  = os.path.splitext(os.path.basename(image_file))[0]
+    image_data = {
+        "Name" : f"{image_name}",
+        "inTraining" : 0,
+        "reviewed" : 0,
+        "cropsGen" : 0,
+        "Status" : 0 
+    }
+
+for image_file in image_files:
+    image_name = os.path.splitext(os.path.basename(image_file))[0]
+    # Get corresponding box file for image
+    box_file = os.path.join(output_folder, f"{image_name}_boxes.npy")
+    if not os.path.exists(box_file):
+        print(f"{image_name} missing box file.")
+        boxes = None
+    else:
+        boxes = np.load(box_file)
+    # Get corresponding score file for image
+    score_file = os.path.join(output_folder, f"{image_name}_scores.npy")
+    if not os.path.exists(score_file):
+        print(f"{image_name} missing score file.")
+        scores = None
+    else:
+        scores = np.load(score_file)
+    # Get corresponding object class file for image
+    label_file = os.path.join(output_folder, f"{image_name}_labels.npy")
+    if not os.path.exists(label_file):
+        print(f"{image_name} missing labels file.")
+        labels = None
+    else:
+        labels = np.load(label_file)
+    
+    image_info = {
+        "image_file": image_file,
+        "boxes": boxes,
+        "scores": scores,
+        "labels": labels
+    }
+    predictions.append(image_info)
+
+pronghorn_class = 2
+count = 0
+for pred in predictions:
+    pred["max_pronghorn_score"] = -1
+    if len(pred['labels']) == 0:
+        continue
+    is_pronghorn = pred['labels'] == pronghorn_class
+    if not np.any(is_pronghorn):
+        continue
+    max_score = np.max(pred['scores'][is_pronghorn])
+    pred['max_pronghorn_score'] = max_score
+    if max_score > .7:
+        count += 1
+print(f"{count} images with pronghorn above min confidence score.")
+
+# Sort images based on max pronghorn score
+predictions = sorted(predictions, key=lambda x: x['max_pronghorn_score'], reverse=True)
 
 # Crop approved predictions
 for pred_num, pred in enumerate(predictions[800:900]):
@@ -179,7 +193,6 @@ for pred_num, pred in enumerate(predictions[800:900]):
         points.append((x, y))       
 
         cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
-
 
     if points:
         print(f"{image_name} has {len(points)} points!")

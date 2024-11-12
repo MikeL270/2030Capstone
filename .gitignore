@@ -169,3 +169,4 @@ AnnotationSoftware/dev-env/
 AnnotationSoftware/data
 AnnotationSoftware/annotations
 AnnotationSoftware/scratch.py
+AnnotationSoftware/*.db
