@@ -79,7 +79,7 @@ def load_prediction(image_file: str) -> dict:
     }
     return image_info
 
-def popualte_image_table():
+def populate_image_table():
     base.create_tables()
     image_names = load_image_files()
     for image_name in image_names:
@@ -245,5 +245,5 @@ def crop_reviewed_predictions(approved_predictions: list, training_image_names: 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 if __name__ == "__main__":
-    popualte_image_table()
+    populate_image_table()
     base.close()
