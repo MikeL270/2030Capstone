@@ -112,7 +112,8 @@ def populate_initial_tables():
             base.insert(
                 table = "Predictions",
                 columns = ["ImageId, BoxTX, BoxTy, BoxBx, BoxBy, Score, Label"],
-                values = (imageId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label))
+                values = (imageId, int(box[0]), int(box[1]), int(box[2]), int(
+box[3]), float(score), int(label))
             )
 
     base.commit()
@@ -249,6 +250,7 @@ def crop_reviewed_predictions(approved_predictions: list, training_image_names: 
 
 def approve_annotations(batch_size: int, crop_buffer:int, draw_box: bool):
     # load image names and predictions from database in batches of batch_size
+    print(f"The system will now show {batch_size} images and then {crop_buffer}x{crop_buffer} crops containing each prediction made by the model. When shown the crops, press 1 if its a prong horn or 2 if it is not.")
     query = """
         SELECT P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, I.Name, I.InTraining
         FROM Predictions P
@@ -258,7 +260,7 @@ def approve_annotations(batch_size: int, crop_buffer:int, draw_box: bool):
             FROM Images
             WHERE Reviewed = 0  
             LIMIT ?
-        ) AND P.Label = ?
+        ) AND P.Label = ? AND P.Score > 0.7
         """
     rows = base.query(query, (batch_size, pronghorn_class))
     predictions = {}
@@ -288,18 +290,62 @@ def approve_annotations(batch_size: int, crop_buffer:int, draw_box: bool):
         crops = []
         scores = []
         
+        
         for box, score, label in zip(pred['boxes'], pred['scores'], pred['labels']):
+            approved_boxes = []
             if (score < min_score) or (label != pronghorn_class):
                 continue
             if draw_box:
-                cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
+                cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 2)
             ymin = np.max([box[1] - crop_buffer, 0])
             ymax = np.min([box[3] + crop_buffer, image.shape[0]])
             xmin = np.max([box[0] - crop_buffer, 0])
             xmax = np.min([box[2] + crop_buffer, image.shape[1]])
             crops.append(image[ymin:ymax, xmin:xmax].copy())
             scores.append(score)
+        
+            if len(crops) == 0:
+                continue
+            plt.figure()
+            plt.imshow(image)
+            plt.title(f"{image_name}")
+            plt.show(block=False)
 
+            for crop, score in zip(crops, scores):
+                crop_fig = plt.figure()
+                plt.imshow(crop)
+                plt.title(f"Score: {score:.2f}")
+                plt.show(block=False)
+                usr_input = int(input("if this is a pronghorn press 1, else press 2: "))
+                if usr_input == 1:
+                    print("Prediction Approved, Generating Crop!")
+                    approved_boxes.append(box)
+                elif usr_input == 2:
+                    print("Prediction Denied, Showing next Crop!")
+                plt.close(crop_fig) 
+            
+            plt.close()
+            query = """
+                UPDATE Images
+                SET Reviewed = ?
+                WHERE Name = ?
+            """
+            base.query(query, (1, f"{image_name}"))
+            base.commit()
+            if len(approved_boxes) >= 1:
+                points = []
+                for box in approved_boxes:
+                    x = np.mean([box[0], box[2]])
+                    y = np.mean([box[1], box[3]])
+                    points.append((x, y))
+
+                annotated_crops = auto_crop(image, points, 2100, 1)
+
+                for crop in annotated_crops:
+                    plt.figure()
+                    plt.imshow(crop)
+                    plt.title("Generated Crop!")
+                    plt.show()
  #---------------------------------------------------------------------------------------------------------------------------#
 if __name__ == "__main__":
     #populate_initial_tables()
