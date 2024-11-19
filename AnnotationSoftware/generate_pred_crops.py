@@ -3,6 +3,7 @@ import json
 import os
 from dotenv import load_dotenv
 import cv2
+from matplotlib import image
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import KMeans
@@ -42,10 +43,11 @@ def load_image_files() -> list:
     return image_files
 
 def load_training_image_names() -> list:
+    prefix = len("high-altitude-pronghorn-survey-")
+    suffix = len("_crop_xx")
     with open(train_json_path) as f:
         train_json = json.load(f)
-
-    return list(os.path.splitext(image_info['file_name'])[0] for image_info in train_json['images'])
+    return list(os.path.splitext(image_info['file_name'])[0][prefix:-suffix] for image_info in train_json['images'])
 
 def load_prediction(image_file: str) -> dict:
     image_name = os.path.splitext(os.path.basename(image_file))[0]
@@ -72,34 +74,12 @@ def load_prediction(image_file: str) -> dict:
         labels = np.load(label_file)
     
     image_info = {
-        "image_file": image_file,
+        "image_name": image_name,
         "boxes": boxes,
         "scores": scores,
         "labels": labels
     }
     return image_info
-
-def populate_image_table():
-    base.create_tables()
-    image_names = load_image_files()
-    for image_name in image_names:
-        prediction = load_prediction(image_name)
-        base.insert(
-            table = "Images",
-            columns = ["Path", "InTraining", "Reviewed", "CropsGen, Status"],
-            values = (image_name, 0, 0, 0, 0)
-        )
-        imageId = base._lastrowid()
-        
-        for box, score, label in zip(prediction['boxes'], prediction['scores'], prediction['labels']):
-            
-            base.insert(
-                table = "Predictions",
-                columns = ["ImageId, BoxTX, BoxTy, BoxBx, BoxBy, Score, Label"],
-                values = (imageId, box[0], box[1], box[2], box[3], score, label)
-            )
-
-    base.commit()
 
 def is_in_training_set(image_name, training_names):
     """ Check if image name is origin of one of the training images. 
@@ -110,10 +90,32 @@ def is_in_training_set(image_name, training_names):
         
     Returns true if image_name is origin of one of the training images.
     """
-    for training_name in training_names:
-        if image_name in training_name:
-            return True
-    return False
+    return image_name in training_names
+
+def populate_initial_tables():
+    base.create_tables()
+    image_names = load_image_files()
+    training_image_names = set(load_training_image_names())
+    for image_name in image_names:
+        prediction = load_prediction(image_name)
+        check_image_name = os.path.splitext(os.path.basename(image_name))[0]
+        in_training = 1 if (is_in_training_set(check_image_name, training_image_names)) else 0
+        base.insert(
+            table = "Images",
+            columns = ["Name", "InTraining", "Reviewed", "CropsGen", "Status"],
+            values = (prediction["image_name"], in_training, 0, 0, 0)
+        )
+        imageId = base._lastrowid()
+        
+        for box, score, label in zip(prediction['boxes'], prediction['scores'], prediction['labels']):
+            
+            base.insert(
+                table = "Predictions",
+                columns = ["ImageId, BoxTX, BoxTy, BoxBx, BoxBy, Score, Label"],
+                values = (imageId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label))
+            )
+
+    base.commit()
 
 def sort_by_class(predictions: list, pred_class: int) -> list:
     count = 0
@@ -205,10 +207,11 @@ def auto_crop(image: np.ndarray, points: list, crop_size: int, num_clusters: int
         return crops
 
 def crop_reviewed_predictions(approved_predictions: list, training_image_names: list):
-    print("running")
+    """ In desperate need of rewrite
+    
+    """
     # Crop approved predictions
     for pred_num, pred in enumerate(approved_predictions[800:900]):
-        print(pred_num)
         image_name = os.path.splitext(os.path.basename(pred['image_file']))[0]
         in_training = is_in_training_set(image_name, training_image_names)
         if in_training:
@@ -232,6 +235,7 @@ def crop_reviewed_predictions(approved_predictions: list, training_image_names: 
             print(f"{image_name} has {len(points)} points!")
             crops = auto_crop(image, points, 2100, 1)
         
+        if len(crops) == 0:
             if not crops:
                 print(f"no valid crops for {image_name}")
                 continue
@@ -243,7 +247,61 @@ def crop_reviewed_predictions(approved_predictions: list, training_image_names: 
                         plt.title(f"{image_name}_crop_{count}")
                         plt.show()
 
-#---------------------------------------------------------------------------------------------------------------------------#
+def approve_annotations(batch_size: int, crop_buffer:int, draw_box: bool):
+    # load image names and predictions from database in batches of batch_size
+    query = """
+        SELECT P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, I.Name, I.InTraining
+        FROM Predictions P
+        JOIN Images I On P.ImageId = I.ImageId
+        WHERE I.Imageid IN (
+            SELECT ImageId
+            FROM Images
+            WHERE Reviewed = 0  
+            LIMIT ?
+        ) AND P.Label = ?
+        """
+    rows = base.query(query, (batch_size, pronghorn_class))
+    predictions = {}
+
+    for row in rows:
+        box = [row[0], row[1], row[2], row[3]]
+        score = row[4]
+        label = row[5]
+        image_name = row[6]
+        in_training = row[7]
+        if image_name not in predictions:
+            predictions[image_name] = {
+                "in_training": in_training,
+                "boxes": [],
+                "scores": [],
+                "labels": [],
+            }
+        predictions[image_name]["boxes"].append(box)
+        predictions[image_name]["scores"].append(score)
+        predictions[image_name]["labels"].append(label)
+
+    for pred_num, (image_name, pred) in enumerate(predictions.items()):
+        image_path = os.path.join(f"{images_folder}", f"{image_name}.JPG")
+
+        image = plt.imread(image_path).copy()
+
+        crops = []
+        scores = []
+        
+        for box, score, label in zip(pred['boxes'], pred['scores'], pred['labels']):
+            if (score < min_score) or (label != pronghorn_class):
+                continue
+            if draw_box:
+                cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
+            ymin = np.max([box[1] - crop_buffer, 0])
+            ymax = np.min([box[3] + crop_buffer, image.shape[0]])
+            xmin = np.max([box[0] - crop_buffer, 0])
+            xmax = np.min([box[2] + crop_buffer, image.shape[1]])
+            crops.append(image[ymin:ymax, xmin:xmax].copy())
+            scores.append(score)
+
+ #---------------------------------------------------------------------------------------------------------------------------#
 if __name__ == "__main__":
-    populate_image_table()
+    #populate_initial_tables()
+    approve_annotations(50, 100, True) 
     base.close()

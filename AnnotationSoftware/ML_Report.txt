@@ -15,3 +15,7 @@ Moving forward, I need to create methods for reviewing predictions, which is the
 
 **Maybe Important:**
 I changed the database schema but have yet to update it in the spreadsheet. The change is significant, but since it will likely change more (hopefully) tomorrow, I have decided to wait until then to update the spreadsheet. The predictions table has been changed to store the values instead of the paths. You see, I can kind of be dumb and not realize it until I am two hours into writing an integration. This change reduces I/O operations and makes SO MUCH MORE SENSE. I also used ChatGPT as a resource to create the database integration, as I primarily understand the finer points of polymorphism (pure methods and abstract classes) from C++. I am mentioning this for transparency.
+
+11/18/24:
+
+Note that database is surprisingly quite slow, even when local hosted. Got some optimization suggestions from CHatGPT, they helped alot. I think the database is still a smart choice since it will allow us to track what image has already been looked at. Admittedly the database integration is not very useful as it takes 95 lines of code to avoid changing 3 or 4 to switch backends. But the code now exists and works, so it would be even stupider to spend time removing it. I have learned a lot of SQL from this which makes me happy. 

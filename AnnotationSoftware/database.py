@@ -1,8 +1,8 @@
 # Abstraction Module to make it easy to change database backend 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: November 17, 2024
-# Disclosure: ChatGPT was used to assist with the finer points of POOP and typing
+# Updated: November 18, 2024
+# Disclosure: ChatGPT was used to assist with the finer points of POOP, typing, and SQL
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -18,11 +18,11 @@ class Database(ABC): # Abstract class for all database types
 
     def create_tables(self):
         if self._conn == None:
-            self.connect()
-
+            self.connect() 
+        
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Images ( 
                         ImageId INTEGER PRIMARY KEY,
-                        Path TEXT NOT NULL,
+                        Name TEXT NOT NULL,
                         InTraining INTEGER NOT NULL CHECK (InTraining IN (0, 1)),
                         Reviewed INTEGER NOT NULL CHECK (Reviewed IN (0, 1)),
                         CropsGen INTEGER,
@@ -36,8 +36,8 @@ class Database(ABC): # Abstract class for all database types
                         BoxTy INTEGER,
                         BoxBx INTEGER,
                         BoxBy INTEGER, 
-                        Score REAL,
-                        Label TEXT,
+                        Score FLOAT,
+                        Label INTEGER,
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
                     )''')
 
@@ -51,6 +51,10 @@ class Database(ABC): # Abstract class for all database types
                         CropBy INTEGER,
                         FOREIGN KEY (PredId) REFERENCES Predictions (PredId)
                     )''')
+
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_predid ON Crops (PredId);')
         self._conn.commit()
 
      
@@ -63,7 +67,7 @@ class Database(ABC): # Abstract class for all database types
     def commit(self):
         self._conn.commit()
 
-    def query(self, query, params=None):
+    def query(self, query: str, params=None):
         self._cursor.execute(query, params or ())
         return self._cursor.fetchall()
 
@@ -73,7 +77,6 @@ class Database(ABC): # Abstract class for all database types
     def close(self):
         if self._conn:
             self._conn.close
-
 
 class SQLite(Database):
     import sqlite3
@@ -85,4 +88,8 @@ class SQLite(Database):
     def connect(self):
         self._conn = self.sqlite3.connect(self._db_name)
         self._cursor = self._conn.cursor()
+        self._cursor.execute("PRAGMA journal_mode = WAL;")
+        self._cursor.execute("PRAGMA cache_size = -20000;")
+        self._cursor.execute("PRAGMA synchronous = NORMAL;")
+        self._cursor.execute("PRAGMA temp_store = MEMORY;")
 
