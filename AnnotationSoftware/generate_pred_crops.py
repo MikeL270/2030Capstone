@@ -16,8 +16,8 @@ base.connect()
 # Assumes we have a local .env file that stores things like ROOT
 load_dotenv()
 
-images_folder = "/mnt/nfsshare/WGFD LT 2/Pronghorn Vertical Imagery/2024/PR527/"
-research_project = "pronghorn-survey"
+images_folder = os.environ.get("IMAGE_FOLDER") 
+research_project = os.environ.get("RESEARCH_PROJECT")
 model_name = "10-25-2024-16-50-17"
 
 root = os.environ.get("ROOT")
@@ -25,8 +25,8 @@ root = os.environ.get("ROOT")
 output_folder = os.path.join(root, "data")  # type: ignore
 train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
 
-save_folder = "/home/mlance/School/UWYO/Fall_Semester_2024/ProngHornCNN/pronghorn-census/AnnotationSoftware/annotation_crops/"
-os.makedirs(save_folder, exist_ok=True)
+save_folder = os.environ.get("SAVE_FOLDER")
+os.makedirs(save_folder, exist_ok=True) # type: ignore
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -38,7 +38,7 @@ pronghorn_class = 2
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def load_image_files() -> list:
-    image_files = sorted(glob.glob(os.path.join(images_folder, f"*.[jJ][pP][gG]")))
+    image_files = sorted(glob.glob(os.path.join(images_folder, f"*.[jJ][pP][gG]"))) # type: ignore
     print(f"{len(image_files)} files found.")
     return image_files
 
