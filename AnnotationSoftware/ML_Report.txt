@@ -1,5 +1,6 @@
 
 11/11/24:
+
 Today, I finally got around to getting my code on the GitHub repo. As it stands, the crop generation seems to be working 100% as far as I can tell. The next steps include approving predictions before crops are generated. I wonder if it would make sense to implement the database before we start approving crops so I only have to write that logic once. I will create a spreadsheet database schema and include it in my next commit.
 
 11/17/24:
@@ -18,4 +19,9 @@ I changed the database schema but have yet to update it in the spreadsheet. The 
 
 11/18/24:
 
-Note that database is surprisingly quite slow, even when local hosted. Got some optimization suggestions from CHatGPT, they helped alot. I think the database is still a smart choice since it will allow us to track what image has already been looked at. Admittedly the database integration is not very useful as it takes 95 lines of code to avoid changing 3 or 4 to switch backends. But the code now exists and works, so it would be even stupider to spend time removing it. I have learned a lot of SQL from this which makes me happy. 
+Note that database is surprisingly quite slow, even when local hosted. Got some optimization suggestions from CHatGPT, they helped alot. I think the database is still a smart choice since it will allow us to track what image has already been looked at. Admittedly the database integration is not very useful as it takes 95 lines of code to avoid changing 3 or 4 to switch backends. But the code now exists and works, so it would be even stupider to spend time removing it. I have learned a lot of SQL from this which makes me happy.
+
+11/21/24:
+
+I got crop approval working, so the crop information is stored in the database and thus can be queried. There is still a lot of work to do. There is the labelbox integration, being able to toggle the prediction's box and ensure that none of them are saved over the image. A feature to redefine the annotation shape would be nice, same with a feature to change the class label to something like a "hard negative." These features should be included in the webapp version, otherwise time will be wasted developing the same feature twice. I am pleased with the rate we are progressing.
+

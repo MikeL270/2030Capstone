@@ -25,8 +25,7 @@ class Database(ABC): # Abstract class for all database types
                         Name TEXT NOT NULL,
                         InTraining INTEGER NOT NULL CHECK (InTraining IN (0, 1)),
                         Reviewed INTEGER NOT NULL CHECK (Reviewed IN (0, 1)),
-                        CropsGen INTEGER,
-                        Status INTEGER
+                        CropsGen INTEGER
                     )''')
 
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Predictions (
@@ -56,13 +55,6 @@ class Database(ABC): # Abstract class for all database types
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_predid ON Crops (PredId);')
         self._conn.commit()
-
-     
-    def insert(self, table:str, columns: list, values: tuple):
-        column_names = ", ".join(columns)
-        placeholders = ", ".join(["?"] * len(values))
-        query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
-        self._cursor.execute(query, values)
 
     def commit(self):
         self._conn.commit()
