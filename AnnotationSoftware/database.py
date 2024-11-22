@@ -1,7 +1,7 @@
 # Abstraction Module to make it easy to change database backend 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: November 18, 2024
+# Updated: November 21, 2024
 # Disclosure: ChatGPT was used to assist with the finer points of POOP, typing, and SQL
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -63,8 +63,11 @@ class Database(ABC): # Abstract class for all database types
         self._cursor.execute(query, params or ())
         return self._cursor.fetchall()
 
-    def _lastrowid(self) -> int:
+    def lastrowid(self) -> int:
         return self._cursor.lastrowid
+
+    def rollback(self):
+        self._conn.rollback()
 
     def close(self):
         if self._conn:
