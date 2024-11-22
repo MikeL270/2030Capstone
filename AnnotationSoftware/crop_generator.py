@@ -1,7 +1,6 @@
 import glob
 import json
 import os
-from re import L
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,7 +9,6 @@ import sys
 import signal
 from sklearn.cluster import KMeans
 from dotenv import load_dotenv
-from typing import Union
 #---------------------------------------------------------------------------------------------------------------------------#
 # TODO: Move this into main.py and modify dependent functions to take them as arguments
 # Paths and other environment related things 
