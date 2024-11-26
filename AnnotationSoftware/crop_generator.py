@@ -313,11 +313,10 @@ def prompt_user(crop_indices: list) -> bool:
     return len(approved_preds) > 0
     
 
-def show_predictions_matplot(image: np.ndarray, prediction: dict, desired_class: int, min_confidence: float, draw_box: bool):
+def show_predictions_matplot(image: np.ndarray, prediction: dict, dimensions: list, desired_class: int, min_confidence: float, draw_box: bool):
     crop_buffer = 100
     crops = []
     scores = []
-    print(prediction)
     for (box, score, label) in zip(prediction['boxes'], prediction['scores'], prediction['labels']):
         if (score < min_confidence) or (label != desired_class):
             continue
@@ -328,26 +327,31 @@ def show_predictions_matplot(image: np.ndarray, prediction: dict, desired_class:
         crops.append(image[ymin:ymax, xmin:xmax].copy())
         scores.append(score)
     
-    if len(crops) > 0: # Skip if there are no crops 
+    if len(crops) > 0:
         fig, axs = plt.subplots(1, len(crops))
         if len(crops) == 1:
             axs = [axs] 
 
-    crop_indices = []
-    for crop_num, (ax, crop, score) in enumerate(zip(axs, crops, scores)):
-        crop_indices.append(crop_num + 1)
-        ax.imshow(crop)
-        ax.set_title(f"Crop Number: {crop_num + 1}")
-        ax.set_axis_off()
+        crop_indices = []
+        for crop_num, (ax, crop, score) in enumerate(zip(axs, crops, scores)):
+            crop_indices.append(crop_num + 1)
+            ax.imshow(crop)
+            ax.set_title(f"Crop Number: {crop_num + 1}")
+            ax.set_axis_off()
 
-    plt.show(block=False)
-    final_crop = prompt_user(crop_indices)
-    plt.close()
-    if final_crop:
-        plt.figure()
-        plt.imshow(image)
-        plt.title("testing crop")
-        plt.show()
+        plt.show(block=False)
+        final_crop = prompt_user(crop_indices)
+        plt.close()
+        if final_crop:
+            query = """
+                INSERT INTO Crops (PredId, InLabelBox, CropTx, CropTy, CropBx, CropBy) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            """
+            base.query(query, (prediction['pred_id'], 0, dimensions[0][0], dimensions[0][1], dimensions[0][2], dimensions[0][3]))
+            plt.figure()
+            plt.imshow(image)
+            plt.title("testing crop")
+            plt.show()
 
 def approve_annotations(predictions: dict, desired_class: int, crop_size: int, min_confidence: float, draw_box: bool, image_backend: str):
     """ Present the user with cropped images and their predictions for validation 
@@ -359,7 +363,7 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, m
         image_crops = auto_crop(image, pred, crop_size, 1)
         for crop in image_crops["crops"]:
             if image_backend in image_backends:
-                image_backends[image_backend](crop, image_crops["predictions"], desired_class, min_confidence, draw_box) #type: ignore
+                image_backends[image_backend](crop, image_crops["predictions"], image_crops["dimensions"], desired_class, min_confidence, draw_box) #type: ignore
             else:
                 raise Exception("Image backend not supported (Did you write an integration? Is it in the backends dict?)")
             
