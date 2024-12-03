@@ -9,8 +9,8 @@ create_db = False
 draw_box = True
 crop_size = 2100
 pronghorn_class = 2
-min_confidence = 0.7
-batch_size = 100
+min_confidence = 0.8
+batch_size = 1000
 image_backend = "matplot"
 
 #flags to modify default values
@@ -29,7 +29,7 @@ if create_db:
 
 while True:
     # Load a dictionary of model predictions into memory 
-    predictions = crop_generator.get_pred_and_images(batch_size=batch_size, desired_class=pronghorn_class, min_confidence=0.7)
+    predictions = crop_generator.get_pred_and_images(batch_size=batch_size, desired_class=pronghorn_class, min_confidence=min_confidence)
     # Approve crops 
     crop_generator.approve_annotations(predictions=predictions, desired_class=pronghorn_class, crop_size=2100, min_confidence=min_confidence, draw_box = True, image_backend=image_backend) 
 

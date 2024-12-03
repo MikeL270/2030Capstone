@@ -30,6 +30,7 @@ class Database(ABC): # Abstract class for all database types
 
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Predictions (
                         PredId INTEGER PRIMARY KEY,
+                        ModelId INTEGER,
                         ImageId INTEGER,
                         BoxTx INTEGER,
                         BoxTy INTEGER,
@@ -37,7 +38,8 @@ class Database(ABC): # Abstract class for all database types
                         BoxBy INTEGER, 
                         Score FLOAT,
                         Label INTEGER,
-                        FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
+                        FOREIGN KEY (ImageId) REFERENCES Images (ImageId),
+                        FOREIGN KEY (ModelId) REFERENCES Models (ModelId)
                     )''')
 
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Crops (
@@ -48,7 +50,13 @@ class Database(ABC): # Abstract class for all database types
                         CropTy INTEGER,
                         CropBx INTEGER,
                         CropBy INTEGER,
+                        Created DATE,
                         FOREIGN KEY (PredId) REFERENCES Predictions (PredId)
+                    )''')
+
+        self._cursor.execute('''CREATE TABLE IF NOT EXISTS Models (
+                        ModelId INTEGER PRIMARY KEY,
+                        ModelName STRING
                     )''')
 
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
