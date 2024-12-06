@@ -1,8 +1,7 @@
 # Abstraction Module to make it easy to change database backend 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: November 21, 2024
-# Disclosure: ChatGPT was used to assist with the finer points of POOP, typing, and SQL
+# Updated: December 5, 2024
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -25,6 +24,7 @@ class Database(ABC): # Abstract class for all database types
                         Name TEXT NOT NULL,
                         InTraining INTEGER NOT NULL CHECK (InTraining IN (0, 1)),
                         Reviewed INTEGER NOT NULL CHECK (Reviewed IN (0, 1)),
+                        Error INTEGER NOT NULL CHECK (ERROR IN (0, 1)),
                         CropsGen INTEGER
                     )''')
 
@@ -44,6 +44,7 @@ class Database(ABC): # Abstract class for all database types
 
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Crops (
                         CropId INTEGER PRIMARY KEY,
+                        CropName,
                         PredId INTEGER,
                         InLabelBox INTEGER NOT NULL CHECK (InLabelBox IN (0, 1)),
                         CropTx INTEGER,
