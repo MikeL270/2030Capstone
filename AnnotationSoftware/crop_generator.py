@@ -276,7 +276,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         crops[crop_name]["dimensions"] = [x_start, y_start, x_end, y_end] 
 
     if np.all(points_in_crop >= 1):
-        
+        print(f"Finished in {num_clusters} clusters") 
         return crops
 
     elif num_clusters + 1 < len(points):
@@ -328,19 +328,20 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
 def prompt_user(crop_indices: list) -> list[int]:
     approved_preds = []
     while True: # Show number associated with crop indexes in plot
-        
         user_input = input("Please enter the number associated with each crop that contains a pronghorn (ex: 1, 2, etc...), if none of them do enter 0 (-999 to quit): ").split(' ')
-              
-        for num in user_input:  
-            if int(num) in set(crop_indices):
-                approved_preds.append((int(num) - 1))
-            elif int(num) == 0:
-                break
-            elif int(num) == -999:
-                base.commit()
-                base.close()
-                sys.exit()
-        
+        for num in user_input:
+            try:
+                if int(num) in set(crop_indices):
+                    approved_preds.append((int(num) - 1))
+                elif int(num) == 0:
+                    break
+                elif int(num) == -999:
+                    base.commit()
+                    base.close()
+                    sys.exit()
+            except:
+                print("something went wrong, you suck")
+                continue
         break
     return approved_preds
 
@@ -409,8 +410,11 @@ def approve_annotations(predictions: dict, crop_size: int, draw_box: bool, image
              """
             base.query(query, (1, f"{image_name}"))
             base.commit()
-            #if len(approved_predictions) > 0:
-
+            if len(approved_predictions) > 0:
+                plt.figure()
+                plt.imshow(crop["crop"])
+                plt.title("Testing Crop")
+                plt.show()
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
