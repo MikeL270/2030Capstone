@@ -170,3 +170,4 @@ AnnotationSoftware/data
 AnnotationSoftware/annotations
 AnnotationSoftware/scratch.py
 AnnotationSoftware/*.db
+AnnotationSoftware/annotated_crops

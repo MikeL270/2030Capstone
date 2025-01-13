@@ -24,14 +24,13 @@ research_project = os.environ.get("RESEARCH_PROJECT")
 model_name = "10-25-2024-16-50-17"
 
 root = os.environ.get("ROOT")
-
 output_folder = os.path.join(root, "data")  # type: ignore
-train_json_path = os.path.join(root, "annbasic input validationotations", research_project, "train.json")  # type: ignore
-
-save_folder = os.environ.get("SAVE_FOLDER")
+train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
+current_date = datetime.date.today().strftime('%Y-%m-%d')
+save_folder = f'{os.environ.get("SAVE_FOLDER")}{current_date}'
 os.makedirs(save_folder, exist_ok=True) # type: ignore
 
-current_date = datetime.date.today().strftime('%Y-%m-%d')
+
 
 #---------------------------------------------------------------------------------------------------------------------------#
 def load_image_files() -> list:
@@ -67,21 +66,21 @@ def load_prediction(image_file: str) -> dict[str, str]:
     """
     image_name = os.path.splitext(os.path.basename(image_file))[0]
     # Get corresponding box file for image
-    box_file = os.path.join(output_folder, f"{image_name}_boxes.npy")
+    box_file = os.path.join(output_folder, f"{image_name}_boxes.npy") #type: ignore
     if not os.path.exists(box_file):
         print(f"{image_name} missing box file.")
         boxes = None
     else:
         boxes = np.load(box_file)
     # Get corresponding score file for image
-    score_file = os.path.join(output_folder, f"{image_name}_scores.npy")
+    score_file = os.path.join(output_folder, f"{image_name}_scores.npy") #type: ignore
     if not os.path.exists(score_file):
         print(f"{image_name} missing score file.")
         scores = None
     else:
         scores = np.load(score_file)
     # Get corresponding object class file for image
-    label_file = os.path.join(output_folder, f"{image_name}_labels.npy")
+    label_file = os.path.join(output_folder, f"{image_name}_labels.npy") #type: ignore
     if not os.path.exists(label_file):
         print(f"{image_name} missing labels file.")
         labels = None
@@ -181,7 +180,7 @@ def populate_initial_tables():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: int, num_clusters: int) -> dict[str, dict[str, list]]:
+def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: int, num_clusters: int) -> dict[str, dict[str, np.ndarray]]:
     """ Automatically create crops of a given size containing all images with approved annotations 
     
     Args:
@@ -324,10 +323,10 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
 
 def prompt_user(crop_indices: list) -> list[int]:
     approved_preds = []
-    if os.name == "posix":
-        os.system("clear")
-    else:
-        os.system("cls")
+    #if os.name == "posix":
+        #os.system("clear")
+    #else:
+        #os.system("cls")
     while True: # Show number associated with crop indexes in plot
         user_input = input("Please enter the number associated with each crop that contains a pronghorn (ex: 1, 2, etc...), if none of them do enter 0 (-999 to quit): ").split(' ')
         for num in user_input:
@@ -411,10 +410,6 @@ def approve_annotations(predictions: dict, crop_size: int, draw_box: bool, image
             base.query(query, (1, f"{image_name}"))
             base.commit()
             if len(approved_predictions) > 0:
-                plt.figure()
-                plt.imshow(crop["crop"])
-                plt.title(f"{crop_name}")
-                plt.show()
                 query = """
                     INSERT INTO Crops (PredId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -422,7 +417,7 @@ def approve_annotations(predictions: dict, crop_size: int, draw_box: bool, image
                 base.query(query, (pred["pred_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date))
                 base.commit()
                 # Save with opencv without compression, highest quality score
-
+                cv2.imwrite(f'{save_folder}/{crop_name}.jpg', cv2.cvtColor(crop["crop"], cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def interrupt_handler(signum, frame):
