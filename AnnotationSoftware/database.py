@@ -1,11 +1,12 @@
 # Abstraction Module to make it easy to change database backend 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: December 5, 2024
+# Updated: December 12, 2024
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
 from typing import Any
+# Add user table and mutex to images table
 
 class Database(ABC): # Abstract class for all database types
     _conn: Any
@@ -18,7 +19,7 @@ class Database(ABC): # Abstract class for all database types
     def create_tables(self):
         if self._conn == None:
             self.connect() 
-        
+        # Check for informantion_schema table
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Images ( 
                         ImageId INTEGER PRIMARY KEY,
                         Name TEXT NOT NULL,
@@ -44,8 +45,8 @@ class Database(ABC): # Abstract class for all database types
 
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Crops (
                         CropId INTEGER PRIMARY KEY,
-                        CropName,
                         PredId INTEGER,
+                        CropName TEXT NOT NULL,
                         InLabelBox INTEGER NOT NULL CHECK (InLabelBox IN (0, 1)),
                         CropTx INTEGER,
                         CropTy INTEGER,
@@ -53,6 +54,18 @@ class Database(ABC): # Abstract class for all database types
                         CropBy INTEGER,
                         Created DATE,
                         FOREIGN KEY (PredId) REFERENCES Predictions (PredId)
+                    )''')
+
+        self._cursor.execute('''CREATE TABLE IF NOT EXISTS CropPredictions (
+                        CropPredId INTEGER PRIMARY KEY,
+                        CropId INTEGER,
+                        PredId INTEGER,
+                        BoxTx INTEGER,
+                        BoxTy INTEGER,
+                        BoxBx INTEGER,
+                        BoxBy INTEGER,
+                        FOREIGN KEY (CropId) REFERENCES Crops (CropId),
+                        Foreign Key (PredId) REFERENCES Predictions (PredId)
                     )''')
 
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Models (

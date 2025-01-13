@@ -30,6 +30,7 @@ if create_db:
 while True:
     # Load a dictionary of model predictions into memory 
     predictions = crop_generator.get_pred_and_images(batch_size=batch_size, desired_class=pronghorn_class, min_confidence=min_confidence)
+    batch_size += batch_size
     # Approve crops 
-    crop_generator.approve_annotations(predictions=predictions, crop_size=2100, draw_box = True, image_backend=image_backend) 
+    crop_generator.approve_annotations(predictions=predictions, crop_size=2100, draw_box = False, image_backend=image_backend) 
 

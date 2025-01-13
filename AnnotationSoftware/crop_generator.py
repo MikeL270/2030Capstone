@@ -26,7 +26,7 @@ model_name = "10-25-2024-16-50-17"
 root = os.environ.get("ROOT")
 
 output_folder = os.path.join(root, "data")  # type: ignore
-train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
+train_json_path = os.path.join(root, "annbasic input validationotations", research_project, "train.json")  # type: ignore
 
 save_folder = os.environ.get("SAVE_FOLDER")
 os.makedirs(save_folder, exist_ok=True) # type: ignore
@@ -57,7 +57,6 @@ def load_training_image_names() -> list:
     return list(os.path.splitext(image_info['file_name'])[0][prefix:-suffix] for image_info in train_json['images'])
 
 #---------------------------------------------------------------------------------------------------------------------------#
-
 def load_prediction(image_file: str) -> dict[str, str]:
     """ Load model predictions for a given image name
 
@@ -155,10 +154,7 @@ def populate_initial_tables():
         VALUES (?)
     """
     base.query(query, (model_name,))
-
-    query = """
-        SELECT 
-    """
+    modelId = base.lastrowid()
 
     for image_name in image_names:
         # add max score to image table, insert score based on prediction values
@@ -169,6 +165,7 @@ def populate_initial_tables():
             INSERT INTO Images (Name, InTraining, Reviewed, Error, CropsGen)
             VALUES (?, ?, ?, ?, ?)
         """
+        
         base.query(query, (prediction["image_name"], in_training, 0, 0, 0))
         
         imageId = base.lastrowid()
@@ -176,10 +173,10 @@ def populate_initial_tables():
         for box, score, label in zip(prediction['boxes'], prediction['scores'], prediction['labels']):
             
             query = """
-                INSERT INTO Predictions (ImageId, BoxTx, BoxTy, BoxBx, BoxBy, Score, Label)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO Predictions (ImageId, ModelId, BoxTx, BoxTy, BoxBx, BoxBy, Score, Label)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
-            base.query(query, (imageId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label)))
+            base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label)))
     base.commit()
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -189,7 +186,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
     
     Args:
         image: source image that predictions were made from
-        points: List of coordinate points of the approximate center for each prediction associated with the image
+        points: List of coordinatTY), 85])e points of the approximate center for each prediction associated with the image
         crop_size: dimension for crop (note only square crops are currently supported)
         num_clusters: number of centers for kmeans to determine clusters 
         
@@ -204,14 +201,13 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         x = np.mean([box[0], box[2]])
         y = np.mean([box[1], box[3]])
         points.append((x, y))
-    
+   
     if len(points) == 0:
         return crops
     elif len(points) == 1:
         centers.append(points[0])
 
     elif num_clusters == 1:
-        print("Attempting without clustering...")
         x_min = x_max = int(points[0][0])
         y_min = y_max = int(points[0][1])
         for point in points:
@@ -224,10 +220,8 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
             x_center = (x_min + x_max) // 2
             y_center = (y_min + y_max) // 2 
             centers.append([x_center, y_center])
-            print("First attempt successful...")
     
     elif num_clusters > 1:
-        print("Now attempting with clustering...")
         points_array = np.array(points)
         kmeans = KMeans(n_clusters = num_clusters)
         if len(points) >= num_clusters:
@@ -238,7 +232,6 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         centers = kmeans.cluster_centers_
 
     points_in_crop = np.zeros(len(points))
-
     for crop_num, center in enumerate(centers):
         crop_name = f"{image_name}_crop_{crop_num}"
         if crop_name not in crops:
@@ -251,13 +244,10 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         y_start = max(0, int(center[1]) - crop_size // 2)
         x_end = min(image.shape[1], x_start + crop_size)
         y_end = min(image.shape[0], y_start + crop_size)
-        
         if x_end == image.shape[1]:
-            print(f"difference x_end = {(x_start + crop_size) - image.shape[1]}")
             x_start -= (x_start + crop_size) - image.shape[1]
 
         if y_end == image.shape[0]:
-            print(f"difference y_end = {(y_start + crop_size) - image.shape[0]}")
             y_start -= (y_start + crop_size) - image.shape[0]
         
         crop = image[y_start:y_end, x_start:x_end].copy()
@@ -279,11 +269,15 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         print(f"Finished in {num_clusters} clusters") 
         return crops
 
-    elif num_clusters + 1 < len(points):
+    elif num_clusters + 1 <= len(points):
         return auto_crop(image, image_name, prediction, crop_size, num_clusters + 1)
 
     else:
         print("Could not generate any crops...")
+        plt.figure()
+        plt.imshow(image)
+        plt.title("Failed to crop")
+        plt.show()
         return crops 
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -291,7 +285,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
 def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: float) -> dict:
     predictions = {}
     query = """
-        SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, I.Name, I.InTraining
+        SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, P.ModelId, I.Name, I.InTraining
         FROM Predictions P
         JOIN Images I On P.ImageId = I.ImageId
         WHERE I.Imageid IN (
@@ -308,12 +302,14 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         box = [row[1], row[2], row[3], row[4]]
         score = row[5]
         label = row[6]
-        image_name = row[7]
-        in_training = row[8]
+        model_id = row[7]
+        image_name = row[8]
+        in_training = row[9]
         if image_name not in predictions:
             predictions[image_name] = {
                 "in_training": in_training,
                 "pred_id": pred_id,
+                "model_name": model_id,
                 "boxes": [],
                 "scores": [],
                 "labels": [],
@@ -321,12 +317,17 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         predictions[image_name]["boxes"].append(box)
         predictions[image_name]["scores"].append(score)
         predictions[image_name]["labels"].append(label)
+        predictions[image_name]["model_id"] = model_id
     return predictions
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def prompt_user(crop_indices: list) -> list[int]:
     approved_preds = []
+    if os.name == "posix":
+        os.system("clear")
+    else:
+        os.system("cls")
     while True: # Show number associated with crop indexes in plot
         user_input = input("Please enter the number associated with each crop that contains a pronghorn (ex: 1, 2, etc...), if none of them do enter 0 (-999 to quit): ").split(' ')
         for num in user_input:
@@ -340,7 +341,6 @@ def prompt_user(crop_indices: list) -> list[int]:
                     base.close()
                     sys.exit()
             except:
-                print("something went wrong, you suck")
                 continue
         break
     return approved_preds
@@ -413,8 +413,15 @@ def approve_annotations(predictions: dict, crop_size: int, draw_box: bool, image
             if len(approved_predictions) > 0:
                 plt.figure()
                 plt.imshow(crop["crop"])
-                plt.title("Testing Crop")
+                plt.title(f"{crop_name}")
                 plt.show()
+                query = """
+                    INSERT INTO Crops (PredId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                base.query(query, (pred["pred_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date))
+                base.commit()
+                # Save with opencv without compression, highest quality score
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
