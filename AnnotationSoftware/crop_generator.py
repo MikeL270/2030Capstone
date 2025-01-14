@@ -12,12 +12,20 @@ from sklearn.cluster import KMeans
 from dotenv import load_dotenv
 #---------------------------------------------------------------------------------------------------------------------------#
 # TODO: Move this into main.py and modify dependent functions to take them as arguments
-# Paths and other environment related things 
-base = database.SQLite("testing.db")
-base.connect()
-
-# Assumes we have a local .env file that stores things like ROOT
+# Paths and other environment related things
+# IMPORTANT: Paths are relative to users, consider a unified path system
 load_dotenv()
+
+db_config = {
+    "database": os.environ.get("DB_NAME"),
+    "user": os.environ.get("DB_USER"),              
+    "password": os.environ.get("DB_PASS"),    
+    "host": os.environ.get("DB_HOST"),           
+    "port": "5432"              
+}
+base = database.Postgres(db_config)
+#base = database.SQLite("testing.db")
+base.connect()
 
 images_folder = os.environ.get("IMAGE_FOLDER") 
 research_project = os.environ.get("RESEARCH_PROJECT")
@@ -45,6 +53,7 @@ def load_image_files() -> list:
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def load_training_image_names() -> list:
+    print("loading training images")
     """ Loads training image names into a list
     
     Returns a list of filenames that were used to train the model 
@@ -57,6 +66,7 @@ def load_training_image_names() -> list:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 def load_prediction(image_file: str) -> dict[str, str]:
+    print("loading preds")
     """ Load model predictions for a given image name
 
     Args:
@@ -141,6 +151,7 @@ def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence:
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def populate_initial_tables():
+    print("populating tables")
     """ Populate a SQL database with image names and predictions
 
         Returns None, populate tables in a database
@@ -161,7 +172,7 @@ def populate_initial_tables():
         check_image_name = os.path.splitext(os.path.basename(image_name))[0]
         in_training = 1 if (is_in_training_set(check_image_name, training_image_names)) else 0
         query = """
-            INSERT INTO Images (Name, InTraining, Reviewed, Error, CropsGen)
+            INSERT INTO Images (Name, InTraining, Reviewed, "Error", CropsGen)
             VALUES (?, ?, ?, ?, ?)
         """
         
@@ -282,6 +293,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: float) -> dict:
+    print("")
     predictions = {}
     query = """
         SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, P.ModelId, I.Name, I.InTraining
@@ -296,7 +308,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         ORDER BY P.Score DESC
         """
     rows = base.query(query, (batch_size, desired_class, min_confidence))
-    for row in rows:
+    for row in rows: #type: ignore
         pred_id = row[0]
         box = [row[1], row[2], row[3], row[4]]
         score = row[5]
