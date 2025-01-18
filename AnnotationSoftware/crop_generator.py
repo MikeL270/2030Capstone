@@ -53,7 +53,6 @@ def load_image_files() -> list:
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def load_training_image_names() -> list:
-    print("loading training images")
     """ Loads training image names into a list
     
     Returns a list of filenames that were used to train the model 
@@ -66,7 +65,6 @@ def load_training_image_names() -> list:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 def load_prediction(image_file: str) -> dict[str, str]:
-    print("loading preds")
     """ Load model predictions for a given image name
 
     Args:
@@ -262,10 +260,11 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         
         crop = image[y_start:y_end, x_start:x_end].copy()
 
-        for p_index, box in enumerate( prediction["boxes"]):
+        for p_index, (box, pred_id) in enumerate(zip(prediction["boxes"], prediction["pred_ids"])):
             if ((box[0] >= x_start) and (box[2] <= x_end)) and ((box[1] >= y_start) and (box[3] <= y_end)): 
                 points_in_crop[p_index] += 1
                 crops[crop_name]["boxes"].append([
+                    pred_id,
                     box[0] - x_start,
                     box[1] - y_start,
                     box[2] - x_start,
@@ -296,7 +295,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
     print("")
     predictions = {}
     query = """
-        SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, P.ModelId, I.Name, I.InTraining
+        SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, P.ModelId, I.Name, I.InTraining, I.ImageId
         FROM Predictions P
         JOIN Images I On P.ImageId = I.ImageId
         WHERE I.Imageid IN (
@@ -316,19 +315,21 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         model_id = row[7]
         image_name = row[8]
         in_training = row[9]
+        image_id = row[10]
         if image_name not in predictions:
             predictions[image_name] = {
-                "in_training": in_training,
-                "pred_id": pred_id,
-                "model_name": model_id,
+                "pred_ids": [],
                 "boxes": [],
                 "scores": [],
                 "labels": [],
+                "model_id": model_id,
+                "in_training": in_training,
+                "image_id": image_id,
             }
+        predictions[image_name]["pred_ids"].append(pred_id)
         predictions[image_name]["boxes"].append(box)
         predictions[image_name]["scores"].append(score)
         predictions[image_name]["labels"].append(label)
-        predictions[image_name]["model_id"] = model_id
     return predictions
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -364,12 +365,12 @@ def show_predictions_matplot(image: np.ndarray, boxes: list, draw_box: bool) -> 
     if len(boxes) == 0:
         return []
     for box in boxes:
-        ymin = np.max([box[1] - crop_size, 0])
-        ymax = np.min([box[3] + crop_size, image.shape[0]])
-        xmin = np.max([box[0] - crop_size, 0])
-        xmax = np.min([box[2] + crop_size, image.shape[1]])
+        ymin = np.max([box[2] - crop_size, 0])
+        ymax = np.min([box[4] + crop_size, image.shape[0]])
+        xmin = np.max([box[1] - crop_size, 0])
+        xmax = np.min([box[3] + crop_size, image.shape[1]])
         if draw_box:
-            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
+            cv2.rectangle(image, (box[1], box[2]), (box[3], box[4]), (255, 0, 0), 3)
 
         if xmax == image.shape[1]:
             print("Transforming Crop on X")
@@ -423,10 +424,18 @@ def approve_annotations(predictions: dict, crop_size: int, draw_box: bool, image
             base.commit()
             if len(approved_predictions) > 0:
                 query = """
-                    INSERT INTO Crops (PredId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created)
+                    INSERT INTO Crops (ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """
-                base.query(query, (pred["pred_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date))
+                
+                base.query(query, (pred["image_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date))
+                crop_id = base.lastrowid()
+                for box in crop["boxes"]:
+                    query = """
+                        INSERT INTO CropPredictions (CropId, PredId, ImageId, BoxTx, BoxTy, BoxBx, BoxBy)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """
+                    base.query(query, (crop_id, box[0], pred["image_id"], box[1], box[2], box[3], box[4]))
                 base.commit()
                 # Save with opencv without compression, highest quality score
                 cv2.imwrite(f'{save_folder}/{crop_name}.jpg', cv2.cvtColor(crop["crop"], cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])

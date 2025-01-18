@@ -9,9 +9,6 @@ from typing import Any
 import psycopg2
 # Add user table and mutex to images table
 
-#Remote DB config
-
-
 class Database(ABC): # Abstract class for all database types
     _conn: Any
     _cursor: Any
@@ -66,7 +63,7 @@ class Database(ABC): # Abstract class for all database types
         # Create Crops table
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Crops (
                         CropId {auto_increment_column},
-                        PredId INTEGER,
+                        ImageId INTEGER,
                         CropName TEXT NOT NULL,
                         InLabelBox INTEGER NOT NULL CHECK (InLabelBox IN (0, 1)),
                         CropTx INTEGER,
@@ -74,7 +71,7 @@ class Database(ABC): # Abstract class for all database types
                         CropBx INTEGER,
                         CropBy INTEGER,
                         Created DATE,
-                        FOREIGN KEY (PredId) REFERENCES Predictions (PredId)
+                        FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
                     )''')
 
         # Create CropPredictions table
@@ -82,18 +79,20 @@ class Database(ABC): # Abstract class for all database types
                         CropPredId {auto_increment_column},
                         CropId INTEGER,
                         PredId INTEGER,
+                        ImageId INTEGER,
                         BoxTx INTEGER,
                         BoxTy INTEGER,
                         BoxBx INTEGER,
                         BoxBy INTEGER,
                         FOREIGN KEY (CropId) REFERENCES Crops (CropId),
-                        FOREIGN KEY (PredId) REFERENCES Predictions (PredId)
+                        FOREIGN KEY (PredId) REFERENCES Predictions (PredId),
+                        FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
                     )''')
 
         # Create indexes
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
-        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_predid ON Crops (PredId);')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_imageid ON Crops (ImageId);')
         
         self.commit()
         
@@ -139,7 +138,6 @@ class SQLite(Database):
     def get_placeholder(self):
         return "?"
     
-
 class Postgres(Database):
     def __init__(self, db_config):
         self._config = db_config
