@@ -1,12 +1,13 @@
 # Abstraction Module to make it easy to change database backend 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: January 1, 2025
+# Updated: January 21, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
 from typing import Any
 import psycopg2
+
 # Add user table and mutex to images table
 
 class Database(ABC): # Abstract class for all database types
@@ -38,7 +39,7 @@ class Database(ABC): # Abstract class for all database types
         # Create Images table
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Images ( 
                         ImageId {auto_increment_column},
-                        Name TEXT NOT NULL,
+                        Name TEXT NOT NULL UNIQUE,
                         InTraining INTEGER NOT NULL CHECK (InTraining IN (0, 1)),
                         Reviewed INTEGER NOT NULL CHECK (Reviewed IN (0, 1)),
                         "Error" INTEGER NOT NULL CHECK ("Error" IN (0, 1)),
@@ -63,14 +64,15 @@ class Database(ABC): # Abstract class for all database types
         # Create Crops table
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Crops (
                         CropId {auto_increment_column},
-                        ImageId INTEGER,
-                        CropName TEXT NOT NULL,
+                        ImageId INTEGER NOT NULL,
+                        CropName TEXT NOT NULL UNIQUE,
                         InLabelBox INTEGER NOT NULL CHECK (InLabelBox IN (0, 1)),
                         CropTx INTEGER,
                         CropTy INTEGER,
                         CropBx INTEGER,
                         CropBy INTEGER,
                         Created DATE,
+                        globalKey TEXT UNIQUE,
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
                     )''')
 
@@ -119,8 +121,8 @@ class Database(ABC): # Abstract class for all database types
 
 class SQLite(Database):
     import sqlite3
-    def __init__(self, conn_string: str):
-        self._db_name = conn_string
+    def __init__(self, db_config: dict):
+        self._db_name = db_config["database"]
         self._conn = None
         self._cursor = None
                 
@@ -132,17 +134,18 @@ class SQLite(Database):
         self._cursor.execute("PRAGMA synchronous = NORMAL;")
         self._cursor.execute("PRAGMA temp_store = MEMORY;")
 
-    def get_auto_increment_column(self):
+    def get_auto_increment_column(self) -> str:
         return "INTEGER PRIMARY KEY"
     
-    def get_placeholder(self):
+    def get_placeholder(self) -> str:
         return "?"
     
 class Postgres(Database):
-    def __init__(self, db_config):
+    def __init__(self, db_config: dict):
         self._config = db_config
         self._conn = None
         self._cursor = None
+        self._pooled_conn = None
 
     def connect(self):
         try:
@@ -151,10 +154,10 @@ class Postgres(Database):
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
-    def get_auto_increment_column(self):
+    def get_auto_increment_column(self) -> str:
         return "SERIAL NOT NULL PRIMARY KEY"
 
-    def get_placeholder(self):
+    def get_placeholder(self) -> str:
         return "%s"
 
     def lastrowid(self) -> int:
