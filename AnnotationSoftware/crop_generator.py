@@ -82,7 +82,7 @@ def load_prediction(image_file: str) -> dict[str, str]:
     Returns a dictionary containing the predictions
     """
     image_name = os.path.splitext(os.path.basename(image_file))[0]
-    # Get corresponding box file for image
+    # Get corresponding box file for imagemblance.twingate.com
     box_file = os.path.join(output_folder, f"{image_name}_boxes.npy") #type: ignore
     if not os.path.exists(box_file):
         print(f"{image_name} missing box file.")
@@ -574,7 +574,7 @@ def upload_to_labelbox(batch_size: int, desired_class: int):
         row_ids.append(id[1])
     
     project.create_batch(
-        name = f"high-altitude-pronghorn-survey-{str(uuid4())}",
+        name = f"high-altitude-pronghorn-survey-{str(uuid4())}", # add model name to batch
         data_rows = row_ids[1], #type_ignore
         priority = 5,
     )
