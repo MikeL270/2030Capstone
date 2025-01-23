@@ -559,11 +559,8 @@ def upload_to_labelbox(batch_size: int, desired_class: int):
                     ]
                 ) 
             )
-  
-        
-        
-    
-    #base.commit()
+   
+    base.commit()
     # Upload data rows to dataset
     task = dataset.create_data_rows(data_rows)
     task.wait_until_done()
