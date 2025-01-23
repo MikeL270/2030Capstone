@@ -1,0 +1,17 @@
+# Local Paths
+ROOT="<Path to project directory>"
+IMAGE_FOLDER="<path to full resolution images>"
+RESEARCH_PROJECT="<name of your project>"
+SAVE_FOLDER="<path where generated crops will be saved>"
+
+# Database 
+DB_NAME="<database name>" 
+DB_USER="<db user with admin>"
+DB_PASS="<password>"
+DB_HOST="<ip or web address of database>"
+
+# Label box
+API_KEY = "<API Key from labelbox>"
+PROJECT_ID = "<project_id from labelbox>"
+DATASET_ID = "<dataset_id from labelbox>"
+
