@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 17, 2024
-# Updated: January 21, 2025
+# Updated: January 24, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 import glob
 import json
@@ -45,8 +45,10 @@ root = os.environ.get("ROOT")
 output_folder = os.path.join(root, "data")  # type: ignore
 train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
 current_date = datetime.date.today().strftime('%Y-%m-%d')
-save_folder = f'{os.environ.get("SAVE_FOLDER")}{current_date}'
+save_folder = f'{os.environ.get("SAVE_FOLDER")}'
 os.makedirs(save_folder, exist_ok=True) # type: ignore
+
+upload_queue = [] 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -108,6 +110,7 @@ def load_prediction(image_file: str) -> dict[str, str]:
         "image_name": image_name,
         "boxes": boxes,
         "scores": scores,
+
         "labels": labels
     }
     return image_info
@@ -209,7 +212,7 @@ def populate_initial_tables():
     
     # Actual row insertion uses multiple processes to greatly speed up data insertion
     process_count = max(1, cpu_count())
-    print(f"connecting to the database on {process_count} connections...")
+    print(f"Inserting into the database on {process_count} threads...")
     total_images = len(image_names)
     chunk_size = (total_images + process_count - 1) // process_count # Size of each block of
     pool = Pool(processes = process_count)
@@ -376,22 +379,23 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
 
 def prompt_user(crop_indices: list) -> list[int]:
     approved_preds = []
-    #if os.name == "posix":
-        #os.system("clear")
-    #else:
-        #os.system("cls")
+    if os.name == "posix":
+        os.system("clear")
+    else:
+        os.system("cls")
     while True: # Show number associated with crop indexes in plot
-        user_input = input("Please enter the number associated with each crop that contains a pronghorn (ex: 1, 2, etc...), if none of them do enter 0 (-999 to quit): ").split(' ')
-        for num in user_input:
+        user_input = input("Please enter the number associated with each crop that contains a pronghorn (ex: 1, 2, etc...), if none of them do enter 0 (quit to quit): ").split(' ')
+        for usr_input in user_input:
             try:
-                if int(num) in set(crop_indices):
-                    approved_preds.append((int(num) - 1))
-                elif int(num) == 0:
+                if str(usr_input) in set(["q", "Q", "Quit", "quit", "QUIT"]):
+                    print("Quitting")
+                    approved_preds.append(-9999) 
+
+                if int(usr_input) in set(crop_indices):
+                    approved_preds.append((int(usr_input) - 1))
+                elif int(usr_input) == 0:
                     break
-                elif int(num) == -999:
-                    base.commit()
-                    base.close()
-                    sys.exit()
+                
             except:
                 continue
         break
@@ -411,15 +415,7 @@ def show_predictions_matplot(image: np.ndarray, boxes: list, draw_box: bool) -> 
         xmax = np.min([box[3] + crop_size, image.shape[1]])
         if draw_box:
             cv2.rectangle(image, (box[1], box[2]), (box[3], box[4]), (255, 0, 0), 3)
-
-        if xmax == image.shape[1]:
-            print("Transforming Crop on X")
-            #xmin -= (xmin + crop_buffer) - image.shape[1]
-
-        if ymax == image.shape[0]:
-            print("Transforming crop on Y")
-            #ymin -= (ymin + crop_buffer) - image.shape[0]
-
+        
         crops.append(image[ymin:ymax, xmin:xmax].copy())
     
     if len(crops) > 0:
@@ -437,6 +433,10 @@ def show_predictions_matplot(image: np.ndarray, boxes: list, draw_box: bool) -> 
         plt.show(block=False)
     out = prompt_user(crop_indices)
     plt.close()
+    if out[0] == -9999:
+        base.commit()
+        base.close()
+        quit()
     return out
     
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -481,26 +481,11 @@ def approve_annotations(predictions: dict, crop_size: int, draw_box: bool, image
     
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def interrupt_handler(signum, frame):
-    usr_input = input(f"Interrupt signal: {signum} in {frame} recieved | IMPORTANT DON'T SAVE IF THERE WAS A PROBLEM | Save work? (Y or N): ")
-    if usr_input in set(["y", "Y", "yes", "Yes", "s", "S", "Save", "save"]):
-        try:
-            base.commit()
-            base.close()
-        except Exception as e:
-            print(f"Exception {e} encountered")
-            sys.exit(1) # exit with error
-        else:
-            sys.exit(0)
-    else:    
-        base.rollback()
-        base.close()
-        sys.exit(0) # exit gracefully
+def concurrent_upload(data_rows, start, end, dataset):
+    task = dataset.create_data_rows(data_rows[start:end])
+    task.wait_until_done()
 
 #---------------------------------------------------------------------------------------------------------------------------#
-
-def concurrent_upload(data_rows, annotations, start, end):
-    pass
     
 def upload_to_labelbox(batch_size: int, desired_class: int):
     client = lb.Client(os.environ.get("API_KEY"))
@@ -511,6 +496,7 @@ def upload_to_labelbox(batch_size: int, desired_class: int):
     global_keys = []
     row_ids = []
     labels = []
+
     query = """
         SELECT C.CropId, C.CropName, C.GlobalKey
         FROM Crops C 
@@ -560,33 +546,69 @@ def upload_to_labelbox(batch_size: int, desired_class: int):
                 ) 
             )
    
-    base.commit()
-    # Upload data rows to dataset
-    task = dataset.create_data_rows(data_rows)
-    task.wait_until_done()
-    
-    print(task.errors)
+    # determine chunk_size from number of data_rows
+    num_data_rows = len(data_rows)
+    # Multiprocessing configuration
+    process_count = max(1, cpu_count())
 
+    if num_data_rows < process_count:
+        process_count = num_data_rows
+
+    print(f"Uploading to labelbox on {process_count} threads...")
+
+    chunk_size = (num_data_rows + process_count - 1) // process_count 
+    pool = Pool(processes = process_count)
+    tasks = []
+
+    for i in range(process_count):
+        start = i * chunk_size
+        end = (i + 1) * chunk_size if i != process_count - 1 else num_data_rows
+
+        tasks.append((data_rows, start, end, dataset))
+
+    pool.starmap(concurrent_upload, tasks)
+    pool.close()
+    pool.join()
+    base.commit()
     # Request data rows associated with global_ids we generated for labelbox shenannigans
     res = client.get_data_row_ids_for_global_keys(global_keys)
+    
     # loop over the dict to append the actual ids to a list that is useful to us
-    for id in res.items():
-        row_ids.append(id[1])
+    for id in res["results"]:
+        row_ids.append(id)
     
     project.create_batch(
         name = f"high-altitude-pronghorn-survey-{str(uuid4())}", # add model name to batch
-        data_rows = row_ids[1], #type_ignore
+        data_rows = row_ids, #type_ignore
         priority = 5,
     )
    # Upload MAL label for this data row in project
-    upload_job = lb.MALPredictionImport.create_from_objects(
+    lb.MALPredictionImport.create_from_objects(
         client = client, 
         project_id = project.uid, #type: ignore 
         name="mal_job"+str(uuid4()), 
         predictions=labels
     )
-    #print(f"Status of uploads: {upload_job.statuses}") 
-   
+    print("Upload complete!")
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def interrupt_handler(signum, frame):
+    usr_input = input(f"Interrupt signal: {signum} in {frame} recieved | IMPORTANT DON'T SAVE IF THERE WAS A PROBLEM | Save work? (Y or N): ")
+    if usr_input in set(["y", "Y", "yes", "Yes", "s", "S", "Save", "save"]):
+        try:
+            base.commit()
+            base.close()
+        except Exception as e:
+            print(f"Exception {e} encountered")
+            sys.exit(1) # exit with error
+        else:
+            sys.exit(0)
+    else:    
+        base.rollback()
+        base.close()
+        sys.exit(0) # exit gracefully
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def setup_interrupt_handler():
@@ -594,6 +616,7 @@ def setup_interrupt_handler():
     
     """
     signal.signal(signal.SIGINT, interrupt_handler)
+
 #---------------------------------------------------------------------------------------------------------------------------#
 # Dictionary of function calls to determine which version of a function to use. 
 image_backends = {
