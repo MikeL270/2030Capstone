@@ -1,7 +1,7 @@
 # Abstraction Module to make it easy to change database backend 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: January 21, 2025
+# Updated: January 25, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -43,6 +43,7 @@ class Database(ABC): # Abstract class for all database types
                         InTraining INTEGER NOT NULL CHECK (InTraining IN (0, 1)),
                         Reviewed INTEGER NOT NULL CHECK (Reviewed IN (0, 1)),
                         "Error" INTEGER NOT NULL CHECK ("Error" IN (0, 1)),
+                        OPEN INTEGER NOT NULL CHECK (OPEN IN (0, 1)),
                         CropsGen INTEGER
                     )''')
 
@@ -90,14 +91,16 @@ class Database(ABC): # Abstract class for all database types
                         FOREIGN KEY (PredId) REFERENCES Predictions (PredId),
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
                     )''')
-
-        # Create indexes
+        
+        
+    def create_indexes(self):
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_imageid ON Crops (ImageId);')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_croppreds_cropid ON CropPredictions (CropId)')
         
         self.commit()
-        
+    
     def commit(self):
         self._conn.commit()
 
