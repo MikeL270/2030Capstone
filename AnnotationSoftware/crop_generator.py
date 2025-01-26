@@ -78,7 +78,7 @@ def quit_app(value: int = 0):
         quit()
 
 #---------------------------------------------------------------------------------------------------------------------------#
-
+#
 def interrupt_handler(signum, frame):
     usr_input = input(f"Interrupt signal: {signum} in {frame} recieved | IMPORTANT DON'T SAVE IF THERE WAS A PROBLEM | Save work? (Y or N): ")
     if usr_input in set(["y", "Y", "yes", "Yes", "s", "S", "Save", "save"]):
