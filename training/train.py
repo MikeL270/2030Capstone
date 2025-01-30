@@ -5,7 +5,6 @@
 #---------------------------------------------------------------------------------------------------------------------------#
 import os
 from dotenv import load_dotenv 
-from labelbox import Client
 import cv2
 from datetime import datetime
 import numpy as np
@@ -43,11 +42,12 @@ from albumentations.pytorch import ToTensorV2
 research_project = "pronghorn-survey"
 load_dotenv()
 root = os.getcwd() # using cwd since I have no clue about ARCC's path
+root = os.environ.get("ROOT")
 project_names = ['high-altitude-pronghorn-survey']
 image_folder = os.path.join(root, "annotations", research_project, "images")
 train_json_path = os.path.join(root, "annotations", research_project, "train.json")
 val_json_path = os.path.join(root, "annotations", research_project, "val.json")
-annotation_folder = os.path.join(os.environ.get("ROOT"), "annotations", research_project) #type: ignore
+
 
 model_run_readme = "Training model with .15 val percent. Using full current augmentaion regime." 
 
@@ -56,10 +56,6 @@ date_time = now.strftime("%m-%d-%Y-%H-%M-%S")
 model_path = os.environ.get("MODEL_PATH")
 run_folder = os.path.join(model_path, research_project, "runs", f"{date_time}") #type: ignore
 os.makedirs(run_folder)
-
-class_colors = ["b", "r", "w", "g", "k"]
-
-client = Client(api_key=os.environ.get("LABEL_BOX_API_KEY"))
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Load Images and Annotations from labelbox into memory for training
@@ -73,33 +69,35 @@ base_transform  = A.Compose([
     ToTensorV2()
 ], bbox_params=bbox_params)
 
-train_dataset = CocoDetection(image_folder,
-                              train_json_path,
-                              transform=base_transform)
+# train_dataset = CocoDetection(image_folder,
+#                               train_json_path,
+#                               transform=base_transform)
 
-val_dataset = CocoDetection(image_folder,
-                            val_json_path,
-                            transform=base_transform)
+# val_dataset = CocoDetection(image_folder,
+#                             val_json_path,
+#                             transform=base_transform)
 
-# Find the most annotations in a single image in training set
-# Important for setting certain hyperparameters (i.e. rpn_batch_size_per_image etc.)
-num_annotations = [d[1]['boxes'].shape[0] for d in train_dataset]
-print(f"{len(train_dataset)} training images.")
-print(f"max annoations per image {np.max(np.array(num_annotations))}")
-class_labels = [int(torch.unique(d[1]['labels'])[0]) for d in train_dataset]
-train_class_labels = max(class_labels)
+# # Find the most annotations in a single image in training set
+# # Important for setting certain hyperparameters (i.e. rpn_batch_size_per_image etc.)
+# num_annotations = [d[1]['boxes'].shape[0] for d in train_dataset]
+# print(f"{len(train_dataset)} training images.")
+# print(f"max annoations per image {np.max(np.array(num_annotations))}")
+# class_labels = [int(torch.unique(d[1]['labels'])[0]) for d in train_dataset]
+# train_class_labels = max(class_labels)
 
-# Find the most annotations in a single image in training set
-# Important for setting certain hyperparameters (i.e. rpn_batch_size_per_image etc.)
-num_annotations = [d[1]['boxes'].shape[0] for d in val_dataset]
-print(f"{len(val_dataset)} validation images.")
-print(f"max annoations per image {np.max(np.array(num_annotations))}")
-class_labels = [int(torch.unique(d[1]['labels'])[0]) for d in val_dataset]
-val_class_labels = max(class_labels)
+# # Find the most annotations in a single image in training set
+# # Important for setting certain hyperparameters (i.e. rpn_batch_size_per_image etc.)
+# num_annotations = [d[1]['boxes'].shape[0] for d in val_dataset]
+# print(f"{len(val_dataset)} validation images.")
+# print(f"max annoations per image {np.max(np.array(num_annotations))}")
+# class_labels = [int(torch.unique(d[1]['labels'])[0]) for d in val_dataset]
+# val_class_labels = max(class_labels)
 
 # Background counts as a class (0) so need the + 1
-num_classes = max([val_class_labels, train_class_labels]) + 1
+# num_classes = max([val_class_labels, train_class_labels]) + 1
 
+
+num_classes = 3 # Current classes are background, cattle and pronghorn
 print(f"{num_classes} object classes across the train and val annotations incl. background.")
 #---------------------------------------------------------------------------------------------------------------------------#
 # Build example and train datasets
@@ -127,7 +125,7 @@ cfg = {'model':
             'val_json_path': val_json_path,
             'batch_size': 4,
             'num_workers': 4,
-            'num_epochs': 10,
+            'num_epochs': 1,
             'run_folder': run_folder,
             'epochs_per_val': 2,
             'optimizer':
