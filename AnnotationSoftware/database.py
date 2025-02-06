@@ -105,6 +105,7 @@ class Database(ABC): # Abstract class for all database types
         self._conn.commit()
 
     def query(self, query: str, params=None):
+        # Check for returned safeguards from dbms
         query = query.replace("?", self.get_placeholder()) #type: ignore
         self._cursor.execute(query, params or ())
         if query.strip().lower().startswith("select"):

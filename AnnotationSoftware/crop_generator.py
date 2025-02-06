@@ -42,10 +42,11 @@ research_project = os.environ.get("RESEARCH_PROJECT")
 model_name = "10-25-2024-16-50-17"
 
 root = os.environ.get("ROOT")
-output_folder = os.path.join(root, "data")  # type: ignore
-train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
+predictions_folder = os.path.join(root, "data")  # type: ignore
+train_json_path = os.path.join(root, os.environ.get("ANNOTATIONS_FOLDER"), os.environ.get("RESEARCH_PROJECT"), "train.json") #type: ignore
+#train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
 current_date = datetime.date.today().strftime('%Y-%m-%d')
-save_folder = f'{os.environ.get("SAVE_FOLDER")}'
+save_folder = os.path.join(root, os.environ.get("CROP_FOLDER")) #type: ignore
 os.makedirs(save_folder, exist_ok=True) # type: ignore
 
 uploading = False 
@@ -126,21 +127,21 @@ def load_prediction(image_file: str) -> dict[str, str]:
     """
     image_name = os.path.splitext(os.path.basename(image_file))[0]
     # Get corresponding box file for imagemblance.twingate.com
-    box_file = os.path.join(output_folder, f"{image_name}_boxes.npy") #type: ignore
+    box_file = os.path.join(predictions_folder, f"{image_name}_boxes.npy") #type: ignore
     if not os.path.exists(box_file):
         print(f"{image_name} missing box file.")
         boxes = None
     else:
         boxes = np.load(box_file)
     # Get corresponding score file for image
-    score_file = os.path.join(output_folder, f"{image_name}_scores.npy") #type: ignore
+    score_file = os.path.join(predictions_folder, f"{image_name}_scores.npy") #type: ignore
     if not os.path.exists(score_file):
         print(f"{image_name} missing score file.")
         scores = None
     else:
         scores = np.load(score_file)
     # Get corresponding object class file for image
-    label_file = os.path.join(output_folder, f"{image_name}_labels.npy") #type: ignore
+    label_file = os.path.join(predictions_folder, f"{image_name}_labels.npy") #type: ignore
     if not os.path.exists(label_file):
         print(f"{image_name} missing labels file.")
         labels = None
@@ -151,7 +152,6 @@ def load_prediction(image_file: str) -> dict[str, str]:
         "image_name": image_name,
         "boxes": boxes,
         "scores": scores,
-
         "labels": labels
     }
     return image_info
@@ -379,6 +379,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: float) -> dict:
+    print("Querying database...")
     predictions = {}
     offset = 0
     rows = []
@@ -396,7 +397,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         ORDER BY P.Score DESC
         """
     # query the database until results are returned
-    while len(rows) < 1: #type: ignore
+    while len(rows) < batch_size: #type: ignore
         try:
             rows = base.query(query, (batch_size, offset, desired_class, min_confidence))
         except Exception as e:
@@ -427,7 +428,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         predictions[image_name]["boxes"].append(box)
         predictions[image_name]["scores"].append(score)
         predictions[image_name]["labels"].append(label)
-
+        # More efficent way to update images (set of image ids )
         query = """
             UPDATE Images
             SET Open = 1 
