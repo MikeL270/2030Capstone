@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: January 25, 2025
+# Updated: February 13, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 import glob
 import json
@@ -37,11 +37,12 @@ base = database.Postgres(db_config)
 #base = database.SQLite("testing.db")
 base.connect()
 
-images_folder = os.environ.get("IMAGE_FOLDER") 
 research_project = os.environ.get("RESEARCH_PROJECT")
-model_name = "10-25-2024-16-50-17"
+model_name = '10-25-2024-16-50-17'
+herd_unit = 'pr527'
 
 root = os.environ.get("ROOT")
+images_folder = os.path.join(root, os.environ.get("IMAGE_FOLDER")) #type: ignore 
 predictions_folder = os.path.join(root, "data")  # type: ignore
 train_json_path = os.path.join(root, os.environ.get("ANNOTATIONS_FOLDER"), os.environ.get("RESEARCH_PROJECT"), "train.json") #type: ignore
 #train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
@@ -201,7 +202,7 @@ def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def concurrent_populate(image_names, start, end, modelId, training_image_names):  
+def concurrent_populate(image_names: list, start: int, end: int, modelId: int, herdId: int, training_image_names: list):  
     db_type = type(base)
     concurrent_base = db_type(db_config)
 
@@ -213,11 +214,11 @@ def concurrent_populate(image_names, start, end, modelId, training_image_names):
         check_image_name = os.path.splitext(os.path.basename(image_name))[0]
         in_training = 1 if (is_in_training_set(check_image_name, training_image_names)) else 0
         query = """
-            INSERT INTO Images (Name, InTraining, Reviewed, "Error", CropsGen)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO Images (Name, HerdUnitID, InTraining, Reviewed, "Error", CropsGen, Open)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """
         
-        concurrent_base.query(query, (prediction["image_name"], in_training, 0, 0, 0))
+        concurrent_base.query(query, (prediction["image_name"], herdId, in_training, 0, 0, 0, 0))
         
         imageId = concurrent_base.lastrowid()
         
@@ -250,6 +251,14 @@ def populate_initial_tables():
     base.query(query, (model_name,))
     base.commit()
     modelId = base.lastrowid()
+
+    query = """
+        INSERT INTO HerdUnit (HerdUnitName)
+        VALUES (?)
+    """
+    base.query(query, (herd_unit,))
+    base.commit()
+    herdId = base.lastrowid()
     
     # Actual row insertion uses multiple processes to greatly speed up data insertion
     process_count = max(1, cpu_count())
@@ -264,7 +273,7 @@ def populate_initial_tables():
         start = i * chunk_size
         end = (i + 1) * chunk_size if i != process_count - 1 else total_images
 
-        tasks.append((image_names, start, end, modelId, training_image_names))
+        tasks.append((image_names, start, end, modelId, herdId, training_image_names))
         
     pool.starmap(concurrent_populate, tasks)
     pool.close()

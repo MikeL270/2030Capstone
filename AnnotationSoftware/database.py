@@ -1,7 +1,7 @@
-# Abstraction Module to make it easy to change database backend 
+# Abstraction module to make it easy to change database drivers 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: January 25, 2025
+# Updated: February 13, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -33,18 +33,26 @@ class Database(ABC): # Abstract class for all database types
         # Create Models table
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Models (
                         ModelId {auto_increment_column},
-                        ModelName TEXT
+                        ModelName CHAR(19)
+                    )''')
+
+         # Create HerdUnit table
+        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS HerdUnit (
+                        HerdUnitID SERIAL NOT NULL PRIMARY KEY,
+                        HerdUnitName VARCHAR(6)
                     )''')
 
         # Create Images table
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Images ( 
                         ImageId {auto_increment_column},
-                        Name TEXT NOT NULL UNIQUE,
-                        InTraining INTEGER NOT NULL CHECK (InTraining IN (0, 1)),
-                        Reviewed INTEGER NOT NULL CHECK (Reviewed IN (0, 1)),
-                        "Error" INTEGER NOT NULL CHECK ("Error" IN (0, 1)),
-                        OPEN INTEGER NOT NULL CHECK (OPEN IN (0, 1)),
-                        CropsGen INTEGER
+                        HerdUnitID INT,
+                        Name CHAR(50) NOT NULL UNIQUE,
+                        InTraining SMALLINT NOT NULL CHECK (InTraining IN (0, 1)),
+                        Reviewed SMALLINT NOT NULL CHECK (Reviewed IN (0, 1)),
+                        "Error" SMALLINT NOT NULL CHECK ("Error" IN (0, 1)),
+                        OPEN SMALLINT NOT NULL CHECK (OPEN IN (0, 1)),
+                        CropsGen INTEGER,
+                        FOREIGN KEY (HerdUnitID) REFERENCES HerdUnit (HerdUnitID)
                     )''')
 
         # Create Predictions table
@@ -52,12 +60,12 @@ class Database(ABC): # Abstract class for all database types
                         PredId {auto_increment_column},
                         ModelId INTEGER,
                         ImageId INTEGER,
-                        BoxTx INTEGER,
-                        BoxTy INTEGER,
-                        BoxBx INTEGER,
-                        BoxBy INTEGER, 
-                        Score FLOAT,
-                        Label INTEGER,
+                        BoxTx SMALLINT,
+                        BoxTy SMALLINT,
+                        BoxBx SMALLINT,
+                        BoxBy SMALLINT, 
+                        Score SMALLINT,
+                        Label SMALLINT,
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId),
                         FOREIGN KEY (ModelId) REFERENCES Models (ModelId)
                     )''')
@@ -66,14 +74,14 @@ class Database(ABC): # Abstract class for all database types
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Crops (
                         CropId {auto_increment_column},
                         ImageId INTEGER NOT NULL,
-                        CropName TEXT NOT NULL UNIQUE,
+                        CropName VARCHAR(58) NOT NULL UNIQUE,
                         InLabelBox INTEGER NOT NULL CHECK (InLabelBox IN (0, 1)),
-                        CropTx INTEGER,
-                        CropTy INTEGER,
-                        CropBx INTEGER,
-                        CropBy INTEGER,
+                        CropTx SMALLINT,
+                        CropTy SMALLINT,
+                        CropBx SMALLINT,
+                        CropBy SMALLINT,
                         Created DATE,
-                        globalKey TEXT UNIQUE,
+                        globalKey CHAR(36) UNIQUE,
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
                     )''')
 
@@ -90,7 +98,18 @@ class Database(ABC): # Abstract class for all database types
                         FOREIGN KEY (CropId) REFERENCES Crops (CropId),
                         FOREIGN KEY (PredId) REFERENCES Predictions (PredId),
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
-                    )''')
+                    )''') 
+
+        # Create Annotations table
+        self._cursor.execute('''CREATE TABLE IF NOT EXISTS Annotations (
+                        AnnotationID SERIAL NOT NULL PRIMARY KEY,
+                        CropPredID INT,
+                        BoxTx SMALLINT,
+                        BoxTy SMALLINT,
+                        BoxBx SMALLINT,
+                        BoxBy SMALLINT,
+                        FOREIGN KEY (CropPredID) REFERENCES CropPredictions (CropPredID)
+                    );''')
         
         
     def create_indexes(self):
@@ -106,9 +125,9 @@ class Database(ABC): # Abstract class for all database types
 
     def query(self, query: str, params=None):
         # Check for returned safeguards from dbms
-        query = query.replace("?", self.get_placeholder()) #type: ignore
+        query = query.replace('?', self.get_placeholder()) #type: ignore
         self._cursor.execute(query, params or ())
-        if query.strip().lower().startswith("select"):
+        if query.strip().lower().startswith('select'):
             return self._cursor.fetchall()
         else:
             return None
@@ -126,17 +145,17 @@ class Database(ABC): # Abstract class for all database types
 class SQLite(Database):
     import sqlite3
     def __init__(self, db_config: dict):
-        self._db_name = db_config["database"]
+        self._db_name = db_config['database']
         self._conn = None
         self._cursor = None
                 
     def connect(self):
         self._conn = self.sqlite3.connect(self._db_name)
         self._cursor = self._conn.cursor()
-        self._cursor.execute("PRAGMA journal_mode = WAL;")
-        self._cursor.execute("PRAGMA cache_size = -20000;")
-        self._cursor.execute("PRAGMA synchronous = NORMAL;")
-        self._cursor.execute("PRAGMA temp_store = MEMORY;")
+        self._cursor.execute('PRAGMA journal_mode = WAL;')
+        self._cursor.execute('PRAGMA cache_size = -20000;')
+        self._cursor.execute('PRAGMA synchronous = NORMAL;')
+        self._cursor.execute('PRAGMA temp_store = MEMORY;')
 
     def get_auto_increment_column(self) -> str:
         return "INTEGER PRIMARY KEY"
@@ -159,13 +178,13 @@ class Postgres(Database):
             print(error)
 
     def get_auto_increment_column(self) -> str:
-        return "SERIAL NOT NULL PRIMARY KEY"
+        return 'SERIAL NOT NULL PRIMARY KEY'
 
     def get_placeholder(self) -> str:
-        return "%s"
+        return '%s'
 
     def lastrowid(self) -> int:
-        self._cursor.execute("SELECT LASTVAL()")
+        self._cursor.execute('SELECT LASTVAL()')
         return self._cursor.fetchone()[0]
 
 
