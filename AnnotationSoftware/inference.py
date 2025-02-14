@@ -12,17 +12,18 @@ import numpy as np
 from PIL import Image 
 import torch 
 import matplotlib as plt  
-from koger_detection.obj_det.predictiors import Predictor 
-from kger_detection.obj_det.mydatasets import ImageDataset
-from koger_detection.obj_det.engine import collate_fn, worker_init_fn
+from koger_detection.obj_det.predictors import Predictor #type: ignore 
+from koger_detection.obj_det.mydatasets import ImageDataset #type: ignore
+from koger_detection.obj_det.engine import collate_fn, worker_init_fn #type: ignore
 import database
 #---------------------------------------------------------------------------------------------------------------------------#
 load_dotenv()
 model_name = "10-25-2024-16-50-17"
-images_folder = os.environ.get("IMAGE_)FOLDER")
+herd_unit = "pr427"
+root = os.environ.get("ROOT")
+images_folder = os.path.join(root, os.environ.get("IMAGE_FOLDER")) #type: ignore 
 research_project = "pronghorn-survey"
-model_path = os.environ.get("MODEL_PATH")
-model_folder = os.path.join(model_path, research_project, "runs", model_name)
+model_folder = os.path.join(root, os.environ.get("MODEL_PATH")) #type: ignore
 model_cfg_file = os.path.join(model_folder, "cfg.json")
 model_weights_file = os.path.join(model_folder, "final_model.pth")
 image_files = sorted(glob.glob(os.path.join(images_folder, f"*.[jJ][pP][gG]")))
@@ -44,9 +45,16 @@ query = """
 INSERT INTO Models (ModelName)
 VALUES (?)
 """
-base.query(query, (model_name))
+base.query(query, (model_name,))
 base.commit()
 modelId = base.lastrowid()
+query = """
+INSERT INTO HerdUnit (HerdUnitName)
+VALUES (?)
+"""
+base.query(query, (herd_unit,))
+base.commit()
+herdID = base.lastrowid()
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -82,10 +90,10 @@ for ind, image in enumerate(dataloader):
     image_name = os.path.splitext(os.path.basename(image['filename'][0]))[0]
     
     query ="""
-        INSERT INTO Images (Name, InTraining, Reviewed, "Error", CropsGen)
-        Values (?, ?, ?, ?, ?)
+        INSERT INTO Images (Name, HerdUnitId, InTraining, Reviewed, "Error", CropsGen, Open)
+        Values (?, ?, ?, ?, ?, ?, ?)
     """
-    base.query(query,(image_name, 0, 0, 0, 0))
+    base.query(query,(image_name, 0, 0, 0, 0, 0))
     imageId = base.lastrowid()
 
     for box, score, label in zip(boxes, scores, labels):
@@ -96,7 +104,7 @@ for ind, image in enumerate(dataloader):
         """
         base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label)))
 
-    base.commit()
+        base.commit()
 
 base.close()
 

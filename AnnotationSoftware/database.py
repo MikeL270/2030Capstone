@@ -103,14 +103,13 @@ class Database(ABC): # Abstract class for all database types
         # Create Annotations table
         self._cursor.execute('''CREATE TABLE IF NOT EXISTS Annotations (
                         AnnotationID SERIAL NOT NULL PRIMARY KEY,
-                        CropPredID INT,
+                        CropID INT,
                         BoxTx SMALLINT,
                         BoxTy SMALLINT,
                         BoxBx SMALLINT,
                         BoxBy SMALLINT,
-                        FOREIGN KEY (CropPredID) REFERENCES CropPredictions (CropPredID)
-                    );''')
-        
+                        FOREIGN KEY (CropID) REFERENCES Crops (CropID)
+                    );''') 
         
     def create_indexes(self):
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
