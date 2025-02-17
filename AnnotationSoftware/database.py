@@ -1,7 +1,7 @@
 # Abstraction module to make it easy to change database drivers 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: February 13, 2025
+# Updated: February 17, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -33,13 +33,13 @@ class Database(ABC): # Abstract class for all database types
         # Create Models table
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Models (
                         ModelId {auto_increment_column},
-                        ModelName CHAR(19)
+                        ModelName CHAR(19) NOT NULL UNIQUE
                     )''')
 
          # Create HerdUnit table
         self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS HerdUnit (
                         HerdUnitID SERIAL NOT NULL PRIMARY KEY,
-                        HerdUnitName VARCHAR(6)
+                        HerdUnitName VARCHAR(6) NOT NULL UNIQUE
                     )''')
 
         # Create Images table
@@ -64,7 +64,7 @@ class Database(ABC): # Abstract class for all database types
                         BoxTy SMALLINT,
                         BoxBx SMALLINT,
                         BoxBy SMALLINT, 
-                        Score SMALLINT,
+                        Score FLOAT,
                         Label SMALLINT,
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId),
                         FOREIGN KEY (ModelId) REFERENCES Models (ModelId)

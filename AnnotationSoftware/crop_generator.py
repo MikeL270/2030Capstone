@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: February 13, 2025
+# Updated: February 17, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 import glob
 import json
@@ -20,6 +20,7 @@ from labelbox.data.annotation_types import Label, ObjectAnnotation, Rectangle, P
 from uuid import uuid4
 from multiprocessing import Pool, cpu_count
 import json
+import math
 #---------------------------------------------------------------------------------------------------------------------------#
 load_dotenv()
 
@@ -38,14 +39,12 @@ base = database.Postgres(db_config)
 base.connect()
 
 research_project = os.environ.get("RESEARCH_PROJECT")
-model_name = '10-25-2024-16-50-17'
-herd_unit = 'pr527'
+model_name = os.environ.get("MODEL_NAME")
+herd_unit = os.environ.get("HERD_UNIT")
 
 root = os.environ.get("ROOT")
-images_folder = os.path.join(root, os.environ.get("IMAGE_FOLDER")) #type: ignore 
-predictions_folder = os.path.join(root, "data")  # type: ignore
-train_json_path = os.path.join(root, os.environ.get("ANNOTATIONS_FOLDER"), os.environ.get("RESEARCH_PROJECT"), "train.json") #type: ignore
-#train_json_path = os.path.join(root, "annotations", research_project, "train.json")  # type: ignore
+predictions_folder = os.path.join(root, model_name, "data")  # type: ignore
+train_json_path = os.path.join(root, model_name, os.environ.get("ANNOTATIONS_FOLDER"), "train.json") #type: ignore
 current_date = datetime.date.today().strftime('%Y-%m-%d')
 save_folder = os.path.join(root, os.environ.get("CROP_FOLDER")) #type: ignore
 os.makedirs(save_folder, exist_ok=True) # type: ignore
@@ -100,6 +99,7 @@ def load_image_files() -> list:
 
     Returns a list of file names
     """
+    images_folder = os.path.join(root, "Images", herd_unit) #type: ignore
     image_files = sorted(glob.glob(os.path.join(images_folder, f"*.[jJ][pP][gG]"))) # type: ignore
     print(f"{len(image_files)} files found.")
     return image_files
@@ -341,7 +341,8 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
                 "dimesions": [],
                 "prediction": {
                     "id": int,
-                    "boxes": []
+                    "boxes": [],
+                    "scores": []
                 }
             }
         x_start = max(0, int(center[0]) - crop_size // 2)
@@ -356,7 +357,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         
         crop = image[y_start:y_end, x_start:x_end].copy()
 
-        for p_index, (box, pred_id) in enumerate(zip(prediction["boxes"], prediction["pred_ids"])):
+        for p_index, (box, pred_id, score) in enumerate(zip(prediction["boxes"], prediction["pred_ids"], prediction["scores"])):
             if ((box[0] >= x_start) and (box[2] <= x_end)) and ((box[1] >= y_start) and (box[3] <= y_end)): 
                 points_in_crop[p_index] += 1
                 crops[crop_name]["prediction"]["id"] = pred_id 
@@ -366,6 +367,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
                     box[2] - x_start,
                     box[3] - y_start
                 ])
+                crops[crop_name]["prediction"]["scores"].append(score)
 
         crops[crop_name]["crop"] = crop
         crops[crop_name]["dimensions"] = [x_start, y_start, x_end, y_end] 
@@ -393,9 +395,10 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
     offset = 0
     rows = []
     query = """
-        SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, P.ModelId, I.Name, I.InTraining, I.ImageId
+        SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, I.Name, I.InTraining, I.ImageId, H.HerdUnitName
         FROM Predictions P
         JOIN Images I On P.ImageId = I.ImageId
+        JOIN HerdUnit H On I.HerdUnitId = H.HerdUnitId
         WHERE I.Imageid IN (
             SELECT ImageId
             FROM Images
@@ -406,7 +409,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         ORDER BY P.Score DESC
         """
     # query the database until results are returned
-    while len(rows) < batch_size: #type: ignore
+    while len(rows) == 0: #type: ignore
         try:
             rows = base.query(query, (batch_size, offset, desired_class, min_confidence))
         except Exception as e:
@@ -419,19 +422,20 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         box = [row[1], row[2], row[3], row[4]]
         score = row[5]
         label = row[6]
-        model_id = row[7]
-        image_name = row[8]
-        in_training = row[9]
-        image_id = row[10]
+        image_name = row[7]
+        in_training = row[8]
+        image_id = row[9]
+        herd_unit = row[10]
+
         if image_name not in predictions:
             predictions[image_name] = {
                 "pred_ids": [],
                 "boxes": [],
                 "scores": [],
                 "labels": [],
-                "model_id": model_id,
                 "in_training": in_training,
                 "image_id": image_id,
+                "herd_unit": herd_unit
             }
         predictions[image_name]["pred_ids"].append(pred_id)
         predictions[image_name]["boxes"].append(box)
@@ -483,33 +487,46 @@ def show_predictions_matplot(image: np.ndarray, prediction: dict, desired_class:
         ymax = np.min([box[3] + crop_size, image.shape[0]])
         xmin = np.max([box[0] - crop_size, 0])
         xmax = np.min([box[2] + crop_size, image.shape[1]])
+        crops.append(image[ymin:ymax, xmin:xmax].copy())
+
         if draw_box:
             cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
-        
-        crops.append(image[ymin:ymax, xmin:xmax].copy())
     
-    if len(crops) > 0:
-        fig, axs = plt.subplots(1, len(crops))
-        if len(crops) == 1:
-            axs = [axs] 
+    crop_size = 2
+    max_cols = 6
+    max_crops = 36
 
-        crop_indices = []
-        for crop_num, (ax, crop) in enumerate(zip(axs, crops)):
-            crop_indices.append(crop_num + 1)
-            ax.imshow(crop)
-            ax.set_title(f"Crop Number: {crop_num + 1}")
-            ax.set_axis_off()
+    crops = crops[:max_crops]
+    if len(crops) <= max_cols:
+        cols = len(crops)
+        rows = 1
+    else:
+        cols = max_cols
+        rows = math.ceil(len(crops) / max_cols)
+    fig, axs = plt.subplots(rows, cols, figsize=(cols * crop_size, rows * crop_size))
 
-        plt.show(block=False)
-        out = prompt_user(desired_class)
-        plt.close(fig)
+    # if len(crops) == 1:
+    #     axs = [axs]
+    for ax, crop, score in zip(fig.axes[:len(crops)], crops, prediction["scores"]):
+        ax.imshow(crop)
+        ax.set_title(f"score: {score:.3f}")
+        ax.set_axis_off() 
+  
+    plt.figure(figsize=(15,15))
+    plt.imshow(image)
+    plt.axis('off')
+    plt.close() 
+    plt.show(block=False)
+    out = prompt_user(desired_class)
+    plt.close(fig)
         
-        if out == "q":
-            quit_app()
-            return False # only exists to appease pyright
-        else:
-            return out
-    return False
+    if out == "q":
+        quit_app()
+        return False # only exists to appease pyright
+    else:
+        return out
+    
+
     
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -519,6 +536,7 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
     """
     num_crops = 0
     for image_name, pred in predictions.items():
+        images_folder = os.path.join(root, "Images", pred['herd_unit']) #type: ignore
         image_path = os.path.join(f"{images_folder}", f"{image_name}.JPG")
         image = plt.imread(image_path).copy()
         image_crops = auto_crop(image, image_name, pred, crop_size, 1)

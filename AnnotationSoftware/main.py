@@ -9,11 +9,12 @@ create_db = False
 draw_box = True
 crop_size = 2100
 desired_class = 2
-min_confidence = 0.50
+min_confidence = 0.90
 batch_size = 100
 image_backend = "matplot"
 approve_predictions = False
 upload_to_labelbox = False
+
 
 #flags to modify default values
 if "create_db" in sys.argv:
