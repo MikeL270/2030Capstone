@@ -187,4 +187,9 @@ class Postgres(Database):
         return self._cursor.fetchone()[0]
 
 
-    
+db_types = {
+    "default": Postgres,
+    "sqlite": SQLite,
+    "postgres": Postgres,
+
+}

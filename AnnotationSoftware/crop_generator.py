@@ -1,8 +1,10 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: February 17, 2025
+# Updated: February 18, 2025
+
 #---------------------------------------------------------------------------------------------------------------------------#
+
 import glob
 import json
 import os
@@ -21,35 +23,6 @@ from uuid import uuid4
 from multiprocessing import Pool, cpu_count
 import json
 import math
-#---------------------------------------------------------------------------------------------------------------------------#
-load_dotenv()
-
-db_config = {
-    "database": os.environ.get("DB_NAME"),
-    "user": os.environ.get("DB_USER"),              
-    "password": os.environ.get("DB_PASS"),    
-    "host": os.environ.get("DB_HOST"),           
-    "port": "5432"              
-}
-
-db_file = os.environ.get("DB_NAME")
-
-base = database.Postgres(db_config)
-#base = database.SQLite("testing.db")
-base.connect()
-
-research_project = os.environ.get("RESEARCH_PROJECT")
-model_name = os.environ.get("MODEL_NAME")
-herd_unit = os.environ.get("HERD_UNIT")
-
-root = os.environ.get("ROOT")
-predictions_folder = os.path.join(root, model_name, "data")  # type: ignore
-train_json_path = os.path.join(root, model_name, os.environ.get("ANNOTATIONS_FOLDER"), "train.json") #type: ignore
-current_date = datetime.date.today().strftime('%Y-%m-%d')
-save_folder = os.path.join(root, os.environ.get("CROP_FOLDER")) #type: ignore
-os.makedirs(save_folder, exist_ok=True) # type: ignore
-
-uploading = False 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -61,8 +34,8 @@ def quit_app(value: int = 0):
         SET Open = 0
         WHERE Open = 1
     """
-    base.query(query,())
-    base.commit()
+    base.query(query,()) 
+    base.commit() 
 
     if value > 0:
         sys.exit(value)
@@ -70,36 +43,80 @@ def quit_app(value: int = 0):
         print("Waiting for upload to finish, program will exit once complete!")
         while uploading:
             pass
-        base.commit()
-        base.close()
+        base.commit() 
+        base.close() 
         quit()
     else:
-        base.commit()
-        base.close()
+        base.commit() 
+        base.close() 
         quit()
 
 #---------------------------------------------------------------------------------------------------------------------------#
-#
+
 def interrupt_handler(signum, frame):
     usr_input = input(f"Interrupt signal: {signum} in {frame} recieved | IMPORTANT DON'T SAVE IF THERE WAS A PROBLEM | Save work? (Y or N): ")
     if usr_input in set(["y", "Y", "yes", "Yes", "s", "S", "Save", "save"]):
         try:
-            base.commit()
-            base.close()
+            base.commit() 
+            base.close() 
         except Exception as e:
             print(f"Exception {e} encountered")
-            quit_app(1)
+            quit_app(1) 
     else:    
-        base.rollback()
-        base.close()
+        base.rollback() 
+        base.close() 
         quit_app()
 
-def load_image_files() -> list:
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def setup_interrupt_handler():
+    """ Gracefully handle ^C interrupts regarding the database
+    
+    """
+    signal.signal(signal.SIGINT, interrupt_handler)
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Since crop_generator is intended as a module it is good practice to not have it execute anything not called in a function
+def initialize(db_type: str, db_configuration: dict):
+    """ Initialize the module and with the specified database backend and environment variables
+
+    """
+    # Global Variables needed for variable things
+    global base
+    global root
+    global model_name
+    global herd_unit
+    global predictions_folder
+    global train_json_path
+    global current_date
+    global save_folder
+    global uploading
+    global db_config
+
+    load_dotenv()
+    db_config = db_configuration
+    base = database.db_types[db_type](db_config)
+    base.connect()
+
+    model_name = os.environ.get("MODEL_NAME")
+    herd_unit = os.environ.get("HERD_UNIT")
+    root = os.environ.get("ROOT")
+    predictions_folder = os.path.join(root, model_name, "data")  # type: ignore
+    train_json_path = os.path.join(root, model_name, os.environ.get("ANNOTATIONS_FOLDER"), "train.json") #type: ignore
+    current_date = datetime.date.today().strftime('%Y-%m-%d')
+    save_folder = os.path.join(root, os.environ.get("CROP_FOLDER")) #type: ignore
+    os.makedirs(save_folder, exist_ok=True) # type: ignore
+    uploading = False 
+
+    setup_interrupt_handler() 
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def load_image_files(images_folder: str) -> list:
     """ Loads image file names into a List
 
     Returns a list of file names
     """
-    images_folder = os.path.join(root, "Images", herd_unit) #type: ignore
     image_files = sorted(glob.glob(os.path.join(images_folder, f"*.[jJ][pP][gG]"))) # type: ignore
     print(f"{len(image_files)} files found.")
     return image_files
@@ -127,25 +144,22 @@ def load_prediction(image_file: str) -> dict[str, str]:
     Returns a dictionary containing the predictions
     """
     image_name = os.path.splitext(os.path.basename(image_file))[0]
-    # Get corresponding box file for imagemblance.twingate.com
+    # Get corresponding box file for image
     box_file = os.path.join(predictions_folder, f"{image_name}_boxes.npy") #type: ignore
     if not os.path.exists(box_file):
-        print(f"{image_name} missing box file.")
-        boxes = None
+        raise Exception(f"{image_name} missing box file.")
     else:
         boxes = np.load(box_file)
     # Get corresponding score file for image
     score_file = os.path.join(predictions_folder, f"{image_name}_scores.npy") #type: ignore
     if not os.path.exists(score_file):
-        print(f"{image_name} missing score file.")
-        scores = None
+        raise Exception(f"{image_name} missing score file.")
     else:
         scores = np.load(score_file)
     # Get corresponding object class file for image
     label_file = os.path.join(predictions_folder, f"{image_name}_labels.npy") #type: ignore
     if not os.path.exists(label_file):
-        print(f"{image_name} missing labels file.")
-        labels = None
+        raise Exception(f"{image_name} missing labels file.")
     else:
         labels = np.load(label_file)
     
@@ -202,63 +216,79 @@ def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def concurrent_populate(image_names: list, start: int, end: int, modelId: int, herdId: int, training_image_names: list):  
-    db_type = type(base)
-    concurrent_base = db_type(db_config)
+def concurrent_populate(image_names: list, modelId: int, herdId: int, training_image_names: list):  
+    concurrent_base = type(base)(db_config)
 
-    concurrent_base.connect()
+    concurrent_base.connect() 
 
-    for image_name in image_names[start:end]:
+    for image_name in image_names:
         # add max score to image table, insert score based on prediction values
-        prediction = load_prediction(image_name)
+        try:
+            prediction = load_prediction(image_name)
+        except Exception as e:
+            print(e)
+            continue
         check_image_name = os.path.splitext(os.path.basename(image_name))[0]
         in_training = 1 if (is_in_training_set(check_image_name, training_image_names)) else 0
         query = """
             INSERT INTO Images (Name, HerdUnitID, InTraining, Reviewed, "Error", CropsGen, Open)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """
-        
-        concurrent_base.query(query, (prediction["image_name"], herdId, in_training, 0, 0, 0, 0))
+        try:
+            concurrent_base.query(query, (prediction["image_name"], herdId, in_training, 0, 0, 0, 0))
+        except database.psycopg2.errors.UniqueViolation:
+            print("Image already in database")
+            continue
         
         imageId = concurrent_base.lastrowid()
-        
+       
         for box, score, label in zip(prediction['boxes'], prediction['scores'], prediction['labels']):
-            
             query = """
                 INSERT INTO Predictions (ImageId, ModelId, BoxTx, BoxTy, BoxBx, BoxBy, Score, Label)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
-            concurrent_base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label)))
+            concurrent_base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label))) #type: ignore
     
-    concurrent_base.commit()
-    concurrent_base.close()
+    concurrent_base.commit() 
+    concurrent_base.close() 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def populate_initial_tables():
-    """ Populate a SQL database with image names and predictions
-
-        Returns None, populate tables in a database
-    """
-    # First part is single threaded for simplicity purposes
-    base.create_tables()
-    image_names = load_image_files()
+def insert_to_database():
+    images_folder = os.path.join(root, "Images", herd_unit) #type: ignore   
+    image_names = load_image_files(images_folder)
     training_image_names = set(load_training_image_names())
+    # TODO: This still does not work as intended, but I have no clue why
     query = """
         INSERT INTO Models (ModelName)
         VALUES (?)
-    """
-    base.query(query, (model_name,))
+        ON CONFLICT(ModelName) DO NOTHING
+    """ 
+    base.query(query, (model_name,))   
     base.commit()
-    modelId = base.lastrowid()
+
+    query = """
+        SELECT ModelId 
+        FROM Models
+        WHERE ModelName = ?
+    """
+    modelId = int(base.query(query, (model_name,))[0][0])
 
     query = """
         INSERT INTO HerdUnit (HerdUnitName)
         VALUES (?)
+        ON CONFLICT(HerdUnitName) DO NOTHING
     """
+    
     base.query(query, (herd_unit,))
     base.commit()
-    herdId = base.lastrowid()
+
+    query = """
+        SELECT HerdUnitId 
+        FROM HerdUnit
+        WHERE HerdUnitName = ?
+    """
+    herdId = int(base.query(query, (herd_unit,))[0][0])
     
     # Actual row insertion uses multiple processes to greatly speed up data insertion
     process_count = max(1, cpu_count())
@@ -273,13 +303,25 @@ def populate_initial_tables():
         start = i * chunk_size
         end = (i + 1) * chunk_size if i != process_count - 1 else total_images
 
-        tasks.append((image_names, start, end, modelId, herdId, training_image_names))
+        tasks.append((image_names[start:end], modelId, herdId, training_image_names))
         
     pool.starmap(concurrent_populate, tasks)
     pool.close()
     pool.join()
 
     base.create_indexes()
+    base.commit()
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def bootstrap_database():
+    """ Populate a SQL database with image names and predictions
+
+        Returns None, populate tables in a database
+    """
+    # First part is single threaded for simplicity purposes
+    base.create_tables()     
+    insert_to_database()
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: int, num_clusters: int) -> dict[str, dict[str, np.ndarray]]:
@@ -411,7 +453,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
     # query the database until results are returned
     while len(rows) == 0: #type: ignore
         try:
-            rows = base.query(query, (batch_size, offset, desired_class, min_confidence))
+            rows = base.query(query, (batch_size, offset, desired_class, min_confidence)) #type: ignore
         except Exception as e:
             print(f"Exception: {e} has ouccured")
         
@@ -447,9 +489,9 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
             SET Open = 1 
             WHERE ImageId = ?
         """
-        base.query(query, (image_id,))
+        base.query(query, (image_id,)) #type: ignore
     
-    base.commit()
+    base.commit() #type: ignore
     return predictions
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -460,6 +502,7 @@ def prompt_user(desired_class: int):
         os.system("clear")
     else:
         os.system("cls")
+
     while True: # Show number associated with crop indexes in plot
         user_input = input(f"Please indicate (yes or no) whether any displayed image is of a {class_names[desired_class]}, q to quit: \n")
         try:
@@ -552,28 +595,28 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 
-                base.query(query, (pred["image_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date, str(uuid4())))
-                base.commit()
+                base.query(query, (pred["image_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date, str(uuid4()))) 
+                base.commit() 
                 num_crops += 1
-                crop_id = base.lastrowid()
-                
+                crop_id = base.lastrowid() 
+
                 for box in crop["prediction"]["boxes"]:
                     query = """
                         INSERT INTO CropPredictions (CropId, PredId, ImageId, BoxTx, BoxTy, BoxBx, BoxBy)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     """
-                    base.query(query, (crop_id, crop["prediction"]["id"], pred["image_id"], box[0], box[1], box[2], box[3]))
+                    base.query(query, (crop_id, crop["prediction"]["id"], pred["image_id"], box[0], box[1], box[2], box[3])) #type: ignore
                 
                 # Save with opencv without compression, highest quality score
                 cv2.imwrite(f'{save_folder}/{crop_name}.jpg', cv2.cvtColor(crop["crop"], cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])
-                base.commit()
+                base.commit() #type: ignore
             query = """
                 UPDATE Images
                 SET Reviewed = 1, Open = 0, CropsGen = ?
                 WHERE ImageId = ?
             """
-            base.query(query, (num_crops, pred["image_id"]))
-            base.commit()
+            base.query(query, (num_crops, pred["image_id"])) 
+            base.commit() 
     
     return num_crops 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -603,7 +646,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
         FROM Crops C 
         WHERE C.InLabelBox = 0
         """
-    crops = base.query(query,())
+    crops = base.query(query,()) #type: ignore
     
     if len(crops) == 0: #type: ignore
         print("No valid crops to upload, please approve predictions first!") #type: ignore
@@ -629,7 +672,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
             FROM CropPredictions CP
             WHERE ? = CP.CropId
         """
-        crop_preds = base.query(query,(crop_info[0],))
+        crop_preds = base.query(query,(crop_info[0],)) 
         for pred_info in crop_preds: #type: ignore 
             labels.append(
                 Label(
@@ -669,7 +712,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
     pool.starmap(concurrent_upload, tasks)
     pool.close()
     pool.join()
-    base.commit()
+    base.commit() #type: ignore
     # Request data rows associated with global_ids we generated for labelbox shenannigans
     res = client.get_data_row_ids_for_global_keys(global_keys)
     
@@ -678,7 +721,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
         row_ids.append(id)
     
     project.create_batch(
-        name = f"high-altitude-pronghorn-survey-{str(uuid4())}", # add model name to batch
+        name = f"high-altitude-pronghorn-survey-{str(uuid4())}", # add model n/exceame to batch
         data_rows = row_ids, #type_ignore
         priority = 5,
     )
@@ -691,14 +734,6 @@ def upload_to_labelbox(batch_size, desired_class: int):
     )
     print("Upload complete!")
     uploading = False
-
-#---------------------------------------------------------------------------------------------------------------------------#
-
-def setup_interrupt_handler():
-    """ Gracefully handle ^C interrupts regarding the database
-    
-    """
-    signal.signal(signal.SIGINT, interrupt_handler)
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Dictionary of function calls to determine which version of a function to use. 
