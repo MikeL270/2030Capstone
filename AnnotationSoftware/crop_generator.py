@@ -333,7 +333,7 @@ def insert_to_database(bootstrap: bool):
 
     query = """
         SELECT HerdUnitId 
-        FROM HerdUnit
+        FROM HerdUnits
         WHERE HerdUnitName = ?
     """
     herdId = int(base.query(query, (herd_unit,))[0][0])
@@ -490,7 +490,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
         SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, I.Name, I.InTraining, I.ImageId, H.HerdUnitName
         FROM Predictions P
         JOIN Images I On P.ImageId = I.ImageId
-        JOIN HerdUnit H On I.HerdUnitId = H.HerdUnitId
+        JOIN HerdUnits H On I.HerdUnitId = H.HerdUnitId
         WHERE I.Imageid IN (
             SELECT ImageId
             FROM Images

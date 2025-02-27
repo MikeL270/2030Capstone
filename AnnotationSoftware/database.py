@@ -54,7 +54,7 @@ class Database(ABC): # Abstract class for all database types
                         "Error" SMALLINT NOT NULL CHECK ("Error" IN (0, 1)),
                         OPEN SMALLINT NOT NULL CHECK (OPEN IN (0, 1)),
                         CropsGen INTEGER,
-                        FOREIGN KEY (HerdUnitID) REFERENCES HerdUnit (HerdUnitID)
+                        FOREIGN KEY (HerdUnitID) REFERENCES HerdUnits (HerdUnitID)
                     )''')
 
         # Create Predictions table
@@ -205,5 +205,4 @@ db_types = {
     "default": Postgres,
     "sqlite": SQLite,
     "postgres": Postgres,
-
 }
