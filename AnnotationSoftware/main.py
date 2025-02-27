@@ -26,6 +26,10 @@ if "insert_data" in sys.argv:
 
 if "matplot" in sys.argv:
     image_backend = "matplot"
+
+if "opencv" in sys.argv:
+    image_backend = "opencv"
+
 if "approve_predictions" in sys.argv:
     approve_predictions = True
 if "upload_to_labelbox" in sys.argv:
@@ -47,7 +51,7 @@ if create_db:
     crop_generator.bootstrap_database()
 
 if append_to_db:
-    crop_generator.insert_to_database()
+    crop_generator.insert_to_database(False)
 
 if upload_to_labelbox:
     crop_generator.upload_to_labelbox(batch_size=batch_size, desired_class=desired_class)
