@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: February 23, 2025
+# Updated: March 7, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -107,7 +107,7 @@ def initialize(db_type: str, db_configuration: dict):
     predictions_folder = os.path.join(root, model_name, "data")  # type: ignore
     train_json_path = os.path.join(root, model_name, os.environ.get("ANNOTATIONS_FOLDER"), "train.json") #type: ignore
     current_date = datetime.date.today().strftime('%Y-%m-%d')
-    save_folder = os.path.join(root, os.environ.get("CROP_FOLDER")) #type: ignore
+    save_folder = os.path.join(root, "Images", os.environ.get("CROP_FOLDER")) #type: ignore
     os.makedirs(save_folder, exist_ok=True) # type: ignore
     uploading = False 
     prefix = len("high-altitude-pronghorn-survey-")
@@ -223,10 +223,10 @@ def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def update_training(image_names: list):
+def update_training(image_names: list, modelId):
     for name in image_names:
         query = """
-            SELECT CropId, ModelId
+            SELECT CropId, imageID
             FROM Crops
             WHERE CropName = ?
         """
@@ -236,8 +236,16 @@ def update_training(image_names: list):
         query = """ 
             INSERT INTO TRAINING (CropId, ModelId)
             VALUES (?, ?)
+            ON CONFLICT (CropId, ModelId) DO NOTHING
         """
-        base.query(query, (ids[0][0], ids[0][1]))
+        base.query(query, (ids[0][0], modelId))
+        query = """
+                UPDATE Images
+                SET intraining = 1 
+                WHERE Imageid = ?
+        """
+        base.query(query, (ids[0][1],))
+        base.commit()
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -261,7 +269,7 @@ def insert_manual_crops(model_id: int):
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def concurrent_populate(image_names: list, modelId: int, herdId: int, training_image_names: list):  
+def concurrent_populate_images(image_names: list, modelId: int, herdId: int, training_image_names: list):  
     concurrent_base = type(base)(db_config)
 
     concurrent_base.connect()
@@ -285,6 +293,7 @@ def concurrent_populate(image_names: list, modelId: int, herdId: int, training_i
             concurrent_base.query(query, (prediction["image_name"], herdId, in_training, 0, 0, 0, 0))
         except database.Postgres.psycopg2.errors.UniqueViolation:
             print("Image already in database")
+            # add flow control to handle new predictions for a new model
             continue
         
         imageId = concurrent_base.lastrowid()
@@ -295,13 +304,13 @@ def concurrent_populate(image_names: list, modelId: int, herdId: int, training_i
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
             concurrent_base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label))) #type: ignore
-    
+   # Async await commit from other workers 
     concurrent_base.commit() 
     concurrent_base.close() 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def insert_to_database(bootstrap: bool):
+def insert_images_to_database(bootstrap: bool):
     images_folder = os.path.join(root, "Images", herd_unit) #type: ignore   
     image_names = load_image_files(images_folder) 
     
@@ -323,7 +332,7 @@ def insert_to_database(bootstrap: bool):
     modelId = int(base.query(query, (model_name,))[0][0])
 
     query = """
-        INSERT INTO HerdUnit (HerdUnitName)
+        INSERT INTO HerdUnits (HerdUnitName)
         VALUES (?)
         ON CONFLICT(HerdUnitName) DO NOTHING
     """
@@ -350,17 +359,17 @@ def insert_to_database(bootstrap: bool):
     for i in range(process_count):
         start = i * chunk_size
         end = (i + 1) * chunk_size if i != process_count - 1 else total_images
-
         tasks.append((image_names[start:end], modelId, herdId, training_image_names))
          
-    pool.starmap(concurrent_populate, tasks)
+    pool.starmap(concurrent_populate_images, tasks)
     pool.close()
     pool.join()
     if bootstrap:
         insert_manual_crops(modelId)
-    update_training(list(load_training_image_names(True)))
+    update_training(list(load_training_image_names(True)), modelId)
     base.create_indexes()
     base.commit()
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def bootstrap_database():
@@ -370,7 +379,7 @@ def bootstrap_database():
     """
     # First part is single threaded for simplicity purposes
     base.create_tables()     
-    insert_to_database(True)
+    insert_images_to_database(True)
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -379,7 +388,7 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
     
     Args:
         image: source image that predictions were made from
-        points: List of coordinatTY), 85])e points of the approximate center for each prediction associated with the image
+        points: List of coordinate points of the approximate center for each prediction associated with the image
         crop_size: dimension for crop (note only square crops are currently supported)
         num_clusters: number of centers for kmeans to determine clusters 
         
@@ -484,7 +493,6 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
 def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: float) -> dict:
     print("Querying database...")
     predictions = {}
-    offset = 0
     rows = []
     query = """
         SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, I.Name, I.InTraining, I.ImageId, H.HerdUnitName
@@ -495,20 +503,16 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
             SELECT ImageId
             FROM Images
             WHERE Reviewed = 0 AND Open = 0
-            ORDER BY Reviewed ASC
-            LIMIT ? OFFSET ?
+            ORDER BY Reviewed ASC 
         ) AND P.Label = ? AND P.Score > ?
         ORDER BY P.Score DESC
+        LIMIT ?
     """
-    # query the database until results are returned
-    while len(rows) == 0: #type: ignore
-        try:
-            rows = base.query(query, (batch_size, offset, desired_class, min_confidence)) #type: ignore
-        except Exception as e:
-            print(f"Exception: {e} has ouccured")
-        
-        offset += batch_size
-
+    rows = base.query(query, (desired_class, min_confidence, batch_size)) #type: ignore
+    
+    if len(rows) == 0:
+        print("No results returned, try lowering min confidence!")
+    
     for row in rows: #type: ignore
         pred_id = row[0]
         box = [row[1], row[2], row[3], row[4]]
@@ -606,6 +610,8 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
 def concurrent_upload(data_rows, start, end, dataset):
     task = dataset.create_data_rows(data_rows[start:end])
     task.wait_until_done()
+    if task.errors:
+        print(task.errors)
 
 #---------------------------------------------------------------------------------------------------------------------------#
     
@@ -627,8 +633,9 @@ def upload_to_labelbox(batch_size, desired_class: int):
         SELECT C.CropId, C.CropName, C.GlobalKey
         FROM Crops C 
         WHERE C.InLabelBox = 0
+        LIMIT 199
         """
-    crops = base.query(query,()) #type: ignore
+    crops = base.query(query,(batch_size,)) #type: ignore
     
     if len(crops) == 0: #type: ignore
         print("No valid crops to upload, please approve predictions first!") #type: ignore

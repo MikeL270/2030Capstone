@@ -129,6 +129,10 @@ class Database(ABC): # Abstract class for all database types
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_imageid ON Crops (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_croppreds_cropid ON CropPredictions (CropId)')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_herdunit_herdunitid ON HerdUnits (herdunitid)')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_modelid on Models (modelid)')
+
+
         
         self.commit()
     

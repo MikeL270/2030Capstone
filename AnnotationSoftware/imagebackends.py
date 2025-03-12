@@ -21,7 +21,7 @@ class ImageBackend(ABC):
         pass
 
     def create_subcrop(self, image: np.ndarray, prediction: dict, desried_class: int, draw_box: bool):
-        crop_size = 100
+        crop_size = 150
         crops = []
         if len(prediction["boxes"]) == 0:        
             return False
@@ -65,7 +65,7 @@ class MatplotBackend(ImageBackend):
 
     def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool = False):     
         crops = self.create_subcrop(image, prediction, desired_class, draw_box)
-
+        scale_factor = 2
         crop_size = 2
         max_cols = 6
         max_crops = 36
@@ -77,7 +77,7 @@ class MatplotBackend(ImageBackend):
         else:
             cols = max_cols
             rows = math.ceil(len(crops) / max_cols)
-        fig, axs = self.plt.subplots(rows, cols, figsize=(cols * crop_size, rows * crop_size))
+        fig, axs = self.plt.subplots(rows, cols, figsize=(cols * crop_size * scale_factor, rows * crop_size * scale_factor))
 
         # if len(crops) == 1:
         #     axs = [axs]
