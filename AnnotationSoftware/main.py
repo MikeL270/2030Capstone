@@ -1,39 +1,65 @@
 import crop_generator
 import sys
 import multiprocessing
+import os
+from dotenv import load_dotenv
 #---------------------------------------------------------------------------------------------------------------------------#
 # Configuration
-
+load_dotenv()
 # Default Values
 create_db = False
+append_to_db = False
 draw_box = True
 crop_size = 2100
 desired_class = 2
-min_confidence = 0.80
-batch_size = 10
+min_confidence = 0.98
+batch_size = 50
 image_backend = "matplot"
 approve_predictions = False
 upload_to_labelbox = False
+update_training = False
 
 #flags to modify default values
 if "create_db" in sys.argv:
     create_db = True
+if "insert_data" in sys.argv:
+    append_to_db = True
 if "matplot" in sys.argv:
     image_backend = "matplot"
+if "opencv" in sys.argv:
+    image_backend = "opencv"
+
 if "approve_predictions" in sys.argv:
     approve_predictions = True
 if "upload_to_labelbox" in sys.argv:
     upload_to_labelbox = True
+if "update_training" in sys.argv:
+    update_training = True
+
+db_config = {
+    "database": os.environ.get("DB_NAME"),
+    "user": os.environ.get("DB_USER"),              
+    "password": os.environ.get("DB_PASS"),    
+    "host": os.environ.get("DB_HOST"),           
+    "port": "5432"              
+}
 
 #---------------------------------------------------------------------------------------------------------------------------#
 #Program start
-crop_generator.setup_interrupt_handler()
+crop_generator.initialize("postgres", db_config)
 
 if create_db:
-    crop_generator.populate_initial_tables()
+    crop_generator.bootstrap_database()
+
+if append_to_db:
+    crop_generator.insert_images_to_database(False)
 
 if upload_to_labelbox:
     crop_generator.upload_to_labelbox(batch_size=batch_size, desired_class=desired_class)
+
+if update_training:
+    print("This function should only be applied to models inserted before 3/7/2025, or if there are issues. Please use caution and test this before using it on using on you production database.")
+    crop_generator.update_training(list(crop_generator.load_training_image_names(True)), int(input("Please enter the id of the model you are updating training for: ")))
 
 if approve_predictions:
     num_crops = 0
