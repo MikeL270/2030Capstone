@@ -11,9 +11,9 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-import database
-import imagebackends
-import classnames
+from ..database import database
+from ..imagebackends import imagebackends
+from ..classnames import classnames
 import sys
 import signal
 import datetime

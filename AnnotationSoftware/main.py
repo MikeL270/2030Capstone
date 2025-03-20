@@ -65,12 +65,12 @@ if approve_predictions:
     num_crops = 0
     while True:
         # Load a dictionary of model predictions into memory 
-        predictions = crop_generator.get_pred_and_images(batch_size=batch_size, desired_class=desired_class, min_confidence=min_confidence)
+        predictions = cropgenerator.get_pred_and_images(batch_size=batch_size, desired_class=desired_class, min_confidence=min_confidence)
         if len(predictions) == 0:
             continue
         # Approve crops 
-        num_crops += crop_generator.approve_annotations(predictions=predictions, desired_class=desired_class, crop_size=2100, draw_box = False, image_backend=image_backend)
+        num_crops += cropgenerator.approve_annotations(predictions=predictions, desired_class=desired_class, crop_size=2100, draw_box = False, image_backend=image_backend)
         
         if num_crops == batch_size:
-            bg_upload = multiprocessing.Process(target=crop_generator.upload_to_labelbox, args=(batch_size, desired_class))
+            bg_upload = multiprocessing.Process(target=cropgenerator.upload_to_labelbox, args=(batch_size, desired_class))
             bg_upload.start()

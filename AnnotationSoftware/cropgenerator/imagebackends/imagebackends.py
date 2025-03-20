@@ -6,7 +6,7 @@
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
 from typing import Any
-import classnames
+from ..classnames import classnames
 import os
 import numpy as np
 import math
