@@ -23,7 +23,6 @@ import labelbox as lb
 from labelbox.data.annotation_types import Label, ObjectAnnotation, Rectangle, Point
 from uuid import uuid4
 from multiprocessing import Pool, cpu_count
-import json
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -271,7 +270,7 @@ def insert_manual_crops(model_id: int):
 
 def concurrent_populate_images(image_names: list, modelId: int, herdId: int, training_image_names: list):  
     concurrent_base = type(base)(db_config)
-
+    
     concurrent_base.connect()
  
     for image_name in image_names:
@@ -633,7 +632,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
         SELECT C.CropId, C.CropName, C.GlobalKey
         FROM Crops C 
         WHERE C.InLabelBox = 0
-        LIMIT 199
+        LIMIT 50
         """
     crops = base.query(query,(batch_size,)) #type: ignore
     
@@ -710,7 +709,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
         row_ids.append(id)
     
     project.create_batch(
-        name = f"high-altitude-pronghorn-survey-{str(uuid4())}", # add model n/exceame to batch
+        name = f"high-altitude-pronghorn-survey-{str(uuid4())}", # add model name to batch
         data_rows = row_ids, #type_ignore
         priority = 5,
     )

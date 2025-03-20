@@ -1,7 +1,7 @@
 absl-py==2.1.0
 albucore==0.0.23
 albumentations==2.0.4
-annotated-types==0.7.0
+annotate-types==0.7.0
 cachetools==5.5.1
 certifi==2025.1.31
 charset-normalizer==3.4.1
