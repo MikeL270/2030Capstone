@@ -124,6 +124,12 @@ class Database(ABC): # Abstract class for all database types
                         PRIMARY KEY (Modelid, Cropid)
                     )''')
         
+        # Create Classlabels table
+        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS ClassLabels (
+                             label_id INT PRIMARY KEY,
+                             label VARCHAR(15))
+                    ''')
+        
     def create_indexes(self):
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
@@ -131,8 +137,6 @@ class Database(ABC): # Abstract class for all database types
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_croppreds_cropid ON CropPredictions (CropId)')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_herdunit_herdunitid ON HerdUnits (herdunitid)')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_modelid on Models (modelid)')
-
-
         
         self.commit()
     

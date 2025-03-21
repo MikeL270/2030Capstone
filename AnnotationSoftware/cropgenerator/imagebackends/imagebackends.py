@@ -1,12 +1,11 @@
 # Methods for presenting images to users
 # Authors: Ben Koger, Michael B. Lance
 # Created: February 26, 2025
-# Updated: February 26, 2025
+# Updated: March 20, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
 from typing import Any
-from ..classnames import classnames
 import os
 import numpy as np
 import math
@@ -20,7 +19,7 @@ class ImageBackend(ABC):
     def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool):
         pass
 
-    def create_subcrop(self, image: np.ndarray, prediction: dict, desried_class: int, draw_box: bool):
+    def create_subcrop(self, image: np.ndarray, prediction: dict, draw_box: bool):
         crop_size = 150
         crops = []
         if len(prediction["boxes"]) == 0:        
@@ -41,7 +40,7 @@ class ImageBackend(ABC):
 class MatplotBackend(ImageBackend):
     import matplotlib.pyplot as plt
 
-    def prompt_user(self, desired_class: int):
+    def prompt_user(self, class_name):
         if os.name == "posix":
             pass
             os.system("clear")
@@ -49,7 +48,7 @@ class MatplotBackend(ImageBackend):
             os.system("cls")
 
         while True: # Show number associated with crop indexes in plot
-            user_input = input(f"Please indicate (yes or no) whether any displayed image is of a {classnames.label_name[desired_class]}, q to quit: \n")
+            user_input = input(f"Please indicate (yes or no) whether any displayed image is of a {class_name}, q to quit: \n")
             try:
                 if user_input in set(["q", "Q", "Quit", "quit", "QUIT"]):
                     print("Quitting...")
@@ -63,12 +62,13 @@ class MatplotBackend(ImageBackend):
             except:
                 continue 
 
-    def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool = False):     
-        crops = self.create_subcrop(image, prediction, desired_class, draw_box)
+    def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, class_labels: dict, draw_box: bool = False):     
+        crops = self.create_subcrop(image, prediction, draw_box)
         scale_factor = 2
         crop_size = 2
         max_cols = 6
         max_crops = 36
+        class_name = class_labels[desired_class]
 
         crops = crops[:max_crops] #type: ignore
         if len(crops) <= max_cols:
@@ -91,7 +91,7 @@ class MatplotBackend(ImageBackend):
         self.plt.axis('off')
         self.plt.close() 
         self.plt.show(block=False)
-        out = self.prompt_user(desired_class)
+        out = self.prompt_user(class_name)
         self.plt.close(fig)
         if out == -999:
             return -999
@@ -133,11 +133,9 @@ class OpencvBackend(ImageBackend):
 #---------------------------------------------------------------------------------------------------------------------------#
 
 # Dictionary of function calls to determine which version of a function to use. 
-backends = {
+def get_backend(name: str):
+    backends = {
     "matplot": MatplotBackend,
     "opencv": OpencvBackend,
-    
-}
-
-
-
+    }
+    return backends[name]  

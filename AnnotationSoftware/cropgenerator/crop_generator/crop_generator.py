@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: March 7, 2025
+# Updated: March 20, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..database import database
 from ..imagebackends import imagebackends
-from ..classnames import classnames
 import sys
 import signal
 import datetime
@@ -77,7 +76,7 @@ def setup_interrupt_handler():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Since crop_generator is intended as a module it is good practice to not have it execute anything not called in a function
-def initialize(db_type: str, db_configuration: dict):
+def initialize(db_type: str, image_backend: str, db_configuration: dict):
     """ Initialize the module and with the specified database backend and environment variables
 
     """
@@ -94,11 +93,13 @@ def initialize(db_type: str, db_configuration: dict):
     global db_config
     global prefix
     global suffix
+    global img_backend
 
     load_dotenv()
     db_config = db_configuration
     base = database.db_types[db_type](db_config)
     base.connect()
+    img_backend = imagebackends.get_backend(image_backend)()
 
     model_name = os.environ.get("MODEL_NAME")
     herd_unit = os.environ.get("HERD_UNIT")
@@ -111,8 +112,26 @@ def initialize(db_type: str, db_configuration: dict):
     uploading = False 
     prefix = len("high-altitude-pronghorn-survey-")
     suffix = len("_crop_xx")
+    setup_interrupt_handler()
+    get_class_labels()
 
-    setup_interrupt_handler() 
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def get_class_labels():
+    global labels_forward
+    global labels_reverse
+    
+    labels_forward = {}
+    labels_reverse = {}
+    query = """
+        SELECT * FROM classlabels
+        
+    """
+    rows = base.query(query,())
+
+    for id, name in rows:
+        labels_forward[id] = name
+        labels_reverse[name] = id
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -549,7 +568,7 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def approve_annotations(predictions: dict, desired_class: int, crop_size: int, draw_box: bool, image_backend: str) -> int:
+def approve_annotations(predictions: dict, desired_class: int, crop_size: int, draw_box: bool) -> int:
     """ Present the user with cropped images and their predictions for validation 
 
     """
@@ -569,8 +588,7 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
         if len(image_crops) == 0:
             continue
         for crop_name, crop in image_crops.items():
-            imagebackend = imagebackends.backends[image_backend]()
-            approved_predictions = imagebackend.show_predictions(image=crop["crop"], prediction=crop["prediction"], desired_class=desired_class, draw_box=draw_box) #type: ignore
+            approved_predictions = img_backend.show_predictions(image=crop["crop"], prediction=crop["prediction"], desired_class=desired_class, class_labels=labels_forward, draw_box=draw_box) #type: ignore
             if approved_predictions == -999:
                 quit_app()
 
@@ -579,7 +597,7 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
                     INSERT INTO Crops (ModelID, ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
-                
+
                 base.query(query, (modelId, pred["image_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date, str(uuid4()))) 
                 base.commit() 
                 num_crops += 1
@@ -667,7 +685,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
                     data = {"global_key": crop_info[2]}, #type: ignore
                     annotations = [
                         ObjectAnnotation(
-                            name = classnames.label_name[desired_class],
+                            name = labels_forward[desired_class],
                             value = Rectangle(
                                 start = Point(x = pred_info[0], y = pred_info[1]),
                                 end = Point( x = pred_info[2], y = pred_info[3])
@@ -724,4 +742,3 @@ def upload_to_labelbox(batch_size, desired_class: int):
     uploading = False
 
 #---------------------------------------------------------------------------------------------------------------------------#
-

@@ -46,7 +46,7 @@ db_config = {
 
 #---------------------------------------------------------------------------------------------------------------------------#
 #Program start
-cropgenerator.initialize("postgres", db_config)
+cropgenerator.initialize(db_type="postgres", image_backend=image_backend, db_configuration=db_config)
 
 if create_db:
     cropgenerator.bootstrap_database()
@@ -69,7 +69,7 @@ if approve_predictions:
         if len(predictions) == 0:
             continue
         # Approve crops 
-        num_crops += cropgenerator.approve_annotations(predictions=predictions, desired_class=desired_class, crop_size=2100, draw_box = False, image_backend=image_backend)
+        num_crops += cropgenerator.approve_annotations(predictions=predictions, desired_class=desired_class, crop_size=2100, draw_box = False)
         
         if num_crops == batch_size:
             bg_upload = multiprocessing.Process(target=cropgenerator.upload_to_labelbox, args=(batch_size, desired_class))
