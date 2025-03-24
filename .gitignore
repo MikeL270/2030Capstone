@@ -176,3 +176,5 @@ AnnotationSoftware/annotated_crops
 AnnotationSoftware/dockerfile
 AnnotationSoftware/docker-compose.yml
 AnnotationSoftware/requirements.txt
+
+deleteme.py

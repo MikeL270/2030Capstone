@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: March 20, 2025
+# Updated: March 24, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -22,6 +22,7 @@ import labelbox as lb
 from labelbox.data.annotation_types import Label, ObjectAnnotation, Rectangle, Point
 from uuid import uuid4
 from multiprocessing import Pool, cpu_count
+from typing import Any
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -99,6 +100,7 @@ def initialize(db_type: str, image_backend: str, db_configuration: dict):
     db_config = db_configuration
     base = database.db_types[db_type](db_config)
     base.connect()
+
     img_backend = imagebackends.get_backend(image_backend)()
 
     model_name = os.environ.get("MODEL_NAME")
@@ -287,7 +289,7 @@ def insert_manual_crops(model_id: int):
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def concurrent_populate_images(image_names: list, modelId: int, herdId: int, training_image_names: list):  
+def concurrent_populate_images(image_names: list, modelId: int, herdId: int, training_image_names: list, insert_images: bool, insert_predictions: bool):  
     concurrent_base = type(base)(db_config)
     
     concurrent_base.connect()
@@ -302,33 +304,43 @@ def concurrent_populate_images(image_names: list, modelId: int, herdId: int, tra
  
         check_image_name = os.path.splitext(os.path.basename(image_name))[0]
         in_training = 1 if (is_in_training_set(check_image_name, training_image_names)) else 0
-            
-        query = """
-            INSERT INTO Images (Name, HerdUnitID, InTraining, Reviewed, "Error", CropsGen, Open)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """
-        try:
-            concurrent_base.query(query, (prediction["image_name"], herdId, in_training, 0, 0, 0, 0))
-        except database.Postgres.psycopg2.errors.UniqueViolation:
-            print("Image already in database")
-            # add flow control to handle new predictions for a new model
-            continue
-        
-        imageId = concurrent_base.lastrowid()
-       
-        for box, score, label in zip(prediction['boxes'], prediction['scores'], prediction['labels']):
+        if insert_images:   
             query = """
-                INSERT INTO Predictions (ImageId, ModelId, BoxTx, BoxTy, BoxBx, BoxBy, Score, Label)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO Images (Name, HerdUnitID, InTraining, Reviewed, "Error", CropsGen, Open)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """
-            concurrent_base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label))) #type: ignore
+            try:
+                concurrent_base.query(query, (prediction["image_name"], herdId, in_training, 0, 0, 0, 0))
+            except database.Postgres.psycopg2.errors.UniqueViolation:
+                print("Image already in database...")
+                continue
+            
+            imageId = concurrent_base.lastrowid()
+        else:
+            query = """
+                    SELECT imageid
+                    FROM images
+                    WHERE image_name = ?
+            """
+            imageId = int(base.query(query, (image_name,))[0][0])
+        if insert_predictions:
+            for box, score, label in zip(prediction['boxes'], prediction['scores'], prediction['labels']):
+                # Prediction level IOU would most likely be less efficient than comparing individual crops
+                query = """
+                    INSERT INTO Predictions (ImageId, ModelId, BoxTx, BoxTy, BoxBx, BoxBy, Score, Label)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                try: 
+                    concurrent_base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label))) #type: ignore
+                except database.Postgres.psycopg2.errors.UniqueViolation:
+                    print("Prediction Already in database...")
    # Async await commit from other workers 
     concurrent_base.commit() 
     concurrent_base.close() 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def insert_images_to_database(bootstrap: bool):
+def insert_to_database(bootstrap: bool=False, insert_images: bool=True, insert_predictions: bool=True):
     images_folder = os.path.join(root, "Images", herd_unit) #type: ignore   
     image_names = load_image_files(images_folder) 
     
@@ -377,7 +389,7 @@ def insert_images_to_database(bootstrap: bool):
     for i in range(process_count):
         start = i * chunk_size
         end = (i + 1) * chunk_size if i != process_count - 1 else total_images
-        tasks.append((image_names[start:end], modelId, herdId, training_image_names))
+        tasks.append((image_names[start:end], modelId, herdId, training_image_names, insert_images, insert_predictions))
          
     pool.starmap(concurrent_populate_images, tasks)
     pool.close()
@@ -390,6 +402,21 @@ def insert_images_to_database(bootstrap: bool):
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
+def insert_full():
+    insert_to_database(bootstrap=False, insert_images=True, insert_predictions=True)
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def insert_new_images():
+    insert_to_database(bootstrap=False, insert_images=True, insert_predictions=False)
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def insert_new_preds():
+    insert_to_database(bootstrap=False, insert_images=False, insert_predictions=False)
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
 def bootstrap_database():
     """ Populate a SQL database with image names and predictions
 
@@ -397,7 +424,7 @@ def bootstrap_database():
     """
     # First part is single threaded for simplicity purposes
     base.create_tables()     
-    insert_images_to_database(True)
+    insert_to_database(bootstrap=True, insert_images=True, insert_predictions=True)
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -567,6 +594,36 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
     return predictions
 
 #---------------------------------------------------------------------------------------------------------------------------#
+def calculate_iou(boxA: list, boxB: list):
+    # Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
+    #Extract bounding boxes coordinates
+    x0_A, y0_A, x1_A, y1_A = boxA
+    x0_B, y0_B, x1_B, y1_B = boxB
+    
+    # Get the coordinates of the intersection rectangle
+    x0_I = max(x0_A, x0_B)
+    y0_I = max(y0_A, y0_B)
+    x1_I = min(x1_A, x1_B)
+    y1_I = min(y1_A, y1_B)
+    #Calculate width and height of the intersection area.
+    width_I = x1_I - x0_I 
+    height_I = y1_I - y0_I
+
+    # Handle the negative value width or height of the intersection area
+    #if width_I<0 : width_I=0
+    width_I = 0 if width_I < 0 else width_I
+    #if height_I<0 : height_I=0
+    height_I = 0 if height_I < 0 else height_I
+    # Calculate the intersection area:
+    intersection = width_I * height_I
+    # Calculate the union area:
+    width_A, height_A = x1_A - x0_A, y1_A - y0_A
+    width_B, height_B = x1_B - x0_B, y1_B - y0_B
+    union = (width_A * height_A) + (width_B * height_B) - intersection
+    # Calculate the IoU:
+    return intersection/union
+
+#---------------------------------------------------------------------------------------------------------------------------#
 
 def approve_annotations(predictions: dict, desired_class: int, crop_size: int, draw_box: bool) -> int:
     """ Present the user with cropped images and their predictions for validation 
@@ -578,7 +635,7 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
         WHERE ModelName = ?
     """
     modelId = int(base.query(query, (model_name,))[0][0])
-
+  
     num_crops = 0
     for image_name, pred in predictions.items():
         images_folder = os.path.join(root, "Images", pred['herd_unit']) #type: ignore
@@ -587,6 +644,20 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
         image_crops = auto_crop(image, image_name, pred, crop_size, 1)
         if len(image_crops) == 0:
             continue
+        query = """
+            SELECT *
+            FROM Crops
+            WHERE ModelID NOT ?
+        """
+        existing_crops = base.query(query, (modelId))
+
+        if len(existing_crops) > 0:
+            for crop in image_crops:
+                for ecrop in existing_crops:
+                    if calculate_iou(crop["dimensions"], list(ecrop[5:8])) >= 0.9:
+                        image_crops.remove(crop)
+
+
         for crop_name, crop in image_crops.items():
             approved_predictions = img_backend.show_predictions(image=crop["crop"], prediction=crop["prediction"], desired_class=desired_class, class_labels=labels_forward, draw_box=draw_box) #type: ignore
             if approved_predictions == -999:

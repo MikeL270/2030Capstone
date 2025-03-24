@@ -1,7 +1,7 @@
 # Methods for presenting images to users
 # Authors: Ben Koger, Michael B. Lance
 # Created: February 26, 2025
-# Updated: March 20, 2025
+# Updated: March 22, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
@@ -36,11 +36,15 @@ class ImageBackend(ABC):
                 self.cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
 
         return crops
+    
+#---------------------------------------------------------------------------------------------------------------------------#
 
 class MatplotBackend(ImageBackend):
     import matplotlib.pyplot as plt
+    def __init__(self, window: Any=None):
+        pass
 
-    def prompt_user(self, class_name):
+    def prompt_user(self, class_name): 
         if os.name == "posix":
             pass
             os.system("clear")
@@ -96,8 +100,12 @@ class MatplotBackend(ImageBackend):
         if out == -999:
             return -999
         return out #type: ignore
+    
+#---------------------------------------------------------------------------------------------------------------------------#
 
 class OpencvBackend(ImageBackend):
+    def __init__(self, window: Any=None):
+        pass
 
     def prompt_user(self, key):
         if key == ord('q'):
@@ -132,10 +140,10 @@ class OpencvBackend(ImageBackend):
          
 #---------------------------------------------------------------------------------------------------------------------------#
 
-# Dictionary of function calls to determine which version of a function to use. 
-def get_backend(name: str):
+def get_backend(backend_type: str):
     backends = {
     "matplot": MatplotBackend,
     "opencv": OpencvBackend,
     }
-    return backends[name]  
+
+    return backends[backend_type]

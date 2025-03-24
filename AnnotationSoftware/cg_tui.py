@@ -1,3 +1,10 @@
+# Command line utility built on top of cropgenerator module
+# Authors: Michael B. Lance
+# Created: Nov 21, 2024
+# Updated: March 24, 2025
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
 import cropgenerator
 import sys
 import multiprocessing
@@ -5,10 +12,10 @@ import os
 from dotenv import load_dotenv
 #---------------------------------------------------------------------------------------------------------------------------#
 # Configuration
+# TODO: Rework flow control into scaleable argument parsing module
 load_dotenv()
 # Default Values
-create_db = False
-append_to_db = False
+
 draw_box = True
 crop_size = 2100
 desired_class = 2
@@ -20,10 +27,6 @@ upload_to_labelbox = False
 update_training = False
 
 #flags to modify default values
-if "create_db" in sys.argv:
-    create_db = True
-if "insert_data" in sys.argv:
-    append_to_db = True
 if "matplot" in sys.argv:
     image_backend = "matplot"
 if "opencv" in sys.argv:
@@ -48,11 +51,14 @@ db_config = {
 #Program start
 cropgenerator.initialize(db_type="postgres", image_backend=image_backend, db_configuration=db_config)
 
-if create_db:
+if "create_db" in sys.argv:
     cropgenerator.bootstrap_database()
-
-if append_to_db:
-    cropgenerator.insert_images_to_database(False)
+elif "append_full" in sys.argv:
+    cropgenerator.insert_full()
+elif "insert_images" in sys.argv:
+    cropgenerator.insert_new_images()
+elif "insert_preds" in sys.argv:
+    cropgenerator.insert_new_preds()
 
 if upload_to_labelbox:
     cropgenerator.upload_to_labelbox(batch_size=batch_size, desired_class=desired_class)
@@ -69,7 +75,7 @@ if approve_predictions:
         if len(predictions) == 0:
             continue
         # Approve crops 
-        num_crops += cropgenerator.approve_annotations(predictions=predictions, desired_class=desired_class, crop_size=2100, draw_box = False)
+        num_crops += cropgenerator.approve_annotations(predictions=predictions, desired_class=desired_class, crop_size=crop_size, draw_box = False)
         
         if num_crops == batch_size:
             bg_upload = multiprocessing.Process(target=cropgenerator.upload_to_labelbox, args=(batch_size, desired_class))
