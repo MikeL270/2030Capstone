@@ -1,12 +1,13 @@
 # Abstraction module to make it easy to change database drivers 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: February 13, 2025
+# Updated: February 26, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
 from typing import Any
-import psycopg2
+
+#---------------------------------------------------------------------------------------------------------------------------#
 
 # Add user table and mutex to images table
 
@@ -18,6 +19,7 @@ class Database(ABC): # Abstract class for all database types
     def connect(self):
         pass
     
+    @abstractmethod
     def get_auto_increment_column(self):
         pass
 
@@ -33,13 +35,13 @@ class Database(ABC): # Abstract class for all database types
         # Create Models table
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Models (
                         ModelId {auto_increment_column},
-                        ModelName CHAR(19)
+                        ModelName CHAR(19) NOT NULL UNIQUE
                     )''')
 
          # Create HerdUnit table
-        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS HerdUnit (
+        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS HerdUnits (
                         HerdUnitID SERIAL NOT NULL PRIMARY KEY,
-                        HerdUnitName VARCHAR(6)
+                        HerdUnitName VARCHAR(6) NOT NULL UNIQUE
                     )''')
 
         # Create Images table
@@ -52,7 +54,7 @@ class Database(ABC): # Abstract class for all database types
                         "Error" SMALLINT NOT NULL CHECK ("Error" IN (0, 1)),
                         OPEN SMALLINT NOT NULL CHECK (OPEN IN (0, 1)),
                         CropsGen INTEGER,
-                        FOREIGN KEY (HerdUnitID) REFERENCES HerdUnit (HerdUnitID)
+                        FOREIGN KEY (HerdUnitID) REFERENCES HerdUnits (HerdUnitID)
                     )''')
 
         # Create Predictions table
@@ -64,7 +66,7 @@ class Database(ABC): # Abstract class for all database types
                         BoxTy SMALLINT,
                         BoxBx SMALLINT,
                         BoxBy SMALLINT, 
-                        Score SMALLINT,
+                        Score FLOAT,
                         Label SMALLINT,
                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId),
                         FOREIGN KEY (ModelId) REFERENCES Models (ModelId)
@@ -74,6 +76,7 @@ class Database(ABC): # Abstract class for all database types
         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Crops (
                         CropId {auto_increment_column},
                         ImageId INTEGER NOT NULL,
+                        ModelId INTEGER NOT NULL,
                         CropName VARCHAR(58) NOT NULL UNIQUE,
                         InLabelBox INTEGER NOT NULL CHECK (InLabelBox IN (0, 1)),
                         CropTx SMALLINT,
@@ -82,7 +85,8 @@ class Database(ABC): # Abstract class for all database types
                         CropBy SMALLINT,
                         Created DATE,
                         globalKey CHAR(36) UNIQUE,
-                        FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
+                        FOREIGN KEY (ImageId) REFERENCES Images (ImageId),
+                        FOREIGN KEY (ModelId) REFERENCES Models (ModelId)
                     )''')
 
         # Create CropPredictions table
@@ -101,22 +105,38 @@ class Database(ABC): # Abstract class for all database types
                     )''') 
 
         # Create Annotations table
-        self._cursor.execute('''CREATE TABLE IF NOT EXISTS Annotations (
-                        AnnotationID SERIAL NOT NULL PRIMARY KEY,
-                        CropPredID INT,
+        self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Annotations (
+                        AnnotationId {auto_increment_column},
+                        CropID INT,
                         BoxTx SMALLINT,
                         BoxTy SMALLINT,
                         BoxBx SMALLINT,
                         BoxBy SMALLINT,
-                        FOREIGN KEY (CropPredID) REFERENCES CropPredictions (CropPredID)
-                    );''')
+                        FOREIGN KEY (CropID) REFERENCES Crops (CropID)
+                    )''')
+
+        # Create Training table
+        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS Training (
+                        ModelId INT,
+                        CropID INT,
+                        FOREIGN KEY (ModelId) REFERENCES Models (ModelId),
+                        FOREIGN KEY (CropId) REFERENCES CROPS (CropId),
+                        PRIMARY KEY (Modelid, Cropid)
+                    )''')
         
+        # Create Classlabels table
+        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS ClassLabels (
+                             label_id INT PRIMARY KEY,
+                             label VARCHAR(15))
+                    ''')
         
     def create_indexes(self):
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_imageid ON Crops (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_croppreds_cropid ON CropPredictions (CropId)')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_herdunit_herdunitid ON HerdUnits (herdunitid)')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_modelid on Models (modelid)')
         
         self.commit()
     
@@ -164,6 +184,7 @@ class SQLite(Database):
         return "?"
     
 class Postgres(Database):
+    import psycopg2
     def __init__(self, db_config: dict):
         self._config = db_config
         self._conn = None
@@ -172,9 +193,9 @@ class Postgres(Database):
 
     def connect(self):
         try:
-            self._conn = psycopg2.connect(**self._config) #type: ignore
+            self._conn = self.psycopg2.connect(**self._config) #type: ignore
             self._cursor = self._conn.cursor()
-        except (Exception, psycopg2.DatabaseError) as error:
+        except (Exception, self.psycopg2.DatabaseError) as error:
             print(error)
 
     def get_auto_increment_column(self) -> str:
@@ -188,4 +209,8 @@ class Postgres(Database):
         return self._cursor.fetchone()[0]
 
 
-    
+db_types = {
+    "default": Postgres,
+    "sqlite": SQLite,
+    "postgres": Postgres,
+}
