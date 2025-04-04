@@ -170,7 +170,7 @@ cython_debug/
 AnnotationSoftware/dev-env/
 AnnotationSoftware/data
 AnnotationSoftware/annotations
-AnnotationSoftware/scratch.py
+AnnotationSoftware/scratch.txt
 AnnotationSoftware/*.db
 AnnotationSoftware/annotated_crops
 AnnotationSoftware/dockerfile

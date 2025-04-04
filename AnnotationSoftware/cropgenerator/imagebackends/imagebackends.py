@@ -1,7 +1,7 @@
 # Methods for presenting images to users
 # Authors: Ben Koger, Michael B. Lance
 # Created: February 26, 2025
-# Updated: March 22, 2025
+# Updated: April 4, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
@@ -9,6 +9,7 @@ from typing import Any
 import os
 import numpy as np
 import math
+import asyncio
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -16,7 +17,7 @@ class ImageBackend(ABC):
     import cv2
     
     @abstractmethod
-    def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool):
+    async def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool):
         pass
 
     def create_subcrop(self, image: np.ndarray, prediction: dict, draw_box: bool):
@@ -80,10 +81,8 @@ class MatplotBackend(ImageBackend):
             rows = 1
         else:
             cols = max_cols
-            rows = math.ceil(len(crops) / max_cols)
-        fig, axs = self.plt.subplots(rows, cols, figsize=(cols * crop_size * scale_factor, rows * crop_size * scale_factor))
+            rows = math.ceil(len(crops) / max_cols)#---------------------------------------------------------------------------------------------------------------------------#
 
-        # if len(crops) == 1:
         #     axs = [axs]
         for ax, crop, score in zip(fig.axes[:len(crops)], crops, prediction["scores"]):
             ax.imshow(crop)
@@ -104,8 +103,6 @@ class MatplotBackend(ImageBackend):
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class OpencvBackend(ImageBackend):
-    def __init__(self, window: Any=None):
-        pass
 
     def prompt_user(self, key):
         if key == ord('q'):
@@ -117,7 +114,7 @@ class OpencvBackend(ImageBackend):
         if key in set([ord("n"), ord("N"), ord("0")]):
             return False
 
-    def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool = False):
+    async def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool = False):
         crops = self.create_subcrop(image, prediction, desired_class, draw_box)
         
         if os.name == "posix":
@@ -138,6 +135,13 @@ class OpencvBackend(ImageBackend):
                 return -999
             return out
          
+#---------------------------------------------------------------------------------------------------------------------------#
+# Returns JSON object of crops to easily build gui applications
+class JsonBackend(ImageBackend):
+    import json
+    async def show_predictions(self, crop):
+        return self.json.dumps(crop, indent = 4)
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def get_backend(backend_type: str):

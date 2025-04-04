@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: March 24, 2025
+# Updated: April 4, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..database import database
 from ..imagebackends import imagebackends
+from .. generator_objects import Box, Image, Prediction, Crop
 import sys
 import signal
 import datetime
@@ -95,6 +96,7 @@ def initialize(db_type: str, image_backend: str, db_configuration: dict):
     global prefix
     global suffix
     global img_backend
+    global img_folder
 
     load_dotenv()
     db_config = db_configuration
@@ -110,6 +112,7 @@ def initialize(db_type: str, image_backend: str, db_configuration: dict):
     train_json_path = os.path.join(root, model_name, os.environ.get("ANNOTATIONS_FOLDER"), "train.json") #type: ignore
     current_date = datetime.date.today().strftime('%Y-%m-%d')
     save_folder = os.path.join(root, "Images", os.environ.get("CROP_FOLDER")) #type: ignore
+    img_folder = os.path.join(root, "Images", pred['herd_unit']) #type: ignore
     os.makedirs(save_folder, exist_ok=True) # type: ignore
     uploading = False 
     prefix = len("high-altitude-pronghorn-survey-")
@@ -161,7 +164,7 @@ def load_training_image_names(crop_suffix: bool = False) -> set:
         return set(os.path.splitext(image_info['file_name'])[0][prefix:-suffix] for image_info in train_json['images'])
 
 #---------------------------------------------------------------------------------------------------------------------------#
-
+# TODO Rework to comply with new datastructure practices
 def load_prediction(image_file: str) -> dict[str, str]:
     """ Load model predictions for a given image name
 
@@ -189,7 +192,7 @@ def load_prediction(image_file: str) -> dict[str, str]:
         raise Exception(f"{image_name} missing labels file.")
     else:
         labels = np.load(label_file)
-    
+    # TODO modify to comply with new memory model
     image_info = {
         "image_name": image_name,
         "boxes": boxes,
@@ -428,7 +431,7 @@ def bootstrap_database():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: int, num_clusters: int) -> dict[str, dict[str, np.ndarray]]:
+def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[Crop, list[Prediction]]:
     """ Automatically create crops of a given size containing all images with approved annotations 
     
     Args:
@@ -443,11 +446,11 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
     points = []
     centers = []
     crops = {} # Structure to be returned
+    img = image.get_image()
 
-    for box in prediction['boxes']:
-        x = np.mean([box[0], box[2]])
-        y = np.mean([box[1], box[3]])
-        points.append((x, y))
+    # Get centers for all predictions 
+    for pred in predictions:
+        points.append(pred.box.get_center())
    
     if len(points) == 0:
         return crops
@@ -474,56 +477,57 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         if len(points) >= num_clusters:
             kmeans.fit(points_array)
         else:
+            #TODO Raise an error
             return crops 
 
         centers = kmeans.cluster_centers_
 
     points_in_crop = np.zeros(len(points))
     for crop_num, center in enumerate(centers):
-        crop_name = f"{image_name}_crop_{crop_num}"
-        if crop_name not in crops:
-            crops[crop_name] = {
-                "crop": None,
-                "dimesions": [],
-                "prediction": {
-                    "id": int,
-                    "boxes": [],
-                    "scores": []
-                }
-            }
+        crop = Crop(
+            name = f"{Image.name}_crop_{crop_num}",
+            image_id = image.id,
+        )
+        crops[crop] = []
+        
         x_start = max(0, int(center[0]) - crop_size // 2)
         y_start = max(0, int(center[1]) - crop_size // 2)
-        x_end = min(image.shape[1], x_start + crop_size)
-        y_end = min(image.shape[0], y_start + crop_size)
-        if x_end == image.shape[1]:
-            x_start -= (x_start + crop_size) - image.shape[1]
+        x_end = min(img.shape[1], x_start + crop_size)
+        y_end = min(img.shape[0], y_start + crop_size)
+        if x_end == img.shape[1]:
+            x_start -= (x_start + crop_size) - img.shape[1]
 
-        if y_end == image.shape[0]:
-            y_start -= (y_start + crop_size) - image.shape[0]
+        if y_end == img.shape[0]:
+            y_start -= (y_start + crop_size) - img.shape[0]
         
-        crop = image[y_start:y_end, x_start:x_end].copy()
+        crop.set_image(img[y_start:y_end, x_start:x_end].copy())
 
-        for p_index, (box, pred_id, score) in enumerate(zip(prediction["boxes"], prediction["pred_ids"], prediction["scores"])):
-            if ((box[0] >= x_start) and (box[2] <= x_end)) and ((box[1] >= y_start) and (box[3] <= y_end)): 
+        for p_index, pred in enumerate(predictions):
+            tl_x, tl_y, br_x, br_y = pred.dimensions.get_points()
+            if ((tl_x >= x_start) and (br_x <= x_end)) and ((tl_y >= y_start) and (br_y <= y_end)): 
                 points_in_crop[p_index] += 1
-                crops[crop_name]["prediction"]["id"] = pred_id 
-                crops[crop_name]["prediction"]["boxes"].append([
-                    box[0] - x_start,
-                    box[1] - y_start,
-                    box[2] - x_start,
-                    box[3] - y_start
-                ])
-                crops[crop_name]["prediction"]["scores"].append(score)
-
-        crops[crop_name]["crop"] = crop
-        crops[crop_name]["dimensions"] = [x_start, y_start, x_end, y_end] 
+                crops[crop].append(
+                    Prediction(
+                        pred_id = pred.id,
+                            box = Box(
+                                tl_x = tl_x - x_start,
+                                tl_y = tl_y - y_start,
+                                br_x = br_x - x_start,
+                                br_y = br_y - y_start
+                            ),
+                        score = pred.score,
+                        label = pred.label, 
+                        model = pred.model
+                    )  
+                )  
+        crop.dimension = Box(x_start, y_start, x_end, y_end)
 
     if np.all(points_in_crop >= 1):
         print(f"Finished in {num_clusters} clusters") 
         return crops
 
     elif num_clusters + 1 <= len(points):
-        return auto_crop(image, image_name, prediction, crop_size, num_clusters + 1)
+        return auto_crop(image, predictions, crop_size, num_clusters + 1)
 
     else:
         print("Could not generate any crops...")
@@ -534,98 +538,97 @@ def auto_crop(image: np.ndarray, image_name: str, prediction: dict, crop_size: i
         return crops 
 
 #---------------------------------------------------------------------------------------------------------------------------#
-
-def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: float) -> dict:
-    print("Querying database...")
-    predictions = {}
-    rows = []
-    query = """
-        SELECT P.PredId, P.BoxTx, P.BoxTy, P.BoxBx, P.BoxBy, P.Score, P.Label, I.Name, I.InTraining, I.ImageId, H.HerdUnitName
-        FROM Predictions P
-        JOIN Images I On P.ImageId = I.ImageId
-        JOIN HerdUnits H On I.HerdUnitId = H.HerdUnitId
-        WHERE I.Imageid IN (
-            SELECT ImageId
-            FROM Images
-            WHERE Reviewed = 0 AND Open = 0
-            ORDER BY Reviewed ASC 
-        ) AND P.Label = ? AND P.Score > ?
-        ORDER BY P.Score DESC
-        LIMIT ?
+# TODO: Move to database module and write sqlite overwrite function
+def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: float, herd_unit_id: int, model_id: int) -> dict:
+    """ Query batch_size Images and associated predictions above a minimum score from the database
+    
+    Args:
+        batch_size: number of images that will consist a batch 
+        desired_class: integer id of desired class object derived from labelbox ontology
+        min_confidence: minimum confidence for fetched predictions
+        herd
+        
+    Returns true if image_name is origin of one of the training images.
     """
-    rows = base.query(query, (desired_class, min_confidence, batch_size)) #type: ignore
+    batch = {}
+    print("Querying database...")
+    query = """
+        WITH SelectedImageIds AS (
+            SELECT DISTINCT I.ImageId
+            FROM Images I
+            INNER JOIN Predictions P ON I.ImageId = P.ImageId
+            WHERE I.HerdUnitId = ?
+                AND I.Reviewed = ?
+                AND I.Open = 0
+                AND P.Label = ?
+                AND P.Score > ?
+            LIMIT ?
+        )
+        SELECT json_agg(row_to_json(img_preds))
+        FROM (
+            SELECT
+                I.ImageId,
+                I.Image,
+                I.Name,
+                I.InTraining,
+                json_agg(
+                    json_build_object(
+                        'PredId', P.PredId,
+                        'BoxTx', P.BoxTx,
+                        'BoxTy', P.BoxTy,
+                        'BoxBx', P.BoxBx,
+                        'BoxBy', P.BoxBy,
+                        'Score', P.Score,
+                        'Label', P.Label
+                    )
+                    ORDER BY P.Score DESC
+                ) AS predictions
+            FROM Images I
+            INNER JOIN Predictions P ON I.ImageId = P.ImageId
+            WHERE I.ImageId IN (SELECT ImageId FROM SelectedImageIds)
+                AND P.Label = ?
+                AND P.Score > ?
+                AND P.ModelId = ?
+            GROUP BY I.ImageId, I.Image, I.Name, I.InTraining
+            ORDER BY I.ImageId
+        ) AS img_preds;
+
+    """
+    rows = base.query(query, (herdUnitId, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, modelId)) #type: ignore
     
     if len(rows) == 0:
         print("No results returned, try lowering min confidence!")
     
-    for row in rows: #type: ignore
-        pred_id = row[0]
-        box = [row[1], row[2], row[3], row[4]]
-        score = row[5]
-        label = row[6]
-        image_name = row[7]
-        in_training = row[8]
-        image_id = row[9]
-        herd_unit = row[10]
-
-        if image_name not in predictions:
-            predictions[image_name] = {
-                "pred_ids": [],
-                "boxes": [],
-                "scores": [],
-                "labels": [],
-                "in_training": in_training,
-                "image_id": image_id,
-                "herd_unit": herd_unit
-            }
-        predictions[image_name]["pred_ids"].append(pred_id)
-        predictions[image_name]["boxes"].append(box)
-        predictions[image_name]["scores"].append(score)
-        predictions[image_name]["labels"].append(label)
-        # More efficent way to update images (set of image ids )
-        query = """
-            UPDATE Images
-            SET Open = 1 
-            WHERE ImageId = ?
-        """
-        base.query(query, (image_id,)) #type: ignore
+    for row in rows:
+        image = Image(
+            imageId = row["ImageId"],
+            name = row["Name"],
+            herdUnitId = herd_unit_id,
+            inTraining = True if row["InTraining"] == 1 else False,
+            folder_path = img_folder,
+            )
+        batch[image] = []
+        for pred in row["predictions"]:
+            batch[image].append(
+                Prediction(
+                    predId = pred["PredId"],
+                    box = Box(
+                        tl_x = pred["BoxTx"],
+                        tl_y = pred["BoxTy"],
+                        br_x = pred["BoxBx"],
+                        br_y = pred["BoxBy"],
+                    ),
+                    score = pred["Score"],
+                    label = pred["Label"],
+                    model = model_id
+                    )
+            )
     
-    base.commit() #type: ignore
-    return predictions
-
-#---------------------------------------------------------------------------------------------------------------------------#
-def calculate_iou(boxA: list, boxB: list):
-    # Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
-    #Extract bounding boxes coordinates
-    x0_A, y0_A, x1_A, y1_A = boxA
-    x0_B, y0_B, x1_B, y1_B = boxB
-    
-    # Get the coordinates of the intersection rectangle
-    x0_I = max(x0_A, x0_B)
-    y0_I = max(y0_A, y0_B)
-    x1_I = min(x1_A, x1_B)
-    y1_I = min(y1_A, y1_B)
-    #Calculate width and height of the intersection area.
-    width_I = x1_I - x0_I 
-    height_I = y1_I - y0_I
-
-    # Handle the negative value width or height of the intersection area
-    #if width_I<0 : width_I=0
-    width_I = 0 if width_I < 0 else width_I
-    #if height_I<0 : height_I=0
-    height_I = 0 if height_I < 0 else height_I
-    # Calculate the intersection area:
-    intersection = width_I * height_I
-    # Calculate the union area:
-    width_A, height_A = x1_A - x0_A, y1_A - y0_A
-    width_B, height_B = x1_B - x0_B, y1_B - y0_B
-    union = (width_A * height_A) + (width_B * height_B) - intersection
-    # Calculate the IoU:
-    return intersection/union
+    return batch    
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def approve_annotations(predictions: dict, desired_class: int, crop_size: int, draw_box: bool) -> int:
+def approve_annotations(batch: dict[Image, Prediction], crop_size: int, draw_box: bool):
     """ Present the user with cropped images and their predictions for validation 
 
     """
@@ -636,14 +639,12 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
     """
     modelId = int(base.query(query, (model_name,))[0][0])
   
-    num_crops = 0
-    for image_name, pred in predictions.items():
-        images_folder = os.path.join(root, "Images", pred['herd_unit']) #type: ignore
-        image_path = os.path.join(f"{images_folder}", f"{image_name}.JPG")
-        image = plt.imread(image_path).copy()
-        image_crops = auto_crop(image, image_name, pred, crop_size, 1)
-        if len(image_crops) == 0:
+    for image, predictions in batch.items():
+        crops = auto_crop(image, predictions, crop_size)
+
+        if len(crops) == 0:
             continue
+
         query = """
             SELECT *
             FROM Crops
@@ -651,48 +652,47 @@ def approve_annotations(predictions: dict, desired_class: int, crop_size: int, d
         """
         existing_crops = base.query(query, (modelId))
 
-        if len(existing_crops) > 0:
-            for crop in image_crops:
-                for ecrop in existing_crops:
-                    if calculate_iou(crop["dimensions"], list(ecrop[5:8])) >= 0.9:
-                        image_crops.remove(crop)
+        # Perform Iou check to prevent duplicate data
+        for crop in crops:
+            for ecrop in existing_crops:
+                if crop.calc_iou(Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
+                    crops.pop(crop, None)
 
+        #TODO: Rework image backends for new data structures
 
-        for crop_name, crop in image_crops.items():
-            approved_predictions = img_backend.show_predictions(image=crop["crop"], prediction=crop["prediction"], desired_class=desired_class, class_labels=labels_forward, draw_box=draw_box) #type: ignore
-            if approved_predictions == -999:
-                quit_app()
-
-            if approved_predictions:
-                query = """
-                    INSERT INTO Crops (ModelID, ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """
-
-                base.query(query, (modelId, pred["image_id"], crop_name, 0, crop["dimensions"][0], crop["dimensions"][1], crop["dimensions"][2], crop["dimensions"][3], current_date, str(uuid4()))) 
-                base.commit() 
-                num_crops += 1
-                crop_id = base.lastrowid() 
-
-                for box in crop["prediction"]["boxes"]:
-                    query = """
-                        INSERT INTO CropPredictions (CropId, PredId, ImageId, BoxTx, BoxTy, BoxBx, BoxBy)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """
-                    base.query(query, (crop_id, crop["prediction"]["id"], pred["image_id"], box[0], box[1], box[2], box[3])) #type: ignore
-                
-                # Save with opencv without compression, highest quality score
-                cv2.imwrite(f'{save_folder}/{crop_name}.jpg', cv2.cvtColor(crop["crop"], cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])
-                base.commit() #type: ignore
-            query = """
-                UPDATE Images
-                SET Reviewed = 1, Open = 0, CropsGen = ?
-                WHERE ImageId = ?
-            """
-            base.query(query, (num_crops, pred["image_id"])) 
-            base.commit() 
     
-    return num_crops 
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# TODO move to database
+def insert_crops(crops: dict[Crop, list[Prediction]]):
+    for crop, predictions in crops.items():
+        query = """
+            INSERT INTO Crops (ModelID, ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+
+        base.query(query, (crop.model_id, crop.image_id, crop.name, 0, crop.dimensions.get_points(), current_date, str(uuid4()))) 
+        num_crops += 1
+
+        for pred in predictions:
+            query = """
+                INSERT INTO CropPredictions (CropId, PredId, ImageId, BoxTx, BoxTy, BoxBx, BoxBy)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+            base.query(query, (crop.id, pred.id, crop.image_id, pred.dimensions.get_points())) #type: ignore
+        
+        # Save with opencv without compression, highest quality score
+        cv2.imwrite(f'{save_folder}/{crop.crop_name}.jpg', cv2.cvtColor(crop.get_image(), cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])
+        base.commit() #type: ignore
+    query = """
+        UPDATE Images
+        SET Reviewed = 1, Open = 0, CropsGen = ?
+        WHERE ImageId = ?
+    """
+    base.query(query, (num_crops, pred["image_id"])) 
+    base.commit() 
+
+    return num_crops
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def concurrent_upload(data_rows, start, end, dataset):
