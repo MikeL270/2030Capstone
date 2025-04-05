@@ -1,15 +1,15 @@
 # Methods for presenting images to users
 # Authors: Ben Koger, Michael B. Lance
 # Created: February 26, 2025
-# Updated: April 4, 2025
+# Updated: April 5, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
+from ..generatorobjects import generatorobjects
 from typing import Any
 import os
 import numpy as np
 import math
-import asyncio
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -17,24 +17,26 @@ class ImageBackend(ABC):
     import cv2
     
     @abstractmethod
-    async def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool):
+    async def show_predictions(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], desired_class: int, class_name, draw_box:bool=False):
         pass
 
-    def create_subcrop(self, image: np.ndarray, prediction: dict, draw_box: bool):
+    def create_subcrop(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], draw_box: bool):
         crop_size = 150
         crops = []
-        if len(prediction["boxes"]) == 0:        
+        img = image.get_image()
+        if len(predictions) == 0:        
             return False
 
-        for box in prediction["boxes"]:
+        for pred in predictions:
+            box = pred.dimensions.get_points()
             ymin = np.max([box[1] - crop_size, 0])
-            ymax = np.min([box[3] + crop_size, image.shape[0]])
+            ymax = np.min([box[3] + crop_size, img.shape[0]])
             xmin = np.max([box[0] - crop_size, 0])
-            xmax = np.min([box[2] + crop_size, image.shape[1]])
-            crops.append(image[ymin:ymax, xmin:xmax].copy())
+            xmax = np.min([box[2] + crop_size, img.shape[1]])
+            crops.append(img[ymin:ymax, xmin:xmax].copy())
 
             if draw_box:
-                self.cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
+                self.cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
 
         return crops
     
@@ -67,30 +69,33 @@ class MatplotBackend(ImageBackend):
             except:
                 continue 
 
-    def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, class_labels: dict, draw_box: bool = False):     
-        crops = self.create_subcrop(image, prediction, draw_box)
+    def show_predictions(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], desired_class: int, class_name, draw_box:bool=False):     
+        crops = self.create_subcrop(image, predictions, draw_box)
+        img = image.get_image()
         scale_factor = 2
         crop_size = 2
         max_cols = 6
         max_crops = 36
-        class_name = class_labels[desired_class]
-
+        
         crops = crops[:max_crops] #type: ignore
         if len(crops) <= max_cols:
             cols = len(crops)
             rows = 1
         else:
             cols = max_cols
-            rows = math.ceil(len(crops) / max_cols)#---------------------------------------------------------------------------------------------------------------------------#
+            rows = math.ceil(len(crops) / max_cols)
 
-        #     axs = [axs]
-        for ax, crop, score in zip(fig.axes[:len(crops)], crops, prediction["scores"]):
+        fig, axs = self.plt.subplots(rows, cols, figsize=(cols * crop_size * scale_factor, rows * crop_size * scale_factor))
+
+
+        # axs = [axs]
+        for ax, crop, pred in zip(fig.axes[:len(crops)], crops, predictions):
             ax.imshow(crop)
-            ax.set_title(f"score: {score:.3f}")
+            ax.set_title(f"score: {pred.score:.3f}")
             ax.set_axis_off() 
     
         self.plt.figure(figsize=(15,15))
-        self.plt.imshow(image)
+        self.plt.imshow(img)
         self.plt.axis('off')
         self.plt.close() 
         self.plt.show(block=False)
@@ -114,8 +119,8 @@ class OpencvBackend(ImageBackend):
         if key in set([ord("n"), ord("N"), ord("0")]):
             return False
 
-    async def show_predictions(self, image: np.ndarray, prediction: dict, desired_class: int, draw_box: bool = False):
-        crops = self.create_subcrop(image, prediction, desired_class, draw_box)
+    async def show_predictions(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], desired_class: int, class_name, draw_box:bool=False):
+        crops = self.create_subcrop(image, predictions, desired_class, draw_box)
         
         if os.name == "posix":
             pass

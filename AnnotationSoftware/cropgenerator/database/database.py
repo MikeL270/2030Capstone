@@ -1,7 +1,7 @@
 # Abstraction module to make it easy to change database drivers 
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: February 26, 2025
+# Updated: April 5, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -14,6 +14,14 @@ from typing import Any
 class Database(ABC): # Abstract class for all database types
     _conn: Any
     _cursor: Any
+
+    def __init__(self):
+        self.class_labels_foward = {}
+        self.class_labels_reverse = {}
+        self.herd_units_forward = {}
+        self.herd_units_reverse = {}
+        self.models_forward = {}
+        self.models_reverse = {}
 
     @abstractmethod 
     def connect(self):
@@ -144,13 +152,12 @@ class Database(ABC): # Abstract class for all database types
         self._conn.commit()
 
     def query(self, query: str, params=None):
-        # Check for returned safeguards from dbms
         query = query.replace('?', self.get_placeholder()) #type: ignore
         self._cursor.execute(query, params or ())
-        if query.strip().lower().startswith('select'):
+        if 'select' in query.strip().lower():
             return self._cursor.fetchall()
         else:
-            return None
+            return self._cursor.rowcount
 
     def lastrowid(self) -> int:
         return self._cursor.lastrowid
@@ -161,6 +168,105 @@ class Database(ABC): # Abstract class for all database types
     def close(self):
         if self._conn:
             self._conn.close
+
+    def get_class_labels(self):
+        
+        self.class_labels_forward = {}
+        self.class_labels_reverse = {}
+        query = """
+            SELECT * FROM classlabels
+            
+        """
+        rows = self.query(query,())
+
+        for id, name in rows:
+            self.class_labels_forward[id] = name
+            self.class_labels_reverse[name] = id
+
+    def get_herd_units(self):
+        query = """
+            SELECT * FROM herdunits
+        """
+        rows = self.query(query,())
+
+        for id, name in rows:
+            self.herd_units_forward[id] = name
+            self.herd_units_reverse[name] = id
+    
+    def get_models(self):
+        query = """
+            SELECT * FROM models
+        """
+        rows = self.query(query,())
+        for id, name in rows:
+            self.models_forward[id] = name
+            self.models_reverse[name] = id
+
+    def get_pred_and_images(self, batch_size: int, desired_class: int, min_confidence: float, herd_unit: str, model_name: str) -> dict:
+        """ Query batch_size Images and associated predictions above a minimum score from the database
+        
+        Args:
+            batch_size: number of images that will consist a batch 
+            desired_class: integer id of desired class object derived from labelbox ontology
+            min_confidence: minimum confidence for fetched predictions
+            herd
+            
+        Returns true if image_name is origin of one of the training images.
+        """
+
+        herd_unit_id = self.herd_units_reverse[herd_unit]
+        model_id = self.models_reverse[model_name]
+       
+        print("Querying database...")
+        query = """
+                WITH SelectedImageIds AS (
+                    SELECT DISTINCT I.ImageId
+                    FROM Images I
+                    INNER JOIN Predictions P ON I.ImageId = P.ImageId
+                    WHERE I.HerdUnitId = ?
+                        AND I.Reviewed = ?
+                        AND I.Open = 0
+                        AND P.Label = ?
+                        AND P.Score > ?
+                    LIMIT ?
+                )
+                SELECT json_agg(row_to_json(img_preds))
+                FROM (
+                    SELECT
+                        I.ImageId,
+                        I.Name,
+                        I.InTraining,
+                        json_agg(
+                            json_build_object(
+                                'PredId', P.PredId,
+                                'BoxTx', P.BoxTx,
+                                'BoxTy', P.BoxTy,
+                                'BoxBx', P.BoxBx,
+                                'BoxBy', P.BoxBy,
+                                'Score', P.Score,
+                                'Label', P.Label
+                            )
+                            ORDER BY P.Score DESC
+                        ) AS predictions
+                    FROM Images I
+                    INNER JOIN Predictions P ON I.ImageId = P.ImageId
+                    WHERE I.ImageId IN (SELECT ImageId FROM SelectedImageIds)
+                        AND P.Label = ?
+                        AND P.Score > ?
+                        AND P.ModelId = ?
+                    GROUP BY I.ImageId, I.Name, I.InTraining
+                    ORDER BY I.ImageId
+                ) AS img_preds;
+        """
+        rows = self.query(query, (herd_unit_id, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, model_id,)) #type: ignore
+        
+        if type(rows) == 'None':
+            # TODO: Raise an error here
+            print("No results returned, try lowering min confidence!")
+        else:
+            return rows[0][0]
+
+#---------------------------------------------------------------------------------------------------------------------------#
 
 class SQLite(Database):
     import sqlite3
@@ -183,20 +289,30 @@ class SQLite(Database):
     def get_placeholder(self) -> str:
         return "?"
     
+#---------------------------------------------------------------------------------------------------------------------------#
+
 class Postgres(Database):
     import psycopg2
+    from psycopg2.extras import DictCursor
     def __init__(self, db_config: dict):
+        super().__init__()
         self._config = db_config
         self._conn = None
         self._cursor = None
+        self._dict_cursor = None
         self._pooled_conn = None
 
     def connect(self):
         try:
             self._conn = self.psycopg2.connect(**self._config) #type: ignore
             self._cursor = self._conn.cursor()
+            self._dict_cursor = self._conn.cursor(cursor_factory=self.DictCursor)
         except (Exception, self.psycopg2.DatabaseError) as error:
             print(error)
+        
+        self.get_class_labels()
+        self.get_herd_units()
+        self.get_models()
 
     def get_auto_increment_column(self) -> str:
         return 'SERIAL NOT NULL PRIMARY KEY'
@@ -208,6 +324,7 @@ class Postgres(Database):
         self._cursor.execute('SELECT LASTVAL()')
         return self._cursor.fetchone()[0]
 
+#---------------------------------------------------------------------------------------------------------------------------#
 
 db_types = {
     "default": Postgres,

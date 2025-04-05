@@ -20,10 +20,10 @@ class Box:
         self.br_y = br_y
 
     def get_center(self):
-        x = np.mean(self.tl_x, self.br_x)
-        y = np.mean(self.tl_y, self.br_y)
+        x = np.mean([self.tl_x, self.br_x])
+        y = np.mean([self.tl_y, self.br_y])
 
-        return (x, y)
+        return ((x, y))
 
     def get_points(self):
         return [self.tl_x, self.tl_y, self.br_x, self.br_y]
@@ -32,7 +32,7 @@ class Box:
         # Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
         #Extract bounding boxes coordinates
         x0_A, y0_A, x1_A, y1_A = self.get_points()
-        x0_B, y0_B, x1_B, y1_B = box_2.get_pointS()
+        x0_B, y0_B, x1_B, y1_B = box_2.get_points()
         
         # Get the coordinates of the intersection rectangle
         x0_I = max(x0_A, x0_B)
@@ -73,7 +73,7 @@ class Image:
         if self.image is not None:
             return self.image
         else:
-            self.image = cv2.imread(os.path.join(f"{self.folder_path}", f"{self.name}.JPG"))
+            self.image = cv2.imread(os.path.join(f"{self.folder_path}", f"{self.name}.JPG"), cv2.IMREAD_COLOR_RGB)
             return self.image
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -104,7 +104,7 @@ class Crop:
         if self.image is not None:
             return self.image
         else:
-            self.image = cv2.imread(os.path.join(f"{self.folder_path}", f"{self.name}.JPG"))
+            self.image = cv2.imread(os.path.join(f"{self.folder_path}", f"{self.name}.JPG"), cv2.IMREAD_COLOR_RGB)
             return self.image
 
     def calc_iou(self, box):

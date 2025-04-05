@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: April 4, 2025
+# Updated: April 5, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..database import database
 from ..imagebackends import imagebackends
-from .. generator_objects import Box, Image, Prediction, Crop
+from ..generatorobjects import generatorobjects
 import sys
 import signal
 import datetime
@@ -112,31 +112,12 @@ def initialize(db_type: str, image_backend: str, db_configuration: dict):
     train_json_path = os.path.join(root, model_name, os.environ.get("ANNOTATIONS_FOLDER"), "train.json") #type: ignore
     current_date = datetime.date.today().strftime('%Y-%m-%d')
     save_folder = os.path.join(root, "Images", os.environ.get("CROP_FOLDER")) #type: ignore
-    img_folder = os.path.join(root, "Images", pred['herd_unit']) #type: ignore
+    img_folder = os.path.join(root, "Images", herd_unit) #type: ignore
     os.makedirs(save_folder, exist_ok=True) # type: ignore
     uploading = False 
     prefix = len("high-altitude-pronghorn-survey-")
     suffix = len("_crop_xx")
     setup_interrupt_handler()
-    get_class_labels()
-
-#---------------------------------------------------------------------------------------------------------------------------#
-
-def get_class_labels():
-    global labels_forward
-    global labels_reverse
-    
-    labels_forward = {}
-    labels_reverse = {}
-    query = """
-        SELECT * FROM classlabels
-        
-    """
-    rows = base.query(query,())
-
-    for id, name in rows:
-        labels_forward[id] = name
-        labels_reverse[name] = id
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -348,7 +329,7 @@ def insert_to_database(bootstrap: bool=False, insert_images: bool=True, insert_p
     image_names = load_image_files(images_folder) 
     
     training_image_names = load_training_image_names()
-    # TODO: This still does not work as intended, but I have no clue why
+    # TODO: Update to use new methods, move all db stuff to database package
     query = """
         INSERT INTO Models (ModelName)
         VALUES (?)
@@ -431,7 +412,7 @@ def bootstrap_database():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[Crop, list[Prediction]]:
+def auto_crop(image: generatorobjects.Image, predictions: list[generatorobjects.Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[generatorobjects.Crop, list[generatorobjects.Prediction]]:
     """ Automatically create crops of a given size containing all images with approved annotations 
     
     Args:
@@ -450,9 +431,10 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
 
     # Get centers for all predictions 
     for pred in predictions:
-        points.append(pred.box.get_center())
-   
+        points.append(pred.dimensions.get_center())
+
     if len(points) == 0:
+        print("no points")
         return crops
     elif len(points) == 1:
         centers.append(points[0])
@@ -483,9 +465,10 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
         centers = kmeans.cluster_centers_
 
     points_in_crop = np.zeros(len(points))
+  
     for crop_num, center in enumerate(centers):
-        crop = Crop(
-            name = f"{Image.name}_crop_{crop_num}",
+        crop = generatorobjects.Crop(
+            name = f"{image.name}_crop_{crop_num}",
             image_id = image.id,
         )
         crops[crop] = []
@@ -507,9 +490,9 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
             if ((tl_x >= x_start) and (br_x <= x_end)) and ((tl_y >= y_start) and (br_y <= y_end)): 
                 points_in_crop[p_index] += 1
                 crops[crop].append(
-                    Prediction(
+                    generatorobjects.Prediction(
                         pred_id = pred.id,
-                            box = Box(
+                            dimensions = generatorobjects.Box(
                                 tl_x = tl_x - x_start,
                                 tl_y = tl_y - y_start,
                                 br_x = br_x - x_start,
@@ -517,17 +500,18 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
                             ),
                         score = pred.score,
                         label = pred.label, 
-                        model = pred.model
+                        model_id = pred.model_id
                     )  
                 )  
-        crop.dimension = Box(x_start, y_start, x_end, y_end)
+        crop.dimensions = generatorobjects.Box(x_start, y_start, x_end, y_end)
 
     if np.all(points_in_crop >= 1):
         print(f"Finished in {num_clusters} clusters") 
         return crops
 
     elif num_clusters + 1 <= len(points):
-        return auto_crop(image, predictions, crop_size, num_clusters + 1)
+        print("we need more crops")
+        return auto_crop(image=image, predictions=predictions, crop_size=crop_size, num_clusters=num_clusters +1)
 
     else:
         print("Could not generate any crops...")
@@ -538,81 +522,26 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
         return crops 
 
 #---------------------------------------------------------------------------------------------------------------------------#
-# TODO: Move to database module and write sqlite overwrite function
-def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: float, herd_unit_id: int, model_id: int) -> dict:
-    """ Query batch_size Images and associated predictions above a minimum score from the database
-    
-    Args:
-        batch_size: number of images that will consist a batch 
-        desired_class: integer id of desired class object derived from labelbox ontology
-        min_confidence: minimum confidence for fetched predictions
-        herd
-        
-    Returns true if image_name is origin of one of the training images.
-    """
+def get_batch(batch_size: int, desired_class: int, min_confidence: float) -> dict:
     batch = {}
-    print("Querying database...")
-    query = """
-        WITH SelectedImageIds AS (
-            SELECT DISTINCT I.ImageId
-            FROM Images I
-            INNER JOIN Predictions P ON I.ImageId = P.ImageId
-            WHERE I.HerdUnitId = ?
-                AND I.Reviewed = ?
-                AND I.Open = 0
-                AND P.Label = ?
-                AND P.Score > ?
-            LIMIT ?
-        )
-        SELECT json_agg(row_to_json(img_preds))
-        FROM (
-            SELECT
-                I.ImageId,
-                I.Image,
-                I.Name,
-                I.InTraining,
-                json_agg(
-                    json_build_object(
-                        'PredId', P.PredId,
-                        'BoxTx', P.BoxTx,
-                        'BoxTy', P.BoxTy,
-                        'BoxBx', P.BoxBx,
-                        'BoxBy', P.BoxBy,
-                        'Score', P.Score,
-                        'Label', P.Label
-                    )
-                    ORDER BY P.Score DESC
-                ) AS predictions
-            FROM Images I
-            INNER JOIN Predictions P ON I.ImageId = P.ImageId
-            WHERE I.ImageId IN (SELECT ImageId FROM SelectedImageIds)
-                AND P.Label = ?
-                AND P.Score > ?
-                AND P.ModelId = ?
-            GROUP BY I.ImageId, I.Image, I.Name, I.InTraining
-            ORDER BY I.ImageId
-        ) AS img_preds;
+    rows = base.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit, model_name)
+    herd_unit_id = base.herd_units_reverse[herd_unit]
+    model_id = base.models_reverse[model_name]
 
-    """
-    rows = base.query(query, (herdUnitId, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, modelId)) #type: ignore
-    
-    if len(rows) == 0:
-        print("No results returned, try lowering min confidence!")
-    
-    for row in rows:
-        image = Image(
-            imageId = row["ImageId"],
-            name = row["Name"],
+    for img in rows:
+        image = generatorobjects.Image(
+            imageId = img["imageid"],
+            name = img["name"],
             herdUnitId = herd_unit_id,
-            inTraining = True if row["InTraining"] == 1 else False,
+            inTraining = True if img["intraining"] == 1 else False,
             folder_path = img_folder,
             )
         batch[image] = []
-        for pred in row["predictions"]:
+        for pred in img["predictions"]:
             batch[image].append(
-                Prediction(
-                    predId = pred["PredId"],
-                    box = Box(
+                generatorobjects.Prediction(
+                    pred_id = pred["PredId"],
+                    dimensions = generatorobjects.Box(
                         tl_x = pred["BoxTx"],
                         tl_y = pred["BoxTy"],
                         br_x = pred["BoxBx"],
@@ -620,51 +549,43 @@ def get_pred_and_images(batch_size: int, desired_class: int, min_confidence: flo
                     ),
                     score = pred["Score"],
                     label = pred["Label"],
-                    model = model_id
+                    model_id = model_id
                     )
             )
-    
     return batch    
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def approve_annotations(batch: dict[Image, Prediction], crop_size: int, draw_box: bool):
-    """ Present the user with cropped images and their predictions for validation 
+def approve_annotations(batch: dict[generatorobjects.Image, generatorobjects.Prediction], desired_class: int, crop_size: int, draw_box: bool):
+    """ Present the user with cropped images and their predictions for validation """
 
-    """
-    query = """
-        SELECT ModelId 
-        FROM Models
-        WHERE ModelName = ?
-    """
-    modelId = int(base.query(query, (model_name,))[0][0])
+    model_id = base.models_reverse[model_name]
+    class_name = base.class_labels_forward[desired_class]
   
     for image, predictions in batch.items():
-        crops = auto_crop(image, predictions, crop_size)
-
-        if len(crops) == 0:
-            continue
+        crops = auto_crop(image=image, predictions=predictions, crop_size=crop_size)
 
         query = """
             SELECT *
             FROM Crops
-            WHERE ModelID NOT ?
+            WHERE ModelID != ? AND ImageId = ?
         """
-        existing_crops = base.query(query, (modelId))
+        existing_crops = base.query(query, (model_id, image.id))
 
         # Perform Iou check to prevent duplicate data
         for crop in crops:
             for ecrop in existing_crops:
-                if crop.calc_iou(Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
+                if crop.calc_iou(generatorobjects.Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
+                    print("duplicate crop")
                     crops.pop(crop, None)
 
         #TODO: Rework image backends for new data structures
-
+        approve_annotations = img_backend.show_predictions(image, predictions, desired_class, class_name)
     
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # TODO move to database
-def insert_crops(crops: dict[Crop, list[Prediction]]):
+def insert_crops(crops: dict[generatorobjects.Crop, list[generatorobjects.Prediction]]):
     for crop, predictions in crops.items():
         query = """
             INSERT INTO Crops (ModelID, ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
@@ -756,7 +677,7 @@ def upload_to_labelbox(batch_size, desired_class: int):
                     data = {"global_key": crop_info[2]}, #type: ignore
                     annotations = [
                         ObjectAnnotation(
-                            name = labels_forward[desired_class],
+                            name = base.class_labels_forward[desired_class],
                             value = Rectangle(
                                 start = Point(x = pred_info[0], y = pred_info[1]),
                                 end = Point( x = pred_info[2], y = pred_info[3])
