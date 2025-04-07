@@ -5,22 +5,21 @@
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
-from ..generatorobjects import generatorobjects
-from typing import Any
+from ..generatorobjects.generatorobjects import Crop, Prediction
 import os
 import numpy as np
 import math
 
-#---------------------------------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------c-------------------------------------------------------------------#
 
 class ImageBackend(ABC):
     import cv2
     
     @abstractmethod
-    async def show_predictions(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], desired_class: int, class_name, draw_box:bool=False):
+    async def evaluate_crop(self, crop: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
         pass
 
-    def create_subcrop(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], draw_box: bool):
+    def create_subcrop(self, image: Crop, predictions: list[Prediction], draw_box: bool):
         crop_size = 150
         crops = []
         img = image.get_image()
@@ -44,8 +43,6 @@ class ImageBackend(ABC):
 
 class MatplotBackend(ImageBackend):
     import matplotlib.pyplot as plt
-    def __init__(self, window: Any=None):
-        pass
 
     def prompt_user(self, class_name): 
         if os.name == "posix":
@@ -69,7 +66,7 @@ class MatplotBackend(ImageBackend):
             except:
                 continue 
 
-    def show_predictions(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], desired_class: int, class_name, draw_box:bool=False):     
+    def evaluate_crop(self, image: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
         crops = self.create_subcrop(image, predictions, draw_box)
         img = image.get_image()
         scale_factor = 2
@@ -119,7 +116,7 @@ class OpencvBackend(ImageBackend):
         if key in set([ord("n"), ord("N"), ord("0")]):
             return False
 
-    async def show_predictions(self, image: generatorobjects.Crop, predictions: list[generatorobjects.Prediction], desired_class: int, class_name, draw_box:bool=False):
+    async def evaluate_crop(self, image: Crop, predictions: list[Prediction], desired_class: int, class_name, draw_box:bool=False):
         crops = self.create_subcrop(image, predictions, desired_class, draw_box)
         
         if os.name == "posix":
@@ -139,13 +136,6 @@ class OpencvBackend(ImageBackend):
             if out == -999:
                 return -999
             return out
-         
-#---------------------------------------------------------------------------------------------------------------------------#
-# Returns JSON object of crops to easily build gui applications
-class JsonBackend(ImageBackend):
-    import json
-    async def show_predictions(self, crop):
-        return self.json.dumps(crop, indent = 4)
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

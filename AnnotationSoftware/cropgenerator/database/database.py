@@ -254,8 +254,8 @@ class Database(ABC): # Abstract class for all database types
                         AND P.Label = ?
                         AND P.Score > ?
                         AND P.ModelId = ?
-                    GROUP BY I.ImageId, I.Name, I.InTraining
-                    ORDER BY I.ImageId
+                    GROUP BY I.ImageId, I.Name, I.InTraining, P.Score
+                    ORDER BY P.Score
                 ) AS img_preds;
         """
         rows = self.query(query, (herd_unit_id, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, model_id,)) #type: ignore
@@ -265,6 +265,32 @@ class Database(ABC): # Abstract class for all database types
             print("No results returned, try lowering min confidence!")
         else:
             return rows[0][0]
+
+    def set_open(self, image_id: int):
+        query = """
+            UPDATE Images
+            SET Open = 1
+            WHERE ImageId = ?
+        """
+        self.query(query, (image_id,))
+
+    def set_closed(self, image_id: int):
+        query = """
+            UPDATE Images
+            SET Open = 0
+            WHERE ImageId = ?
+        """
+        self.query(query, (image_id,))
+
+    def set_reviewed(self, image_id: int):
+        query = """
+            UPDATE Images
+            SET Reviewed = 1
+            WHERE ImageId = ?
+        """
+        self.query(query, (image_id,))
+
+    
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

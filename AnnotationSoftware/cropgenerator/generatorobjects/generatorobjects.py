@@ -1,7 +1,7 @@
 # Class definition for objects used in the crop_generator module
 # Author: Michael B. Lance
 # Created: April 4, 2025
-# Updated: April 4, 2025
+# Updated: April 6, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 import numpy as np
@@ -9,24 +9,23 @@ import cv2
 import os
 
 #---------------------------------------------------------------------------------------------------------------------------#
+
 class Box:
     """ A Box contains dimensional data for crops and predictions
     
     """
-    def __init__(self, tl_x: int=None, tl_y: int=None, br_x: int=None, br_y: int=None):
-        self.tl_x = tl_x
-        self.tl_y = tl_y
-        self.br_x = br_x
-        self.br_y = br_y
+    def __init__(self, top_left: tuple[int]=None, bottom_right: tuple[int]=None):
+        self.top_left = top_left
+        self.bottom_right = bottom_right
 
     def get_center(self):
-        x = np.mean([self.tl_x, self.br_x])
-        y = np.mean([self.tl_y, self.br_y])
+        x = np.mean([self.top_left[0], self.bottom_right[0]])
+        y = np.mean([self.top_left[1], self.bottom_right[1]])
 
-        return ((x, y))
+        return ((abs(x), abs(y)))
 
     def get_points(self):
-        return [self.tl_x, self.tl_y, self.br_x, self.br_y]
+        return [self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]]
 
     def calc_iou(self, box_2):
         # Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
@@ -58,11 +57,11 @@ class Box:
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Image:
-    def __init__(self, imageId: int=None, name: str=None, herdUnitId: int=None, inTraining:bool=False, folder_path: str=None):
-        self.id = imageId
+    def __init__(self, db_id: int=None, name: str=None, herd_unit_id: int=None, in_training:bool=False, folder_path: str=None):
+        self.id = db_id
         self.name = name
-        self.herdUnitId = herdUnitId
-        self.inTraining = inTraining
+        self.herdUnitId = herd_unit_id
+        self.inTraining = in_training
         self.folder_path = folder_path
         self.image = None
 
@@ -79,8 +78,8 @@ class Image:
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Prediction:
-    def __init__(self, pred_id: int, dimensions: Box=None, score: float=None, label: int=None, model_id: int=None):
-        self.id = pred_id
+    def __init__(self, db_id: int, dimensions: Box=None, score: float=None, label: int=None, model_id: int=None):
+        self.id = db_id
         self.dimensions = dimensions
         self.score = score
         self.label = label
@@ -88,24 +87,13 @@ class Prediction:
     
 #---------------------------------------------------------------------------------------------------------------------------#
 
-class Crop:
-    def __init__(self, crop_id: int=None, image_id: int=None, model_id: int=None, name: str=None, dimensions: Box=None):
-        self.id = crop_id 
+class Crop(Image):
+    def __init__(self, db_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
+        super().__init__(db_id, name)
         self.image_id = image_id
-        self.name = name
         self.dimensions = dimensions
-        self.image = None
-        self.folder_path = None
-
-    def set_image(self, image: np.ndarray):
-        self.image = image
-
-    def get_image(self) -> np.ndarray:
-        if self.image is not None:
-            return self.image
-        else:
-            self.image = cv2.imread(os.path.join(f"{self.folder_path}", f"{self.name}.JPG"), cv2.IMREAD_COLOR_RGB)
-            return self.image
 
     def calc_iou(self, box):
         return self.dimensions.calc_iou(box)
+    
+#---------------------------------------------------------------------------------------------------------------------------#

@@ -7,7 +7,6 @@
 
 import cropgenerator
 import sys
-import multiprocessing
 import os
 from dotenv import load_dotenv
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -74,5 +73,10 @@ if approve_predictions:
         batch = cropgenerator.get_batch(batch_size=batch_size, desired_class=desired_class, min_confidence=min_confidence)
         if len(batch) == 0:
             continue
-        # Approve crops 
-        approved_crops = cropgenerator.approve_annotations(batch=batch, desired_class=desired_class, crop_size=crop_size, draw_box = False)
+
+        for image, predictions in batch.items():
+            crops = cropgenerator.generate_crops(image, predictions, crop_size=crop_size)
+
+            approved_crops = cropgenerator.evaluate_crops(crops, desired_class)
+
+            #cropgenerator.upload_crops(approved_crops)

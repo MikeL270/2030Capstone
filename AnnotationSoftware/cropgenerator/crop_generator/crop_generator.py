@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..database import database
 from ..imagebackends import imagebackends
-from ..generatorobjects import generatorobjects
+from ..generatorobjects.generatorobjects import Box, Prediction, Image, Crop
 import sys
 import signal
 import datetime
@@ -97,6 +97,7 @@ def initialize(db_type: str, image_backend: str, db_configuration: dict):
     global suffix
     global img_backend
     global img_folder
+    global new_model
 
     load_dotenv()
     db_config = db_configuration
@@ -118,6 +119,7 @@ def initialize(db_type: str, image_backend: str, db_configuration: dict):
     prefix = len("high-altitude-pronghorn-survey-")
     suffix = len("_crop_xx")
     setup_interrupt_handler()
+    new_model = False
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -412,7 +414,7 @@ def bootstrap_database():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def auto_crop(image: generatorobjects.Image, predictions: list[generatorobjects.Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[generatorobjects.Crop, list[generatorobjects.Prediction]]:
+def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[Crop, list[Prediction]]:
     """ Automatically create crops of a given size containing all images with approved annotations 
     
     Args:
@@ -467,7 +469,7 @@ def auto_crop(image: generatorobjects.Image, predictions: list[generatorobjects.
     points_in_crop = np.zeros(len(points))
   
     for crop_num, center in enumerate(centers):
-        crop = generatorobjects.Crop(
+        crop = Crop(
             name = f"{image.name}_crop_{crop_num}",
             image_id = image.id,
         )
@@ -486,31 +488,30 @@ def auto_crop(image: generatorobjects.Image, predictions: list[generatorobjects.
         crop.set_image(img[y_start:y_end, x_start:x_end].copy())
 
         for p_index, pred in enumerate(predictions):
-            tl_x, tl_y, br_x, br_y = pred.dimensions.get_points()
-            if ((tl_x >= x_start) and (br_x <= x_end)) and ((tl_y >= y_start) and (br_y <= y_end)): 
+            box = pred.dimensions.get_points()
+            if ((box[0] >= x_start) and (box[2] <= x_end)) and ((box[1] >= y_start) and (box[3] <= y_end)): 
                 points_in_crop[p_index] += 1
                 crops[crop].append(
-                    generatorobjects.Prediction(
-                        pred_id = pred.id,
-                            dimensions = generatorobjects.Box(
-                                tl_x = tl_x - x_start,
-                                tl_y = tl_y - y_start,
-                                br_x = br_x - x_start,
-                                br_y = br_y - y_start
+                    Prediction(
+                        db_id = pred.id,
+                            dimensions = Box(
+                                top_left = (box[0] - x_start, box[1] - y_start),
+                                bottom_right = (box[2] - x_start, box[3] - y_start)
                             ),
                         score = pred.score,
                         label = pred.label, 
                         model_id = pred.model_id
                     )  
                 )  
-        crop.dimensions = generatorobjects.Box(x_start, y_start, x_end, y_end)
+        crop.dimensions = Box(
+            top_left = (x_start, y_start), 
+            bottom_right = (x_end, y_end)
+            )
 
     if np.all(points_in_crop >= 1):
-        print(f"Finished in {num_clusters} clusters") 
         return crops
 
     elif num_clusters + 1 <= len(points):
-        print("we need more crops")
         return auto_crop(image=image, predictions=predictions, crop_size=crop_size, num_clusters=num_clusters +1)
 
     else:
@@ -522,75 +523,83 @@ def auto_crop(image: generatorobjects.Image, predictions: list[generatorobjects.
         return crops 
 
 #---------------------------------------------------------------------------------------------------------------------------#
-def get_batch(batch_size: int, desired_class: int, min_confidence: float) -> dict:
+def get_batch(batch_size: int, desired_class: int, min_confidence: float) -> dict[Image, list[Prediction]]:
     batch = {}
     rows = base.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit, model_name)
     herd_unit_id = base.herd_units_reverse[herd_unit]
     model_id = base.models_reverse[model_name]
 
     for img in rows:
-        image = generatorobjects.Image(
-            imageId = img["imageid"],
+        base.set_open(img["imageid"])
+        image = Image(
+            db_id = img["imageid"],
             name = img["name"],
-            herdUnitId = herd_unit_id,
-            inTraining = True if img["intraining"] == 1 else False,
+            herd_unit_id = herd_unit_id,
+            in_training = True if img["intraining"] == 1 else False,
             folder_path = img_folder,
             )
         batch[image] = []
         for pred in img["predictions"]:
             batch[image].append(
-                generatorobjects.Prediction(
-                    pred_id = pred["PredId"],
-                    dimensions = generatorobjects.Box(
-                        tl_x = pred["BoxTx"],
-                        tl_y = pred["BoxTy"],
-                        br_x = pred["BoxBx"],
-                        br_y = pred["BoxBy"],
+                Prediction(
+                    db_id = pred["PredId"],
+                    dimensions = Box(
+                        top_left = (pred["BoxTx"], pred["BoxTy"]),
+                        bottom_right = (pred["BoxBx"], pred["BoxBy"])
                     ),
                     score = pred["Score"],
                     label = pred["Label"],
                     model_id = model_id
                     )
             )
+    base.commit()
     return batch    
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def approve_annotations(batch: dict[generatorobjects.Image, generatorobjects.Prediction], desired_class: int, crop_size: int, draw_box: bool):
+def generate_crops(image: Image, predictions: list[Prediction], crop_size: int) -> dict[Crop, list[Prediction]]:
     """ Present the user with cropped images and their predictions for validation """
-
     model_id = base.models_reverse[model_name]
-    class_name = base.class_labels_forward[desired_class]
-  
-    for image, predictions in batch.items():
-        crops = auto_crop(image=image, predictions=predictions, crop_size=crop_size)
 
-        query = """
-            SELECT *
-            FROM Crops
-            WHERE ModelID != ? AND ImageId = ?
-        """
-        existing_crops = base.query(query, (model_id, image.id))
+    crops = auto_crop(image=image, predictions=predictions, crop_size=crop_size)
+    print("done")       
+    query = """
+        SELECT *
+        FROM Crops
+        WHERE ModelID != ? AND ImageId = ?
+    """
+    existing_crops = base.query(query, (model_id, image.id))
 
-        # Perform Iou check to prevent duplicate data
-        for crop in crops:
-            for ecrop in existing_crops:
-                if crop.calc_iou(generatorobjects.Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
-                    print("duplicate crop")
-                    crops.pop(crop, None)
+    # Perform Iou check to prevent duplicate data
+    for crop in crops.keys():
+        for ecrop in existing_crops:
+            if crop.calc_iou(Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
+                print("duplicate crop")
+                crops.pop(crop, None)
 
-        #TODO: Rework image backends for new data structures
-        approve_annotations = img_backend.show_predictions(image, predictions, desired_class, class_name)
-    
+    return crops
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def evaluate_crops(crops: dict[Crop, list[Prediction]], desired_class: int):
+    label = base.class_labels_forward[desired_class]
+    approved_crops = []
+    for crop, predictions in crops.items():
+        resp = img_backend.evaluate_crop(crop, predictions, label)
+        base.set_closed(crop.image_id)
+        base.set_reviewed(crop.image_id)
+        if resp:
+            approved_crops.append(crop)
+    base.commit()
+    return approved_crops
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # TODO move to database
-def insert_crops(crops: dict[generatorobjects.Crop, list[generatorobjects.Prediction]]):
+def upload_crops(crops: dict[Crop, list[Prediction]]):
     for crop, predictions in crops.items():
         query = """
             INSERT INTO Crops (ModelID, ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """
+        """
 
         base.query(query, (crop.model_id, crop.image_id, crop.name, 0, crop.dimensions.get_points(), current_date, str(uuid4()))) 
         num_crops += 1
