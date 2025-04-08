@@ -1,8 +1,7 @@
 # Class definition for objects used in the crop_generator module
 # Author: Michael B. Lance
 # Created: April 4, 2025
-# Updated: April 6, 2025
-
+# Updated: April 7, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 import numpy as np
 import cv2
@@ -11,9 +10,9 @@ import os
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Box:
-    """ A Box contains dimensional data for crops and predictions
+    ''' A Box contains dimensional data for crops and predictions
     
-    """
+    '''
     def __init__(self, top_left: tuple[int]=None, bottom_right: tuple[int]=None):
         self.top_left = top_left
         self.bottom_right = bottom_right
@@ -53,6 +52,12 @@ class Box:
         union = (width_A * height_A) + (width_B * height_B) - intersection
         # Calculate the IoU:
         return intersection/union
+    
+    def serialize(self):
+        return {
+            'top_left': list(self.top_left),
+            'bottom_right': list(self.bottom_right),
+            }
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -60,8 +65,8 @@ class Image:
     def __init__(self, db_id: int=None, name: str=None, herd_unit_id: int=None, in_training:bool=False, folder_path: str=None):
         self.id = db_id
         self.name = name
-        self.herdUnitId = herd_unit_id
-        self.inTraining = in_training
+        self.herd_unit_id = herd_unit_id
+        self.in_training = in_training
         self.folder_path = folder_path
         self.image = None
 
@@ -72,28 +77,55 @@ class Image:
         if self.image is not None:
             return self.image
         else:
-            self.image = cv2.imread(os.path.join(f"{self.folder_path}", f"{self.name}.JPG"), cv2.IMREAD_COLOR_RGB)
+            self.image = cv2.imread(os.path.join(f'{self.folder_path}', f'{self.name}.JPG'), cv2.IMREAD_COLOR_RGB)
             return self.image
+        
+    def serialize(self):
+        return {
+            'image_id': self.id,
+            'image_name': self.name,
+            'herd_unit_id': self.herd_unit_id,
+            'folder_path' : self.folder_path,
+        }
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Prediction:
     def __init__(self, db_id: int, dimensions: Box=None, score: float=None, label: int=None, model_id: int=None):
         self.id = db_id
+        self.model_id = model_id
         self.dimensions = dimensions
         self.score = score
         self.label = label
-        self.model_id = model_id
     
+    def serialize(self):
+        return {
+            'pred_id': self.id,
+            'model_id': self.model_id,
+            'dimensions': self.dimensions.serialize(),
+            'score': self.score,
+            'label': self.label,
+            
+        }
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Crop(Image):
     def __init__(self, db_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
         super().__init__(db_id, name)
         self.image_id = image_id
-        self.dimensions = dimensions
+        self.crop_dimensions = dimensions
 
     def calc_iou(self, box):
         return self.dimensions.calc_iou(box)
     
+    def serialize(self):
+        return {
+            'crop_id': self.id,
+            'image_id': self.image_id,
+            'crop_name': self.name,
+            'dimensions': self.dimensions.serialize(),
+            'herd_unit_id': self.herd_unit_id,
+            'folder_path' : self.folder_path,
+        }
 #---------------------------------------------------------------------------------------------------------------------------#

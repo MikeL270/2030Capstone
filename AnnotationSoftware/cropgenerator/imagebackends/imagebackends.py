@@ -45,22 +45,22 @@ class MatplotBackend(ImageBackend):
     import matplotlib.pyplot as plt
 
     def prompt_user(self, class_name): 
-        if os.name == "posix":
+        if os.name == 'posix':
             pass
-            os.system("clear")
+            os.system('clear')
         else:
-            os.system("cls")
+            os.system('cls')
 
         while True: # Show number associated with crop indexes in plot
-            user_input = input(f"Please indicate (yes or no) whether any displayed image is of a {class_name}, q to quit: \n")
+            user_input = input(f'Please indicate (yes or no) whether any displayed image is of a {class_name}, q to quit: \n')
             try:
-                if user_input in set(["q", "Q", "Quit", "quit", "QUIT"]):
-                    print("Quitting...")
+                if user_input in set(['q', 'Q', 'Quit', 'quit', 'QUIT']):
+                    print('Quitting...')
                     return -999 
 
-                if user_input in set(["y", "Y", "yes", "Yes", "1"]):
+                if user_input in set(['y', 'Y', 'yes', 'Yes', '1']):
                     return True
-                elif user_input in set(["n", "N", "no", "No", "0"]):
+                elif user_input in set(['n', 'N', 'no', 'No', '0']):
                     return False
                 
             except:
@@ -88,7 +88,7 @@ class MatplotBackend(ImageBackend):
         # axs = [axs]
         for ax, crop, pred in zip(fig.axes[:len(crops)], crops, predictions):
             ax.imshow(crop)
-            ax.set_title(f"score: {pred.score:.3f}")
+            ax.set_title(f'score: {pred.score:.3f}')
             ax.set_axis_off() 
     
         self.plt.figure(figsize=(15,15))
@@ -111,22 +111,22 @@ class OpencvBackend(ImageBackend):
                 self.cv2.destroyAllWindows()
                 return -999
             
-        if key in set([ord("y"), ord("Y"), ord("1")]):
+        if key in set([ord('y'), ord('Y'), ord('1')]):
             return True
-        if key in set([ord("n"), ord("N"), ord("0")]):
+        if key in set([ord('n'), ord('N'), ord('0')]):
             return False
 
     async def evaluate_crop(self, image: Crop, predictions: list[Prediction], desired_class: int, class_name, draw_box:bool=False):
         crops = self.create_subcrop(image, predictions, desired_class, draw_box)
         
-        if os.name == "posix":
+        if os.name == 'posix':
             pass
-            os.system("clear")
+            os.system('clear')
         else:
-            os.system("cls")
+            os.system('cls')
 
-        for crop, score in zip(crops, prediction["scores"]): #type: ignore
-            self.cv2.imshow(f"score: {score}", self.cv2.cvtColor(crop, self.cv2.COLOR_BGR2RGB))
+        for crop, score in zip(crops, prediction['scores']): #type: ignore
+            self.cv2.imshow(f'score: {score}', self.cv2.cvtColor(crop, self.cv2.COLOR_BGR2RGB))
             
             key = self.cv2.waitKey(0)
             
@@ -141,8 +141,8 @@ class OpencvBackend(ImageBackend):
 
 def get_backend(backend_type: str):
     backends = {
-    "matplot": MatplotBackend,
-    "opencv": OpencvBackend,
+    'matplot': MatplotBackend,
+    'opencv': OpencvBackend,
     }
 
     return backends[backend_type]

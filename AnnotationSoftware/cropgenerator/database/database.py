@@ -59,7 +59,7 @@ class Database(ABC): # Abstract class for all database types
                         Name CHAR(50) NOT NULL UNIQUE,
                         InTraining SMALLINT NOT NULL CHECK (InTraining IN (0, 1)),
                         Reviewed SMALLINT NOT NULL CHECK (Reviewed IN (0, 1)),
-                        "Error" SMALLINT NOT NULL CHECK ("Error" IN (0, 1)),
+                        'Error' SMALLINT NOT NULL CHECK ('Error' IN (0, 1)),
                         OPEN SMALLINT NOT NULL CHECK (OPEN IN (0, 1)),
                         CropsGen INTEGER,
                         FOREIGN KEY (HerdUnitID) REFERENCES HerdUnits (HerdUnitID)
@@ -173,10 +173,10 @@ class Database(ABC): # Abstract class for all database types
         
         self.class_labels_forward = {}
         self.class_labels_reverse = {}
-        query = """
+        query = '''
             SELECT * FROM classlabels
             
-        """
+        '''
         rows = self.query(query,())
 
         for id, name in rows:
@@ -184,9 +184,9 @@ class Database(ABC): # Abstract class for all database types
             self.class_labels_reverse[name] = id
 
     def get_herd_units(self):
-        query = """
+        query = '''
             SELECT * FROM herdunits
-        """
+        '''
         rows = self.query(query,())
 
         for id, name in rows:
@@ -194,16 +194,16 @@ class Database(ABC): # Abstract class for all database types
             self.herd_units_reverse[name] = id
     
     def get_models(self):
-        query = """
+        query = '''
             SELECT * FROM models
-        """
+        '''
         rows = self.query(query,())
         for id, name in rows:
             self.models_forward[id] = name
             self.models_reverse[name] = id
 
     def get_pred_and_images(self, batch_size: int, desired_class: int, min_confidence: float, herd_unit: str, model_name: str) -> dict:
-        """ Query batch_size Images and associated predictions above a minimum score from the database
+        ''' Query batch_size Images and associated predictions above a minimum score from the database
         
         Args:
             batch_size: number of images that will consist a batch 
@@ -212,13 +212,13 @@ class Database(ABC): # Abstract class for all database types
             herd
             
         Returns true if image_name is origin of one of the training images.
-        """
+        '''
 
         herd_unit_id = self.herd_units_reverse[herd_unit]
         model_id = self.models_reverse[model_name]
        
-        print("Querying database...")
-        query = """
+        print('Querying database...')
+        query = '''
                 WITH SelectedImageIds AS (
                     SELECT DISTINCT I.ImageId
                     FROM Images I
@@ -257,37 +257,37 @@ class Database(ABC): # Abstract class for all database types
                     GROUP BY I.ImageId, I.Name, I.InTraining, P.Score
                     ORDER BY P.Score
                 ) AS img_preds;
-        """
+        '''
         rows = self.query(query, (herd_unit_id, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, model_id,)) #type: ignore
         
         if type(rows) == 'None':
             # TODO: Raise an error here
-            print("No results returned, try lowering min confidence!")
+            print('No results returned, try lowering min confidence!')
         else:
             return rows[0][0]
 
     def set_open(self, image_id: int):
-        query = """
+        query = '''
             UPDATE Images
             SET Open = 1
             WHERE ImageId = ?
-        """
+        '''
         self.query(query, (image_id,))
 
     def set_closed(self, image_id: int):
-        query = """
+        query = '''
             UPDATE Images
             SET Open = 0
             WHERE ImageId = ?
-        """
+        '''
         self.query(query, (image_id,))
 
     def set_reviewed(self, image_id: int):
-        query = """
+        query = '''
             UPDATE Images
             SET Reviewed = 1
             WHERE ImageId = ?
-        """
+        '''
         self.query(query, (image_id,))
 
     
@@ -310,10 +310,10 @@ class SQLite(Database):
         self._cursor.execute('PRAGMA temp_store = MEMORY;')
 
     def get_auto_increment_column(self) -> str:
-        return "INTEGER PRIMARY KEY"
+        return 'INTEGER PRIMARY KEY'
     
     def get_placeholder(self) -> str:
-        return "?"
+        return '?'
     
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -353,7 +353,7 @@ class Postgres(Database):
 #---------------------------------------------------------------------------------------------------------------------------#
 
 db_types = {
-    "default": Postgres,
-    "sqlite": SQLite,
-    "postgres": Postgres,
+    'default': Postgres,
+    'sqlite': SQLite,
+    'postgres': Postgres,
 }
