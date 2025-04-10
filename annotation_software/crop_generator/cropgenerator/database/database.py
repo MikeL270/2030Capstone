@@ -202,6 +202,90 @@ class Database(ABC): # Abstract class for all database types
             self.models_forward[id] = name
             self.models_reverse[name] = id
 
+
+
+    def set_open(self, image_id: int):
+        query = '''
+            UPDATE Images
+            SET Open = 1
+            WHERE ImageId = ?
+        '''
+        self.query(query, (image_id,))
+
+    def set_closed(self, image_id: int):
+        query = '''
+            UPDATE Images
+            SET Open = 0
+            WHERE ImageId = ?
+        '''
+        self.query(query, (image_id,))
+
+    def set_reviewed(self, image_id: int):
+        query = '''
+            UPDATE Images
+            SET Reviewed = 1
+            WHERE ImageId = ?
+        '''
+        self.query(query, (image_id,))
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+class SQLite(Database):
+    import sqlite3
+    def __init__(self, db_config: dict):
+        self._db_name = db_config['database']
+        self._conn = None
+        self._cursor = None
+                
+    def connect(self):
+        self._conn = self.sqlite3.connect(self._db_name)
+        self._cursor = self._conn.cursor()
+        self._cursor.execute('PRAGMA journal_mode = WAL;')
+        self._cursor.execute('PRAGMA cache_size = -20000;')
+        self._cursor.execute('PRAGMA synchronous = NORMAL;')
+        self._cursor.execute('PRAGMA temp_store = MEMORY;')
+
+    def get_auto_increment_column(self) -> str:
+        return 'INTEGER PRIMARY KEY'
+    
+    def get_placeholder(self) -> str:
+        return '?'
+    
+#---------------------------------------------------------------------------------------------------------------------------#
+
+class Postgres(Database):
+    import psycopg2
+    from psycopg2.extras import DictCursor
+    def __init__(self, db_config: dict):
+        super().__init__()
+        self._config = db_config
+        self._conn = None
+        self._cursor = None
+        self._dict_cursor = None
+        self._pooled_conn = None
+
+    def connect(self):
+        try:
+            self._conn = self.psycopg2.connect(**self._config) #type: ignore
+            self._cursor = self._conn.cursor()
+            self._dict_cursor = self._conn.cursor(cursor_factory=self.DictCursor)
+        except (Exception, self.psycopg2.DatabaseError) as error:
+            print(error)
+        
+        self.get_class_labels()
+        self.get_herd_units()
+        self.get_models()
+
+    def get_auto_increment_column(self) -> str:
+        return 'SERIAL NOT NULL PRIMARY KEY'
+
+    def get_placeholder(self) -> str:
+        return '%s'
+
+    def lastrowid(self) -> int:
+        self._cursor.execute('SELECT LASTVAL()')
+        return self._cursor.fetchone()[0]
+    
     def get_pred_and_images(self, batch_size: int, desired_class: int, min_confidence: float, herd_unit: str, model_name: str) -> dict:
         ''' Query batch_size Images and associated predictions above a minimum score from the database
         
@@ -265,90 +349,6 @@ class Database(ABC): # Abstract class for all database types
             print('No results returned, try lowering min confidence!')
         else:
             return rows[0][0]
-
-    def set_open(self, image_id: int):
-        query = '''
-            UPDATE Images
-            SET Open = 1
-            WHERE ImageId = ?
-        '''
-        self.query(query, (image_id,))
-
-    def set_closed(self, image_id: int):
-        query = '''
-            UPDATE Images
-            SET Open = 0
-            WHERE ImageId = ?
-        '''
-        self.query(query, (image_id,))
-
-    def set_reviewed(self, image_id: int):
-        query = '''
-            UPDATE Images
-            SET Reviewed = 1
-            WHERE ImageId = ?
-        '''
-        self.query(query, (image_id,))
-
-    
-
-#---------------------------------------------------------------------------------------------------------------------------#
-
-class SQLite(Database):
-    import sqlite3
-    def __init__(self, db_config: dict):
-        self._db_name = db_config['database']
-        self._conn = None
-        self._cursor = None
-                
-    def connect(self):
-        self._conn = self.sqlite3.connect(self._db_name)
-        self._cursor = self._conn.cursor()
-        self._cursor.execute('PRAGMA journal_mode = WAL;')
-        self._cursor.execute('PRAGMA cache_size = -20000;')
-        self._cursor.execute('PRAGMA synchronous = NORMAL;')
-        self._cursor.execute('PRAGMA temp_store = MEMORY;')
-
-    def get_auto_increment_column(self) -> str:
-        return 'INTEGER PRIMARY KEY'
-    
-    def get_placeholder(self) -> str:
-        return '?'
-    
-#---------------------------------------------------------------------------------------------------------------------------#
-
-class Postgres(Database):
-    import psycopg2
-    from psycopg2.extras import DictCursor
-    def __init__(self, db_config: dict):
-        super().__init__()
-        self._config = db_config
-        self._conn = None
-        self._cursor = None
-        self._dict_cursor = None
-        self._pooled_conn = None
-
-    def connect(self):
-        try:
-            self._conn = self.psycopg2.connect(**self._config) #type: ignore
-            self._cursor = self._conn.cursor()
-            self._dict_cursor = self._conn.cursor(cursor_factory=self.DictCursor)
-        except (Exception, self.psycopg2.DatabaseError) as error:
-            print(error)
-        
-        self.get_class_labels()
-        self.get_herd_units()
-        self.get_models()
-
-    def get_auto_increment_column(self) -> str:
-        return 'SERIAL NOT NULL PRIMARY KEY'
-
-    def get_placeholder(self) -> str:
-        return '%s'
-
-    def lastrowid(self) -> int:
-        self._cursor.execute('SELECT LASTVAL()')
-        return self._cursor.fetchone()[0]
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

@@ -1,15 +1,24 @@
 # Class definition for objects used in the crop_generator module
 # Author: Michael B. Lance
 # Created: April 4, 2025
-# Updated: April 7, 2025
+# Updated: April 9, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 import numpy as np
 import cv2
 import os
-
+from flask.json.provider import DefaultJSONProvider
+from abc import ABC, abstractmethod
+from typing import Any
 #---------------------------------------------------------------------------------------------------------------------------#
 
-class Box:
+class CgOBJ(ABC):
+    @abstractmethod
+    def serialize(self) -> dict:
+        pass
+    
+#---------------------------------------------------------------------------------------------------------------------------#
+
+class Box(CgOBJ):
     ''' A Box contains dimensional data for crops and predictions
     
     '''
@@ -53,7 +62,7 @@ class Box:
         # Calculate the IoU:
         return intersection/union
     
-    def serialize(self):
+    def serialize(self) -> dict:
         return {
             'top_left': list(self.top_left),
             'bottom_right': list(self.bottom_right),
@@ -61,7 +70,7 @@ class Box:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-class Image:
+class Image(CgOBJ):
     def __init__(self, db_id: int=None, name: str=None, herd_unit_id: int=None, in_training:bool=False, folder_path: str=None):
         self.id = db_id
         self.name = name
@@ -80,7 +89,7 @@ class Image:
             self.image = cv2.imread(os.path.join(f'{self.folder_path}', f'{self.name}.JPG'), cv2.IMREAD_COLOR_RGB)
             return self.image
         
-    def serialize(self):
+    def serialize(self) -> dict:
         return {
             'image_id': self.id,
             'image_name': self.name,
@@ -90,7 +99,7 @@ class Image:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-class Prediction:
+class Prediction(CgOBJ):
     def __init__(self, db_id: int, dimensions: Box=None, score: float=None, label: int=None, model_id: int=None):
         self.id = db_id
         self.model_id = model_id
@@ -98,7 +107,7 @@ class Prediction:
         self.score = score
         self.label = label
     
-    def serialize(self):
+    def serialize(self) -> dict:
         return {
             'pred_id': self.id,
             'model_id': self.model_id,
@@ -119,7 +128,7 @@ class Crop(Image):
     def calc_iou(self, box):
         return self.dimensions.calc_iou(box)
     
-    def serialize(self):
+    def serialize(self) -> dict:
         return {
             'crop_id': self.id,
             'image_id': self.image_id,
@@ -128,4 +137,14 @@ class Crop(Image):
             'herd_unit_id': self.herd_unit_id,
             'folder_path' : self.folder_path,
         }
+    
+#---------------------------------------------------------------------------------------------------------------------------#
+
+class CropgenJSONPRovider(DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, CgOBJ):
+            return obj.serialize()
+        return super().default(obj)
+
+
 #---------------------------------------------------------------------------------------------------------------------------#

@@ -167,14 +167,4 @@ cython_debug/
 #.idea/
 
 # Michael's Dev env
-AnnotationSoftware/dev-env/
-AnnotationSoftware/data
-AnnotationSoftware/annotations
-AnnotationSoftware/scratch.txt
-AnnotationSoftware/*.db
-AnnotationSoftware/annotated_crops
-AnnotationSoftware/dockerfile
-AnnotationSoftware/docker-compose.yml
-AnnotationSoftware/requirements.txt
-
-deleteme.py
+scratch.txt

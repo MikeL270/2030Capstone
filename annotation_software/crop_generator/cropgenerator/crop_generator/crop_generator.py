@@ -13,8 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..database import database
 from ..imagebackends import imagebackends
-from ..generatorobjects.generatorobjects import Box, Prediction, Image, Crop
-import sys
+from ..generatorobjects.generatorobjects import Box, Prediction, Image, Crop, CropgenJSONPRovider
 import signal
 import datetime
 from sklearn.cluster import KMeans
@@ -23,7 +22,7 @@ import labelbox as lb
 from labelbox.data.annotation_types import Label, ObjectAnnotation, Rectangle, Point
 from uuid import uuid4
 from multiprocessing import Pool, cpu_count
-from typing import Any
+from typing import Dict, List, Union
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -412,6 +411,52 @@ def bootstrap_database():
     base.create_tables()     
     insert_to_database(bootstrap=True, insert_images=True, insert_predictions=True)
 
+    #---------------------------------------------------------------------------------------------------------------------------#
+
+def retrieve_batch(batch_size: int, desired_class: int, min_confidence: float) -> dict[Image, list[Prediction]]:
+    batch = {}
+    rows = base.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit, model_name)
+    herd_unit_id = base.herd_units_reverse[herd_unit]
+    model_id = base.models_reverse[model_name]
+
+    for img in rows:
+        img_id =img['imageid']
+        base.set_open(img_id)
+    
+        batch[img_id] = {}
+        image = Image(
+            db_id = img_id,
+            name = img['name'],
+            herd_unit_id = herd_unit_id,
+            in_training = True if img['intraining'] == 1 else False,
+            folder_path = img_folder,
+            )
+        batch[img_id]['image'] = image
+        for pred in img['predictions']:
+            batch[img_id]['predictions'] = []
+            batch[img_id]['predictions'].append(
+                Prediction(
+                    db_id = pred['PredId'],
+                    dimensions = Box(
+                        top_left = (pred['BoxTx'], pred['BoxTy']),
+                        bottom_right = (pred['BoxBx'], pred['BoxBy'])
+                    ),
+                    score = pred['Score'],
+                    label = pred['Label'],
+                    model_id = model_id
+                    )
+            )
+    base.commit()
+    return batch
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def close_batch(batch: Dict[str, Union[Image, List[Prediction]]]):
+    for image_id in batch.keys():
+        base.set_closed(image_id)
+    
+
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[Crop, list[Prediction]]:
@@ -473,7 +518,7 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
             name = f'{image.name}_crop_{crop_num}',
             image_id = image.id,
         )
-        crops[crop] = []
+        crops[crop_num] = {}
         
         x_start = max(0, int(center[0]) - crop_size // 2)
         y_start = max(0, int(center[1]) - crop_size // 2)
@@ -486,18 +531,19 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
             y_start -= (y_start + crop_size) - img.shape[0]
         
         crop.set_image(img[y_start:y_end, x_start:x_end].copy())
-
+        crops[crop_num]['crop'] = crop
+        crops[crop_num]['predictions'] = []
         for p_index, pred in enumerate(predictions):
             box = pred.dimensions.get_points()
             if ((box[0] >= x_start) and (box[2] <= x_end)) and ((box[1] >= y_start) and (box[3] <= y_end)): 
                 points_in_crop[p_index] += 1
-                crops[crop].append(
+                crops[crop_num]['predictions'].append(
                     Prediction(
                         db_id = pred.id,
-                            dimensions = Box(
-                                top_left = (box[0] - x_start, box[1] - y_start),
-                                bottom_right = (box[2] - x_start, box[3] - y_start)
-                            ),
+                        dimensions = Box(
+                            top_left = (box[0] - x_start, box[1] - y_start),
+                            bottom_right = (box[2] - x_start, box[3] - y_start)
+                        ),
                         score = pred.score,
                         label = pred.label, 
                         model_id = pred.model_id
@@ -521,44 +567,7 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
         plt.title('Failed to crop')
         plt.show()
         return crops 
-
-#---------------------------------------------------------------------------------------------------------------------------#
-def retrieve_batch(batch_size: int, desired_class: int, min_confidence: float) -> dict[Image, list[Prediction]]:
-    batch = {}
-    rows = base.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit, model_name)
-    herd_unit_id = base.herd_units_reverse[herd_unit]
-    model_id = base.models_reverse[model_name]
-
-    for img in rows:
-        img_id =img['imageid']
-        base.set_open(img_id)
     
-        batch[img_id] = {}
-        image = Image(
-            db_id = img_id,
-            name = img['name'],
-            herd_unit_id = herd_unit_id,
-            in_training = True if img['intraining'] == 1 else False,
-            folder_path = img_folder,
-            )
-        batch[img_id]['image'] = image
-        for pred in img['predictions']:
-            batch[img_id]['predictions'] = []
-            batch[img_id]['predictions'].append(
-                Prediction(
-                    db_id = pred['PredId'],
-                    dimensions = Box(
-                        top_left = (pred['BoxTx'], pred['BoxTy']),
-                        bottom_right = (pred['BoxBx'], pred['BoxBy'])
-                    ),
-                    score = pred['Score'],
-                    label = pred['Label'],
-                    model_id = model_id
-                    )
-            )
-    base.commit()
-    return batch
-
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def generate_crops(image: Image, predictions: list[Prediction], crop_size: int) -> dict[Crop, list[Prediction]]:
@@ -581,12 +590,15 @@ def generate_crops(image: Image, predictions: list[Prediction], crop_size: int) 
                 crops.pop(crop, None)
 
     return crops
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def evaluate_crops(crops: dict[Crop, list[Prediction]], desired_class: int):
+def evaluate_crops(crops: Dict[str, Union[Crop, List[Prediction]]], desired_class: int):
     label = base.class_labels_forward[desired_class]
     approved_crops = []
-    for crop, predictions in crops.items():
+    for crop_num in crops.keys():
+        crop = crops[crop_num]['crop']
+        predictions = crops[crop_num]['predictions']
         resp = img_backend.evaluate_crop(crop, predictions, label)
         base.set_closed(crop.image_id)
         base.set_reviewed(crop.image_id)
