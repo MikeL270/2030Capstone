@@ -11,10 +11,14 @@
     "type-check": "vue-tsc --build"
   },
   "dependencies": {
+    "lodash": "^4.17.21",
+    "ndarray": "^1.0.19",
     "vue": "^3.5.13"
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.1",
+    "@types/lodash": "^4.17.16",
+    "@types/ndarray": "^1.0.14",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/tsconfig": "^0.7.0",

@@ -77,6 +77,7 @@ def retrieve_batch():
     serialized_data = json.dumps(new_batch_obj,  default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201
 
+#---------------------------------------------------------------------------------------------------------------------------#
 # POST request: create a batch of crops based on an image
 @app.route('/api/v1/crops', methods=['POST'])
 def create_crops():
@@ -92,13 +93,8 @@ def create_crops():
     return Response(serialized_data, mimetype='application/json'), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
-# PUT Requests
-
-#PUT request: Update a batch of crops 
-
-#---------------------------------------------------------------------------------------------------------------------------#
 # Delete request: Delete a crop
-@app.route('api/v1/batches/<int:batch_id>', methods=['DELETE'])
+@app.route('/api/v1/batches/<int:batch_id>', methods=['DELETE'])
 def delete_batch(batch_id):
     cropgenerator.close_batch(batches[batch_id])
     del batches[batch_id]

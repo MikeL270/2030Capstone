@@ -26,16 +26,16 @@ class Box(CgOBJ):
         self.top_left = top_left
         self.bottom_right = bottom_right
 
-    def get_center(self):
+    def get_center(self) -> tuple:
         x = np.mean([self.top_left[0], self.bottom_right[0]])
         y = np.mean([self.top_left[1], self.bottom_right[1]])
 
         return ((abs(x), abs(y)))
 
-    def get_points(self):
+    def get_points(self) -> list[int]:
         return [self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]]
 
-    def calc_iou(self, box_2):
+    def calc_iou(self, box_2) -> float:
         # Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
         #Extract bounding boxes coordinates
         x0_A, y0_A, x1_A, y1_A = self.get_points()
@@ -94,7 +94,8 @@ class Image(CgOBJ):
             'image_id': self.id,
             'image_name': self.name,
             'herd_unit_id': self.herd_unit_id,
-            'folder_path' : self.folder_path,
+            'folder_path': self.folder_path,
+            'in_training': 1 if self.in_training else 0
         }
 
 #---------------------------------------------------------------------------------------------------------------------------#
