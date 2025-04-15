@@ -34,8 +34,9 @@ app.json_provider_class = CropgenJSONPRovider
 
 
 @app.route('/')
-def hello_workd():
-    return jsonify(message='Hello Gamers!')    
+def hello_world():
+
+    return jsonify(message='Hi mom!')    
 
 # In memory item store, list of dicts for now
 # TODO make proper container object with ids and such

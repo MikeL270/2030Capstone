@@ -16,6 +16,7 @@
     "vue": "^3.5.13"
   },
   "devDependencies": {
+    "@iconify/vue": "^4.3.0",
     "@tsconfig/node22": "^22.0.1",
     "@types/lodash": "^4.17.16",
     "@types/ndarray": "^1.0.14",

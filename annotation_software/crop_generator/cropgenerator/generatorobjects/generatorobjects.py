@@ -1,7 +1,7 @@
 # Class definition for objects used in the crop_generator module
 # Author: Michael B. Lance
 # Created: April 4, 2025
-# Updated: April 9, 2025
+# Updated: April 11, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 import numpy as np
 import cv2
@@ -127,7 +127,7 @@ class Crop(Image):
         self.crop_dimensions = dimensions
 
     def calc_iou(self, box):
-        return self.dimensions.calc_iou(box)
+        return self.crop_dimensions.calc_iou(box)
     
     def serialize(self) -> dict:
         return {

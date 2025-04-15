@@ -36,7 +36,7 @@ export class Box implements CgOBJ {
         return {
             top_left: this.top_left,
             bottom_right: this.bottom_right,
-        }
+        };
     }
 }
 
@@ -66,6 +66,52 @@ export class Image implements CgOBJ {
             herd_unit_id: this.herd_unit_id,
             folder_path: this.folder_path,
             in_training: this.in_training ? 1 : 0,
+        };
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export class Prediction implements CgOBJ {
+    id: number | null = null;
+    model_id: number | null = null;
+    dimensions: Box | null = null;
+    score: number | null = null;
+    label: number | null = null;
+
+    constructor(db_id: number | null, model_id: number | null = null, dimensions: Box | null = null, score: number | null = null, label: number | null = null) {
+        this.id = db_id;
+        this.model_id = model_id;
+        this.dimensions = dimensions;
+        this.score = score;
+        this.label = label;    
+    }
+
+
+    serialize(): object {
+        return {
+            pred_id: this.id,
+            model_id: this.model_id,
+            dimensions: this.dimensions,
+            score: this.score,
+            label: this.label,
         }
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export class Crop extends Image implements CgOBJ {
+    image_id: number | null = null;
+    crop_dimensions: Box | null = null;
+
+    constructor(db_id: number | null = null, image_id: number | null = null, name: string | null = null, diemsons: Box | null = null) {
+        super(db_id, name);
+        this.image_id = image_id;
+        this.crop_dimensions = diemsons;
+    }
+
+    serialize(): object {
+        return {}
     }
 }

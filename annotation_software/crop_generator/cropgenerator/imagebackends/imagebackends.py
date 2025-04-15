@@ -1,11 +1,11 @@
 # Methods for presenting images to users
 # Authors: Ben Koger, Michael B. Lance
 # Created: February 26, 2025
-# Updated: April 5, 2025
+# Updated: April 11, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
-from ..generatorobjects.generatorobjects import Crop, Prediction
+from ..generatorobjects.generatorobjects import Image, Crop, Prediction, Box
 import os
 import numpy as np
 import math
@@ -19,8 +19,7 @@ class ImageBackend(ABC):
     async def evaluate_crop(self, crop: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
         pass
 
-    def create_subcrop(self, image: Crop, predictions: list[Prediction], draw_box: bool):
-        crop_size = 150
+    def create_subcrop(self, image: Image, predictions: list[Prediction], crop_size: int=150, draw_box: bool=False):
         crops = []
         img = image.get_image()
         if len(predictions) == 0:        
@@ -32,7 +31,13 @@ class ImageBackend(ABC):
             ymax = np.min([box[3] + crop_size, img.shape[0]])
             xmin = np.max([box[0] - crop_size, 0])
             xmax = np.min([box[2] + crop_size, img.shape[1]])
-            crops.append(img[ymin:ymax, xmin:xmax].copy())
+            crop = Crop(
+                image_id = image.id,
+                name = f'{image.name}_pred_crop_{pred.id}',
+                dimensions = Box((xmin, ymax), (xmax, ymin)),
+            )
+            crop.set_image(img[ymin:ymax, xmin:xmax].copy())
+            crops.append()
 
             if draw_box:
                 self.cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)

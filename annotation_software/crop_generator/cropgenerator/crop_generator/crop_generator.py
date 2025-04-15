@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: April 7, 2025
+# Updated: April 11, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -23,6 +23,7 @@ from labelbox.data.annotation_types import Label, ObjectAnnotation, Rectangle, P
 from uuid import uuid4
 from multiprocessing import Pool, cpu_count
 from typing import Dict, List, Union
+import sys
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -592,6 +593,10 @@ def generate_crops(image: Image, predictions: list[Prediction], crop_size: int) 
     return crops
 
 #---------------------------------------------------------------------------------------------------------------------------#
+def generate_pred_crops(image: Image, predictions: list[Prediction], crop_size: int) -> list[np.ndarray]:
+    return img_backend.create_subcrop(image, predictions, crop_size)
+
+#---------------------------------------------------------------------------------------------------------------------------#
 
 def evaluate_crops(crops: Dict[str, Union[Crop, List[Prediction]]], desired_class: int):
     label = base.class_labels_forward[desired_class]
@@ -611,7 +616,6 @@ def evaluate_crops(crops: Dict[str, Union[Crop, List[Prediction]]], desired_clas
 
 def save_crop(crop: Crop):
         cv2.imwrite(f'{save_folder}/{crop.name}.jpg', cv2.cvtColor(crop.get_image(), cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])
-
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

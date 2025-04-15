@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
+import Header from './components/Header.vue'
+import Footer from './components/Footer.vue'
+
 </script>
 
 <template>
   <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
 
     <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+    <Header />
     </div>
   </header>
 
   <main>
-    <TheWelcome />
+   
   </main>
+  <footer>
+    <Footer />
+  </footer>
 </template>
 
 <style scoped>
@@ -31,7 +34,35 @@ header {
   header {
     display: flex;
     place-items: center;
+    flex-direction: column;
+    position: absolute;
+    width: 100%;
+    height: 10vh;
+    top: 0;
+    left: 0;
     padding-right: calc(var(--section-gap) / 2);
+    color: rgb(255, 255, 255);
+    background-color: rgb(51, 51, 51);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.788);
+    padding: 1%;
+  }
+
+  footer {
+    display: flex;
+    flex-direction: column;
+    place-items: center;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    background-color: rgb(51, 51, 51);
+    width: 100%;
+    height: 15vh;
+    padding: 1%;
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.788);;
+
   }
 
   .logo {
