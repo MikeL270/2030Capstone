@@ -78,7 +78,6 @@ def retrieve_batch():
     serialized_data = json.dumps(new_batch_obj,  default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201
 
-#---------------------------------------------------------------------------------------------------------------------------#
 # POST request: create a batch of crops based on an image
 @app.route('/api/v1/crops', methods=['POST'])
 def create_crops():

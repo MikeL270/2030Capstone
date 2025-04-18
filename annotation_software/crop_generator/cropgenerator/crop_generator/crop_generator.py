@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: April 11, 2025
+# Updated: April 16, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -455,8 +455,6 @@ def retrieve_batch(batch_size: int, desired_class: int, min_confidence: float) -
 def close_batch(batch: Dict[str, Union[Image, List[Prediction]]]):
     for image_id in batch.keys():
         base.set_closed(image_id)
-    
-
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

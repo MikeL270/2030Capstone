@@ -1,7 +1,7 @@
 # Methods for presenting images to users
 # Authors: Ben Koger, Michael B. Lance
 # Created: February 26, 2025
-# Updated: April 11, 2025
+# Updated: April 16, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
@@ -19,7 +19,7 @@ class ImageBackend(ABC):
     async def evaluate_crop(self, crop: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
         pass
 
-    def create_subcrop(self, image: Image, predictions: list[Prediction], crop_size: int=150, draw_box: bool=False):
+    def create_subcrop(self, image: Image, predictions: list[Prediction], crop_size: int=150, draw_box: bool=False) -> list[Crop]:
         crops = []
         img = image.get_image()
         if len(predictions) == 0:        
@@ -37,7 +37,7 @@ class ImageBackend(ABC):
                 dimensions = Box((xmin, ymax), (xmax, ymin)),
             )
             crop.set_image(img[ymin:ymax, xmin:xmax].copy())
-            crops.append()
+            crops.append(crop)
 
             if draw_box:
                 self.cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
