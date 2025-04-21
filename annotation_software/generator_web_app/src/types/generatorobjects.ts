@@ -1,7 +1,7 @@
 // Typescript Class definition analogues for crop_generator objects 
 // Author: Michael B. Lance
 // Created: April 9, 2025
-// Updated: April 9, 2025
+// Updated: April 20, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { mean } from 'lodash';
@@ -115,3 +115,7 @@ export class Crop extends Image implements CgOBJ {
         return {}
     }
 }
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export default {};

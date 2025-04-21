@@ -10,21 +10,37 @@ const menu_toggled = ref(false)
 
     <div class="Menu" :class= {active:menu_toggled}>
         
-        <button class="Toggle-Button" @click="menu_toggled = !menu_toggled">
+        <button class="Toggle-Button" @click="menu_toggled = !menu_toggled"title="Toggle Menu">
             <Icon icon="material-symbols:menu" width="36" height="36"></Icon>
         </button>
         <nav>
-            <RouterLink to="/" class="Item">
-                <Icon icon="uil:home" width="36" height="36"></Icon>
+            <RouterLink to="/" class="Item" title="Home">
+                <Icon icon="uil:home" width="36" height="36" ></Icon>
                 <p v-if="menu_toggled"> Home </p>
             </RouterLink>
-            <RouterLink to="/profile" class="Item">
-                <Icon icon="qlementine-icons:user-16" width="36" height="36"></Icon>
-                <p v-if="menu_toggled"> Profile </p>
-
+            <RouterLink to="/annotate" class="Item" title="Annotate">
+                <Icon icon="foundation:annotate" width="36" height="36"></Icon>
+                <p v-if="menu_toggled"> Annotate </p>
             </RouterLink>
+            <RouterLink to="/statistics" class="Item" title="Statistics">
+                <Icon icon="uil:statistics" width="36" height="36"></Icon>
+                <p v-if="menu_toggled"> Statistics </p>
+            </RouterLink>
+            <RouterLink to="/profile" class="Item" title="Profile">
+                <Icon icon="iconamoon:profile-fill" width="36" height="36"></Icon>
+                <p v-if="menu_toggled"> Profile </p>
+            </RouterLink>
+            <RouterLink to="/api-tester" class="Item"title="API Tester">
+                <Icon icon="fluent-mdl2:test-auto-solid" width="36" height="36"></Icon>
+                <p v-if="menu_toggled"> API Tester </p>
+            </RouterLink>
+            <RouterLink to="/settings" class="Item"title="Settings">
+                <Icon icon="ic:outline-settings" width="36" height="36"></Icon>
+                <p v-if="menu_toggled"> Settings </p>
+            </RouterLink>
+
         </nav>
-        <a class="GH-Link" href="https://github.com/benkoger/pronghorn-census" >
+        <a class="GH-Link" href="https://github.com/benkoger/pronghorn-census" title="Github repo">
             <Icon icon="fe:github" width="36" height="36"></Icon>
             <p v-if="menu_toggled"> Github </p>
         </a>
@@ -36,14 +52,23 @@ const menu_toggled = ref(false)
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: flex-start;
+        justify-content: center;
         height: 100%;
         width: auto;
         background-color: var(--wygf-bg-blue);
         box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
+        
     }
+    nav {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+    }
+  
     .active {
-        width: 10vw;
+        width: 15vw;
         align-items: flex-start;
     }
     .Toggle-Button {
@@ -57,11 +82,9 @@ const menu_toggled = ref(false)
     .Item {
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
         gap: 1vw;
-        border: 1px;
-        padding: 1%;
-        margin-top: 2px;
+        width: 100%;
     }
     .Item:hover {
         color: var(--wygf-yellow);
@@ -75,6 +98,9 @@ const menu_toggled = ref(false)
         align-items: center;
         justify-content: center;
         gap: 1vw;
+        border-top: 1px solid var(--vt-c-black-mute);
+        width: 100%;
+        box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
     }
     .GH-Link:hover {
         color: var(--wygf-yellow);

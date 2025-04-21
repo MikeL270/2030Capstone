@@ -3,11 +3,12 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: April 9, 2025
+# Updated: April 20, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from flask import Flask, jsonify, request, Response
+from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import cropgenerator
@@ -30,13 +31,13 @@ cropgenerator.initialize(db_type='postgres', db_configuration=db_config, image_b
 
 
 app = Flask(__name__)
-app.json_provider_class = CropgenJSONPRovider  
-
+app.json_provider_class = CropgenJSONPRovider
+CORS(app, resources={r"/api/*": {"origins": "*", "allow_methods": "*", "allow_headers": "*"}})  
 
 @app.route('/')
 def hello_world():
 
-    return jsonify(message='Hi mom!')    
+    return jsonify(message='Connection Successful!')    
 
 # In memory item store, list of dicts for now
 # TODO make proper container object with ids and such
@@ -45,6 +46,10 @@ batches = {}
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # GET requests
+# Get request: Test connectivity
+@app.route('/api/v1/test', methods=['GET'])
+def test_api():
+    return jsonify(message='Connected to v1 successfully')
 
 # GET request: Retrieve all batches items
 @app.route('/api/v1/batches', methods=['GET'])
@@ -66,7 +71,7 @@ def get_batch(batch_id):
 # POST Requests
 
 # POST request: retrieve a batch of images from the database
-@app.route('/api/v1/batches', methods=['POST'])
+@app.route('/api/v1/create_batch', methods=['POST'])
 def retrieve_batch():
     batch_size = request.json.get('batch_size')
     desired_class = request.json.get('desired_class')
