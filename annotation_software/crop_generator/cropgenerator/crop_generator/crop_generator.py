@@ -455,6 +455,7 @@ def retrieve_batch(batch_size: int, desired_class: int, min_confidence: float) -
 def close_batch(batch: Dict[str, Union[Image, List[Prediction]]]):
     for image_id in batch.keys():
         base.set_closed(image_id)
+    base.commit()
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

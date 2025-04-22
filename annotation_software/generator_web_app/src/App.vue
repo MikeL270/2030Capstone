@@ -34,7 +34,7 @@ header {
   padding-right: calc(var(--section-gap) / 2);
   color: rgb(255, 255, 255);
   background-color: var(--wygf-bg-blue);
-  border-bottom: 1px solid var(--vt-c-black-mute);
+  border-bottom: 1px solid var(--color-border);
   padding: 1%;
   box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
 }

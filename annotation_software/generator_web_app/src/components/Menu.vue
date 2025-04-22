@@ -98,7 +98,7 @@ const menu_toggled = ref(false)
         align-items: center;
         justify-content: center;
         gap: 1vw;
-        border-top: 1px solid var(--vt-c-black-mute);
+        border-top: 1px solid var(--color-border);
         width: 100%;
         box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
     }

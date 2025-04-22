@@ -38,15 +38,20 @@ export default {
     .Tab-Bar {
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 1vw;
         width: 100%;
         height: 5vh;
+        border-bottom: 1px solid var(--color-border);
+        background-color: var(--color-background);
+        border-radius: 4px;
+        padding: .1%;
+
     }
     .Tab {
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100%;
+        height: 90%;
         width: 20vw;
         background-color: var(--color-background-soft);
         box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
@@ -56,8 +61,6 @@ export default {
     }   
     .active  {
         background-color: var(--color-background-mute);
-        box-shadow: 0 4px 6px 2px rgba(77, 77, 77, 0.25);
-
     }
     .Contnet {
         display: flex;

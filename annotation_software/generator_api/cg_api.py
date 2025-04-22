@@ -49,7 +49,7 @@ batches = {}
 # Get request: Test connectivity
 @app.route('/api/v1/test', methods=['GET'])
 def test_api():
-    return jsonify(message='Connected to v1 successfully')
+    return jsonify(message='Connected to v1 successfully'), 201
 
 # GET request: Retrieve all batches items
 @app.route('/api/v1/batches', methods=['GET'])
@@ -65,7 +65,7 @@ def get_batch(batch_id):
     batch = batches[batch_id] 
     if batch is None:
         return jsonify({'error': 'Batch not found'}), 404
-    return jsonify(batch)
+    return jsonify(batch), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # POST Requests
@@ -103,6 +103,7 @@ def create_crops():
 def delete_batch(batch_id):
     cropgenerator.close_batch(batches[batch_id])
     del batches[batch_id]
+    return jsonify(message='success'), 201
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { fetchFromApi, createBatch } from '../../../modules/annotate';
+import { createBatch } from '../../../modules/apiV1Methods';
 import { defineComponent } from 'vue';
 export default defineComponent({
     name: 'V1Tester',
@@ -14,10 +14,6 @@ export default defineComponent({
         };
     },
     methods: {
-        async fetchdata(endpoint: string) {
-            const responseData = await fetchFromApi(endpoint);
-            this.apiResponse = JSON.stringify(responseData, null, 2);
-        },
         async create_batch(params: Record<string, any>) {
             const responseData = await createBatch(params);
             this.apiResponse = JSON.stringify(responseData, null, 2);
