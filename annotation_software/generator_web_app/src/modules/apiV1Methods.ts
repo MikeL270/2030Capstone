@@ -22,9 +22,9 @@ interface PredictionData {
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export async function testApi(endpoint: string): Promise<any> {
+export async function testApi(): Promise<any> {
     try {
-        const response = await(fetch(`${api_url}${endpoint}`))
+        const response = await(fetch(`${api_url}test`))
 
         if (!response.ok) {
             throw new Error('You did something wrong! status ${response.status}')

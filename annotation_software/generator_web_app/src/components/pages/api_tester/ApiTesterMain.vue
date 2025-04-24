@@ -41,6 +41,7 @@ export default {
         gap: 1vw;
         width: 100%;
         height: 5vh;
+        min-height: 40px;
         border-bottom: 1px solid var(--color-border);
         background-color: var(--color-background);
         border-radius: 4px;

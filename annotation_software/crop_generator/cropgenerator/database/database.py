@@ -1,4 +1,4 @@
-# Dataself wrapper module for crop_generator
+# Database wrapper module for crop_generator
 # Author: Michael B. Lance
 # Created: November 17, 2024
 # Updated: April 23, 2025
@@ -149,7 +149,7 @@ class Database(ABC): # Abstract class for all dataself types
                     ''')
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#  
     def create_indexes(self):
-        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (Reviewed);')
+        self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (ReviewLed);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_imageid ON Crops (ImageId);')
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_croppreds_cropid ON CropPredictions (CropId)')
@@ -667,44 +667,44 @@ class Postgres(Database):
        
         print('Querying dataself...')
         query = '''
-                WITH SelectedImageIds AS (
-                    SELECT DISTINCT I.ImageId
-                    FROM Images I
-                    INNER JOIN Predictions P ON I.ImageId = P.ImageId
-                    WHERE I.HerdUnitId = ?
-                        AND I.Reviewed = ?
-                        AND I.Open = 0
-                        AND P.Label = ?
-                        AND P.Score > ?
-                    LIMIT ?
-                )
-                SELECT json_agg(row_to_json(img_preds))
-                FROM (
-                    SELECT
-                        I.ImageId,
-                        I.Name,
-                        I.InTraining,
-                        json_agg(
-                            json_build_object(
-                                'PredId', P.PredId,
-                                'BoxTx', P.BoxTx,
-                                'BoxTy', P.BoxTy,
-                                'BoxBx', P.BoxBx,
-                                'BoxBy', P.BoxBy,
-                                'Score', P.Score,
-                                'Label', P.Label
-                            )
-                            ORDER BY P.Score DESC
-                        ) AS predictions
-                    FROM Images I
-                    INNER JOIN Predictions P ON I.ImageId = P.ImageId
-                    WHERE I.ImageId IN (SELECT ImageId FROM SelectedImageIds)
-                        AND P.Label = ?
-                        AND P.Score > ?
-                        AND P.ModelId = ?
-                    GROUP BY I.ImageId, I.Name, I.InTraining, P.Score
-                    ORDER BY P.Score
-                ) AS img_preds;
+            WITH SelectedImageIds AS (
+                SELECT DISTINCT I.ImageId
+                FROM Images I
+                INNER JOIN Predictions P ON I.ImageId = P.ImageId
+                WHERE I.HerdUnitId = ?
+                    AND I.Reviewed = ?
+                    AND I.Open = 0
+                    AND P.Label = ?
+                    AND P.Score > ?
+                LIMIT ?
+            )
+            SELECT json_agg(row_to_json(img_preds))
+            FROM (
+                SELECT
+                    I.ImageId,
+                    I.Name,
+                    I.InTraining,
+                    json_agg(
+                        json_build_object(
+                            'PredId', P.PredId,
+                            'BoxTx', P.BoxTx,
+                            'BoxTy', P.BoxTy,
+                            'BoxBx', P.BoxBx,
+                            'BoxBy', P.BoxBy,
+                            'Score', P.Score,
+                            'Label', P.Label
+                        )
+                        ORDER BY P.Score DESC
+                    ) AS predictions
+                FROM Images I
+                INNER JOIN Predictions P ON I.ImageId = P.ImageId
+                WHERE I.ImageId IN (SELECT ImageId FROM SelectedImageIds)
+                    AND P.Label = ?
+                    AND P.Score > ?
+                    AND P.ModelId = ?
+                GROUP BY I.ImageId, I.Name, I.InTraining, P.Score
+                ORDER BY P.Score
+            ) AS img_preds;
         '''
         rows = self.query(query, (herd_unit_id, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, model_id,)) #type: ignore
         
