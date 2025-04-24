@@ -7,9 +7,7 @@ const menu_toggled = ref(false)
 </script>
 
 <template>
-
-    <div class="Menu" :class= {active:menu_toggled}>
-        
+    <div class="Menu" :class= {active:menu_toggled}>     
         <button class="Toggle-Button" @click="menu_toggled = !menu_toggled"title="Toggle Menu">
             <Icon icon="material-symbols:menu" width="36" height="36"></Icon>
         </button>
@@ -56,7 +54,7 @@ const menu_toggled = ref(false)
         height: 100%;
         width: auto;
         background-color: var(--wygf-bg-blue);
-        box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
+        box-shadow: 0 4px 6px 2px var(--color-background-soft);
         
     }
     nav {
@@ -72,7 +70,7 @@ const menu_toggled = ref(false)
         align-items: flex-start;
     }
     .Toggle-Button {
-        background-color: rgba(0,0,0, 0);
+        background: none;
         border: none;
         color: white;
     }
@@ -88,7 +86,10 @@ const menu_toggled = ref(false)
     }
     .Item:hover {
         color: var(--wygf-yellow);
-        background-color:  rgba(0,0,0, 0);
+        background: none;
+    }
+    .router-link-active {
+        color: var(--wygf-yellow);
     }
     .GH-Link {
         padding: 5px;

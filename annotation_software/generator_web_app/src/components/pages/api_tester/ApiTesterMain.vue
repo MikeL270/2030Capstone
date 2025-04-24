@@ -60,7 +60,7 @@ export default {
         border: none;
     }   
     .active  {
-        background-color: var(--color-background-mute);
+        background-color: var(--color-border);
     }
     .Contnet {
         display: flex;

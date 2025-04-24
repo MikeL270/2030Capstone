@@ -9,6 +9,7 @@ from ..generatorobjects.generatorobjects import Image, Crop, Prediction, Box
 import os
 import numpy as np
 import math
+from typing import Dict, List, Union
 
 #--------------------------------------------------------c-------------------------------------------------------------------#
 
@@ -43,6 +44,21 @@ class ImageBackend(ABC):
                 self.cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
 
         return crops
+    
+    def generate_pred_crops(self, image: Image, predictions: list[Prediction], crop_size: int) -> list[np.ndarray]:
+        return self.create_subcrop(image, predictions, crop_size)
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def evaluate_crops(self, crops: Dict[str, Union[Crop, List[Prediction]]], label:str):
+    approved_crops = []
+    for crop_num in crops.keys():
+        crop = crops[crop_num]['crop']
+        predictions = crops[crop_num]['predictions']
+        resp = self.evaluate_crop(crop, predictions, label)
+        if resp:
+            approved_crops.append(crop)
+    return approved_crops
     
 #---------------------------------------------------------------------------------------------------------------------------#
 

@@ -6,6 +6,7 @@
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import cropgenerator
+from cropgenerator.database import database
 import sys
 import os
 from dotenv import load_dotenv
@@ -48,7 +49,8 @@ db_config = {
 
 #---------------------------------------------------------------------------------------------------------------------------#
 #Program start
-cropgenerator.initialize(db_type='postgres', image_backend=image_backend, db_configuration=db_config)
+base = database.Postgres(db_config)
+
 
 if 'create_db' in sys.argv:
     cropgenerator.bootstrap_database()
@@ -59,18 +61,20 @@ elif 'insert_images' in sys.argv:
 elif 'insert_preds' in sys.argv:
     cropgenerator.insert_new_preds()
 
+
+'''
 if upload_to_labelbox:
     cropgenerator.upload_to_labelbox(batch_size=batch_size, desired_class=desired_class)
 
 if update_training:
     print('This function should only be applied to models inserted before 3/7/2025, or if there are issues. Please use caution and test this before using it on using on you production database.')
     cropgenerator.update_training(list(cropgenerator.load_training_image_names(True)), int(input('Please enter the id of the model you are updating training for: ')))
-
+'''
 if approve_predictions:
     num_crops = 0
     while True:
         # Load a dictionary of model predictions into memory 
-        batch = cropgenerator.retrieve_batch(batch_size=batch_size, desired_class=desired_class, min_confidence=min_confidence)
+        batch = base.retrieve_batch(batch_size=batch_size, desired_class=desired_class, min_confidence=min_confidence)
         if len(batch) == 0:
             continue
 

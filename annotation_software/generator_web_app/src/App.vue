@@ -28,7 +28,7 @@ header {
   align-items: center;
   position: absolute;
   width: 100%;
-  height: 10vh;
+  height: 7vh;
   top: 0;
   left: 0;
   padding-right: calc(var(--section-gap) / 2);
@@ -36,7 +36,7 @@ header {
   background-color: var(--wygf-bg-blue);
   border-bottom: 1px solid var(--color-border);
   padding: 1%;
-  box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 6px 2px var(--color-background-soft);
 }
 
 main {
@@ -45,8 +45,9 @@ main {
   left: 0;
   display: flex;
   justify-content: flex-start;
-  height: 90vh;
+  height: 93vh;
   width: 100vw;
+
 }
 
 .Page-Container {
@@ -56,10 +57,10 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  width: 95%;
   height: 90%;
   background-color: var(--color-background-soft);
-  box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 6px 2px var(--color-background-soft);
   border-radius: 4px;
 }
 

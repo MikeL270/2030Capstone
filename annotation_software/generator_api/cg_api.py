@@ -3,7 +3,7 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: April 20, 2025
+# Updated: April 22, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -12,6 +12,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import cropgenerator
+from cropgenerator.database import database
 from cropgenerator import CropgenJSONPRovider
 import json
 
@@ -27,8 +28,18 @@ db_config = {
     'port': '5432'              
 }
 
-cropgenerator.initialize(db_type='postgres', db_configuration=db_config, image_backend=None)
+prefix = len('high-altitude-pronghorn-survey-')
+suffix = len('_crop_xx')
 
+root = os.environ.get('ROOT')
+herd_unit = os.environ.get('HERD_UNIT')
+save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
+img_folder = os.path.join(root, 'Images', herd_unit) #type: ignore
+os.makedirs(save_folder, exist_ok=True) # type: ignore
+
+
+
+#---------------------------------------------------------------------------------------------------------------------------#
 
 app = Flask(__name__)
 app.json_provider_class = CropgenJSONPRovider
@@ -41,6 +52,11 @@ def hello_world():
 
 # In memory item store, list of dicts for now
 # TODO make proper container object with ids and such
+
+base = database.Postgres(db_config)
+base.connect()
+
+#---------------------------------------------------------------------------------------------------------------------------#
 
 batches = {}
 
@@ -76,7 +92,9 @@ def retrieve_batch():
     batch_size = request.json.get('batch_size')
     desired_class = request.json.get('desired_class')
     min_confidence = request.json.get('min_confidence')
-    batch = cropgenerator.retrieve_batch(batch_size, desired_class, min_confidence)
+    herd_unit_id = request.json.get('herd_unit_id')
+    model_Id = request.json.get('model_id')
+    batch = base.retrieve_batch(batch_size, desired_class, min_confidence, herd_unit_id, model_Id, img_folder)
     batch_id = len(batches) + 1
     new_batch_obj = {'batch_id': batch_id, 'batch': batch}
     batches[batch_id] = batch
@@ -84,7 +102,7 @@ def retrieve_batch():
     return Response(serialized_data, mimetype='application/json'), 201
 
 # POST request: create a batch of crops based on an image
-@app.route('/api/v1/crops', methods=['POST'])
+@app.route('/api/v1/create_crop', methods=['POST'])
 def create_crops():
     batch_id = request.json.get('batch_id')
     image_id = request.json.get('image_id')
@@ -96,12 +114,13 @@ def create_crops():
     
     serialized_data = json.dumps(crops_obj, default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201
+    
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Delete request: Delete a crop
 @app.route('/api/v1/batches/<int:batch_id>', methods=['DELETE'])
 def delete_batch(batch_id):
-    cropgenerator.close_batch(batches[batch_id])
+    base.close_batch(batches[batch_id])
     del batches[batch_id]
     return jsonify(message='success'), 201
 

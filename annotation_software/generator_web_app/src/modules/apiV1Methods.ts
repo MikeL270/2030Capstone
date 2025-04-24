@@ -1,7 +1,7 @@
 // Methods for approving predictions in the annotate vue component
 // Author: Michael B. Lance
 // Created: April 20, 2025
-// Updated: April 20, 2025
+// Updated: April 22, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import _ from 'lodash';
