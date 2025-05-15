@@ -46,7 +46,9 @@ main {
   display: flex;
   justify-content: flex-start;
   height: 93vh;
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 
 }
 

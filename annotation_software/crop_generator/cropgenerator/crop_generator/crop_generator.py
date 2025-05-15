@@ -91,7 +91,7 @@ def load_from_npy(images_folder: str, herd_unit_id: int, model_id: int) -> dict[
             name = image_name,
             herd_unit_id = herd_unit_id,
             in_training= True if image_name in training else False,
-            folder_path= images_folder,
+            local_path= images_folder,
         )
         images[image] = load_prediction(image_file, model_id)
     return images

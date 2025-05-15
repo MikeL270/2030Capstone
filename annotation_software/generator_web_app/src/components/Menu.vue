@@ -66,7 +66,7 @@ const menu_toggled = ref(false)
     }
   
     .active {
-        width: 160px;
+        width: 200px;
         align-items: flex-start;
     }
     .Toggle-Button {

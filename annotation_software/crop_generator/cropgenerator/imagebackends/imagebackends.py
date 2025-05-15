@@ -1,26 +1,26 @@
 # Methods for presenting images to users
 # Authors: Ben Koger, Michael B. Lance
 # Created: February 26, 2025
-# Updated: April 16, 2025
+# Updated: May 9, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
-from ..generatorobjects.generatorobjects import Image, Crop, Prediction, Box
+from ..generatorobjects.generatorobjects import Image, Crop, Prediction, Box, PredictionCrop
 import os
 import numpy as np
 import math
 from typing import Dict, List, Union
+import cv2
 
-#--------------------------------------------------------c-------------------------------------------------------------------#
+#---------------------------------------------------------------------------------------------------------------------------#
 
 class ImageBackend(ABC):
-    import cv2
     
     @abstractmethod
     async def evaluate_crop(self, crop: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
         pass
 
-    def create_subcrop(self, image: Image, predictions: list[Prediction], crop_size: int=150, draw_box: bool=False) -> list[Crop]:
+    def create_subcrop(self, image: Image, predictions: list[Prediction], crop_size: int=150, draw_box: bool=False) -> list[PredictionCrop]:
         crops = []
         img = image.get_image()
         if len(predictions) == 0:        
@@ -32,10 +32,13 @@ class ImageBackend(ABC):
             ymax = np.min([box[3] + crop_size, img.shape[0]])
             xmin = np.max([box[0] - crop_size, 0])
             xmax = np.min([box[2] + crop_size, img.shape[1]])
-            crop = Crop(
+            crop = PredictionCrop(
+                pred_crop_id=pred.id,
                 image_id = image.id,
                 name = f'{image.name}_pred_crop_{pred.id}',
-                dimensions = Box((xmin, ymax), (xmax, ymin)),
+                score = pred.score,
+                label = pred.label,
+                dimensions = Box((int(xmin), int(ymax)), (int(xmax), int(ymin))),
             )
             crop.set_image(img[ymin:ymax, xmin:xmax].copy())
             crops.append(crop)
@@ -129,7 +132,7 @@ class OpencvBackend(ImageBackend):
 
     def prompt_user(self, key):
         if key == ord('q'):
-                self.cv2.destroyAllWindows()
+                cv2.destroyAllWindows()
                 return -999
             
         if key in set([ord('y'), ord('Y'), ord('1')]):
@@ -147,12 +150,12 @@ class OpencvBackend(ImageBackend):
             os.system('cls')
 
         for crop, score in zip(crops, prediction['scores']): #type: ignore
-            self.cv2.imshow(f'score: {score}', self.cv2.cvtColor(crop, self.cv2.COLOR_BGR2RGB))
+            cv2.imshow(f'score: {score}', cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
             
-            key = self.cv2.waitKey(0)
+            key = cv2.waitKey(0)
             
             out = self.prompt_user(key)
-            self.cv2.destroyAllWindows()
+            cv2.destroyAllWindows()
 
             if out == -999:
                 return -999

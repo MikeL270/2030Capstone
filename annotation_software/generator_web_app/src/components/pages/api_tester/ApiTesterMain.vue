@@ -63,21 +63,16 @@ export default {
     .active  {
         background-color: var(--color-border);
     }
-    .Contnet {
+    .Page-Content {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         width: 100%;
+        max-width: 100%;
+        overflow: hidden;
         height: 100%;
         gap: 5px;
     }
-    .Response-Container {
-        display: flex;
-        width: 75vw;
-        min-height: 25vh;
-        height: auto;
-        overflow: auto;
-        background-color: black;
-    }
+
 </style>

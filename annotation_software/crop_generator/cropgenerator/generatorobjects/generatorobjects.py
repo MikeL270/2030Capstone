@@ -1,14 +1,16 @@
 # Class definition for objects used in the crop_generator module
 # Author: Michael B. Lance
 # Created: April 4, 2025
-# Updated: April 11, 2025
+# Updated: May 14, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 import numpy as np
 import cv2
 import os
 from flask.json.provider import DefaultJSONProvider
+import cv2
 from abc import ABC, abstractmethod
-from typing import Any
+from PIL import Image
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class CgOBJ(ABC):
@@ -71,13 +73,15 @@ class Box(CgOBJ):
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Image(CgOBJ):
-    def __init__(self, db_id: int=None, name: str=None, herd_unit_id: int=None, in_training:bool=False, folder_path: str=None):
+    def __init__(self, db_id: int=None, name: str=None, herd_unit_id: int=None, in_training:bool=False, local_path: str=None):
         self.id = db_id
         self.name = name
         self.herd_unit_id = herd_unit_id
         self.in_training = in_training
-        self.folder_path = folder_path
+        self.local_path = local_path
+        self.url = None
         self.image = None
+        self.img_encoded = None
 
     def set_image(self, image: np.ndarray):
         self.image = image
@@ -86,15 +90,20 @@ class Image(CgOBJ):
         if self.image is not None:
             return self.image
         else:
-            self.image = cv2.imread(os.path.join(f'{self.folder_path}', f'{self.name}.JPG'), cv2.IMREAD_COLOR_RGB)
+            self.image = cv2.imread(os.path.join(f'{self.local_path}', f'{self.name}.JPG'))
             return self.image
         
+    def serve(self):
+        _, self.img_encoded = cv2.imencode('.png', self.get_image())
+        return self.img_encoded.tobytes()
+        
+
     def serialize(self) -> dict:
         return {
             'image_id': self.id,
             'image_name': self.name,
             'herd_unit_id': self.herd_unit_id,
-            'folder_path': self.folder_path,
+            'url': self.url,
             'in_training': 1 if self.in_training else 0
         }
 
@@ -121,9 +130,10 @@ class Prediction(CgOBJ):
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Crop(Image):
-    def __init__(self, db_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
+    def __init__(self, db_id: int=None, pred_crop_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
         super().__init__(db_id, name)
         self.image_id = image_id
+        self.pred_crop_id = pred_crop_id
         self.crop_dimensions = dimensions
 
     def calc_iou(self, box):
@@ -132,13 +142,36 @@ class Crop(Image):
     def serialize(self) -> dict:
         return {
             'crop_id': self.id,
+            'pred_crop_id' : self.pred_crop_id,
             'image_id': self.image_id,
             'crop_name': self.name,
-            'dimensions': self.dimensions.serialize(),
+            'dimensions': self.crop_dimensions.serialize(),
             'herd_unit_id': self.herd_unit_id,
-            'folder_path' : self.folder_path,
+            'url' : self.url,
         }
     
+#---------------------------------------------------------------------------------------------------------------------------#
+
+class PredictionCrop(Crop):
+    def __init__(self, pred_crop_id: int=None, image_id: int=None, name: str=None, score: float=None, label: int=None, dimensions: Box=None, 
+                 url: str=None):
+        self.pred_crop_id = pred_crop_id
+        self.image_id = image_id
+        self.score = score
+        self.label = label 
+        self.dimensions = dimensions
+        self.url = url
+    
+    def serialize(self) -> dict:
+        return {
+            'pred_crop_id': self.pred_crop_id,
+            'image_id': self.image_id,
+            'score': self.score,
+            'label': self.label,
+            'dimensions': self.dimensions.serialize(),
+        }
+
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class CropgenJSONPRovider(DefaultJSONProvider):

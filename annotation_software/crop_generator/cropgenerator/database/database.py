@@ -1,7 +1,7 @@
 # Database wrapper module for crop_generator
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: April 23, 2025
+# Updated: May 14, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -402,11 +402,12 @@ class Database(ABC): # Abstract class for all dataself types
                 name = img['name'],
                 herd_unit_id = herd_unit_id,
                 in_training = True if img['intraining'] == 1 else False,
-                folder_path = img_folder,
+                local_path = img_folder,
                 )
             batch[img_id]['image'] = image
+            batch[img_id]['predictions'] = []
+
             for pred in img['predictions']:
-                batch[img_id]['predictions'] = []
                 batch[img_id]['predictions'].append(
                     Prediction(
                         db_id = pred['PredId'],
@@ -702,8 +703,7 @@ class Postgres(Database):
                     AND P.Label = ?
                     AND P.Score > ?
                     AND P.ModelId = ?
-                GROUP BY I.ImageId, I.Name, I.InTraining, P.Score
-                ORDER BY P.Score
+                GROUP BY I.ImageId, I.Name, I.InTraining
             ) AS img_preds;
         '''
         rows = self.query(query, (herd_unit_id, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, model_id,)) #type: ignore
