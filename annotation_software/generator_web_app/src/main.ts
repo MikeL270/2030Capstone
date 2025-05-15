@@ -1,10 +1,11 @@
-import './assets/main.css'
-import { createApp } from 'vue'
-import App from './App.vue'
-import router from './router' // Import your router instance
+import './assets/main.css';
+import { createApp } from 'vue';
+import App from './App.vue';
+import router from './router' ;
+import { Icon } from '@iconify/vue';
 
-const app = createApp(App)
+const app = createApp(App);
 
-app.use(router) // Install the router plugin
-
-app.mount('#app')
+app.use(router) ;
+app.component('Icon', Icon);
+app.mount('#app');

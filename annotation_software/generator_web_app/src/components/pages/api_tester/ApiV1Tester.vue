@@ -5,6 +5,7 @@ import { testApi, getBatch, getBatches, createBatch, deleteBatch,
  } from '../../../modules/apiV1Methods';
  import type {Batches, Batch} from '../../../types/interfaces.ts';
 import { defineComponent } from 'vue';
+import { Icon } from '@iconify/vue'
 import { ref } from 'vue';
 import { jsx } from 'vue/jsx-runtime';
 
@@ -84,6 +85,7 @@ export default defineComponent({
     <div class="Tester-Container">
         <div class="Requests-Menu Box" id="top-menu">
             <h2> Select Route: </h2>
+
             <button class="Tab" @click="set_request_type('GET')":class="{active: request_type=='GET'}"> GET </button>
             <button class="Tab" @click="set_request_type('POST')":class="{active: request_type=='POST'}"> POST </button>
             <button class="Tab" @click="set_request_type('PUT')":class="{active: request_type=='PUT'}"> PUT </button>
@@ -185,7 +187,8 @@ export default defineComponent({
             <label class="switch">
                 <input type="checkbox" @click="toggle_response_type"> 
                 <div class="slider round"></div>
-            </label> Toggle Output
+            </label> Toggle Output  
+            
         </div>
     </div>
 </template>
