@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import os
 import cropgenerator
 from cropgenerator import CropgenJSONPRovider
+from cropgenerator import Prediction, Box
 import json
 
 
@@ -34,14 +35,13 @@ suffix = len('_crop_xx')
 root = os.environ.get('ROOT')
 herd_unit = os.environ.get('HERD_UNIT')
 save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
-img_folder = os.path.join(root, 'Images', herd_unit) #type: ignore
 os.makedirs(save_folder, exist_ok=True) # type: ignore
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
 app = Flask(__name__)
 app.json_provider_class = CropgenJSONPRovider
-CORS(app, resources={r"/api/*": {"origins": "*", "allow_methods": "*", "allow_headers": "*"}})  
+CORS(app)  
 
 @app.route('/')
 def hello_world():
@@ -53,7 +53,7 @@ def hello_world():
 
 #Initialize image
 img_backend = cropgenerator.imagebackends.OpencvBackend()
-base = cropgenerator.database.Postgres(db_config)
+base = cropgenerator.database.Postgres(db_config, root)
 base.connect()
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -93,32 +93,30 @@ def get_pred_crop(batch_id, image_id, crop_id):
     except Exception as e:
         return jsonify(message='Crop not found')
     
-    return Response(crop.serve(), mimetype='image/png'), 201
+    return Response(crop.serve(), mimetype='image/webp'), 201
 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # POST Requests
 
 # POST request: retrieve a batch of images from the database
-@app.route('/api/v1/full-images/create_batch', methods=['POST'])
+@app.route('/api/v1/images/create_batch', methods=['POST'])
 def retrieve_img_batch():
     batch_size = request.json.get('batch_size')
     desired_class = request.json.get('desired_class')
     min_confidence = request.json.get('min_confidence')
     herd_unit_id = request.json.get('herd_unit_id')
     model_Id = request.json.get('model_id')
-    batch = base.retrieve_batch(batch_size, desired_class, min_confidence, herd_unit_id, model_Id, img_folder)
+    batch = base.retrieve_batch(batch_size, desired_class, min_confidence, herd_unit_id, model_Id)
     batch_id = len(batches) + 1
     new_batch_obj = {batch_id: batch}
     batches[batch_id] = batch
     serialized_data = json.dumps(new_batch_obj,  default=app.json_provider_class(app).default)
-    return Response(serialized_data, mimetype='application/json'), 201
+    return Response(serialized_data, mimetype='application/json'), 201 
 
-# POST request: Retrieve a batch of prediction level crops
-@app.route('/api/v1/prediction-crops/create_crops', methods=['POST'])
-def create_pred_crops():
-    batch_id = request.json.get('batch_id')
-    image_id = request.json.get('image_id')
+# POST request: Update an image with prediction level crops:
+@app.route('/api/v1/batches/<int:batch_id>/images/<int:image_id>/create_pred_crops', methods=['POST'])
+def create_pred_crops(batch_id: int, image_id: int):
     image = batches[batch_id][image_id]['image']
     predictions = batches[batch_id][image_id]['predictions']
     crops = img_backend.create_subcrop(image, predictions)
@@ -127,13 +125,11 @@ def create_pred_crops():
         batches[batch_id][image_id]['pred_crops'][crop.pred_crop_id] = crop
 
     serialized_data = json.dumps(crops, default=app.json_provider_class(app).default)
-    return Response(serialized_data, mimetype='application/json'), 201    
+    return Response(serialized_data, mimetype='application/json'), 201   
 
-# POST request: create a batch of crops based on an image
-@app.route('/api/v1/crops/create_crop', methods=['POST'])
-def create_crops():
-    batch_id = request.json.get('batch_id')
-    image_id = int(request.json.get('image_id'))
+# POST request: Update an image in a batch with crops
+@app.route('/api/v1/batches/<int:batch_id>/images/<int:image_id>/create_crops', methods=['POST'])
+def create_crops(batch_id: int, image_id: int):
     crop_size = request.json.get('crop_size')
     image = batches[batch_id][image_id]['image']
     predictions = batches[batch_id][image_id]['predictions']
@@ -142,6 +138,29 @@ def create_crops():
     
     serialized_data = json.dumps(crops_obj, default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Put Requests
+
+# Put request: Update an image in a batch with approved predictions
+@app.route('/api/v1/batches/<int:batch_id>/images/<int:image_id>/approve_predictions', methods=['PUT'])
+def approve_predictions(batch_id: int, image_id: int):
+    batches[batch_id][image_id]['approved_predictions'] = []
+    approved_predictions = request.json.get('approved_predictions')
+    for pred in approve_predictions:
+        batches[batch_id][image_id]['approved_predictions'].append(
+            Prediction(
+                db_id = pred['pred_id'],
+                model_id = pred['model_id'],
+                dimensions = Box(
+                    top_left = pred['dimensions']['top_left'],
+                    bottom_right = pred['dimensions']['bottom_right']
+                )
+            )
+        )
+    return 201
+
+
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Delete request: Delete a crop

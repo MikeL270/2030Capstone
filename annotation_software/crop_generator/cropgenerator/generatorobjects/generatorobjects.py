@@ -94,7 +94,7 @@ class Image(CgOBJ):
             return self.image
         
     def serve(self):
-        _, self.img_encoded = cv2.imencode('.png', self.get_image())
+        _, self.img_encoded = cv2.imencode('.webp', self.get_image())
         return self.img_encoded.tobytes()
         
 
@@ -130,10 +130,9 @@ class Prediction(CgOBJ):
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Crop(Image):
-    def __init__(self, db_id: int=None, pred_crop_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
+    def __init__(self, db_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
         super().__init__(db_id, name)
         self.image_id = image_id
-        self.pred_crop_id = pred_crop_id
         self.crop_dimensions = dimensions
 
     def calc_iou(self, box):
@@ -142,7 +141,6 @@ class Crop(Image):
     def serialize(self) -> dict:
         return {
             'crop_id': self.id,
-            'pred_crop_id' : self.pred_crop_id,
             'image_id': self.image_id,
             'crop_name': self.name,
             'dimensions': self.crop_dimensions.serialize(),

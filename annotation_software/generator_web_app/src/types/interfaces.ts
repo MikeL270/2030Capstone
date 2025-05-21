@@ -51,6 +51,7 @@ export interface Batch {
     [image_id: number]: {
         image: Image;
         predictions: Prediction[];
+        approved_predictions: Prediction[];
         pred_crops: PredictionCrop[]; 
     };
 }

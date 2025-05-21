@@ -1,13 +1,9 @@
 <script lang="ts">
-import { set } from 'lodash';
 import { testApi, getBatch, getBatches, createBatch, deleteBatch,
          createPredCrops,
  } from '../../../modules/apiV1Methods';
  import type {Batches, Batch} from '../../../types/interfaces.ts';
 import { defineComponent } from 'vue';
-import { Icon } from '@iconify/vue'
-import { ref } from 'vue';
-import { jsx } from 'vue/jsx-runtime';
 
 var request_type: string = 'GET';
 var endpoint: string = 'none';
@@ -19,6 +15,7 @@ export default defineComponent({
         return {
             apiResponse: null as string | null,
             batches: {} as Batches,
+            batch_ids: [],
             resp_checkbox: false,
             create_batch_params: {
                 batch_size: 10,
@@ -60,23 +57,28 @@ export default defineComponent({
         },
         async create_batch(create_batch_params: Record<string, any>) {
             const responseData = await createBatch(create_batch_params);
-            console.log(Object.keys(responseData)[0])
             const batch_id = Object.keys(responseData)[0];
             this.batches[+batch_id] = Object.values(responseData)[0] as Batch;
             this.apiResponse = JSON.stringify(responseData, null, 2);
         },
-        async create_pred_crops(create_pred_crops_params: Record<string, any>, batch: Batch) {
-            const responseData = await createPredCrops(create_pred_crops_params, batch);
-            this.batches[create_pred_crops_params.batch_id] = responseData;
+        async create_pred_crops(create_pred_crops_params: Record<string, any>) {
+            const responseData = await createPredCrops(create_pred_crops_params.batch_id, create_pred_crops_params.image_id);
+            this.batches[create_pred_crops_params.batch_id][this.create_pred_crop_params.image_id]['pred_crops'] = responseData;
             this.apiResponse = JSON.stringify(responseData, null, 2);
             this.crops_requested = true;
 
         },  
         async delete_batch(batch_id: number): Promise<any> {
             const responseData = await deleteBatch(batch_id);
+            delete this.batches[batch_id];
             this.apiResponse = JSON.stringify(responseData, null, 2);
         },
 
+    },
+    unmounted() {
+        for (const batch_id in Object.keys(this.batches)) {
+            this.delete_batch(+batch_id + 1);
+        }
     },
 });
 </script>
@@ -100,9 +102,14 @@ export default defineComponent({
         <div class="Requests-Menu Box" id="post-request-menu" v-if="request_type == 'POST'">
             <h2> POST Requests: </h2>
             <button class="Tab" @click="endpoint = 'create_batch'":class="{active: endpoint=='create_batch'}"> Create Batch</button>
+            
+        </div>
+        <div class="Requests-Menu Box" id="put=request-menu" v-if="request_type == 'PUT'">
+            <h2> PUT Requests: </h2>
             <button class="Tab" @click="endpoint = 'create_full_crops'":class="{active: endpoint=='create_full_crops'}"> Create Full Crops</button>
             <button class="Tab" @click="endpoint = 'create_pred_crops'":class="{active: endpoint=='create_pred_crops'}"> Create Pred Crops</button>
         </div>
+
         <div class="Requests-Menu Box" id="delete-request-menu" v-if="request_type == 'DELETE'">
             <h2> DELETE Requests: </h2>
             <button class="Tab" @click="endpoint = 'delete_batch'":class="{active: endpoint=='delete_batch'}"> Delete Batch</button>
@@ -113,7 +120,7 @@ export default defineComponent({
         <p>
             Select a route to the left to reveal the endpoints available through the API.
             The select a route you would like test. You will be presented with the available
-            parameters for thre request. Please be aware of the lifecycle of objects you create.
+            parameters for the request. Please be aware of the lifecycle of objects you create.
         </p>
     </div>
     <div class="Request-Parameters Box" v-if="endpoint === 'test'">
@@ -164,7 +171,7 @@ export default defineComponent({
         <label for="image_id"> Image Id:
             <input type="number" id="image_id" v-model="create_pred_crop_params.image_id">
         </label>
-        <button @click="create_pred_crops(create_pred_crop_params, batches[create_pred_crop_params.batch_id])"> Create Crops </button>
+        <button @click="create_pred_crops(create_pred_crop_params)"> Create Crops </button>
     </div>
     <div class="Request-Parameters Box" v-if="endpoint == 'delete_batch'">
         <h2> Delete Batch:</h2>

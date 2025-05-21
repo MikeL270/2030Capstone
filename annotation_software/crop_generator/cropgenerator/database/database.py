@@ -13,7 +13,6 @@ from uuid import uuid4
 from multiprocessing import Pool, cpu_count 
 from ..generatorobjects.generatorobjects import *
 from labelbox.data.annotation_types import Label, ObjectAnnotation, Rectangle, Point
-from dotenv import load_dotenv
 import labelbox as lb
 from typing import Dict, List, Union
 import signal
@@ -25,14 +24,15 @@ class Database(ABC): # Abstract class for all dataself types
     _conn: Any
     _cursor: Any
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    def __init__(self):
+    def __init__(self, root: os.PathLike):
         self.class_labels_foward = {}
         self.class_labels_reverse = {}
         self.herd_units_forward = {}
         self.herd_units_reverse = {}
         self.models_forward = {}
         self.models_reverse = {}
-        load_dotenv()
+        self.root = root
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     @abstractmethod 
     def connect(self):
@@ -230,6 +230,18 @@ class Database(ABC): # Abstract class for all dataself types
         self.commit()
         self.get_models()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    def resolve_herd_unit(self, herd_unit: int | str):
+        return self.herd_units_forward[herd_unit] if type(herd_unit) is int else self.herd_units_reverse[herd_unit]
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    def resolve_model(self, model: int | str):
+        return self.models_forward[model] if type(model) is int else self.models_reverse[model]
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    def resolve_label(self, label: int | str):
+        return self.labels_forward[label] if type(label) is int else self.labels_reverse[label]
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def set_open(self, image_id: int):
         query = '''
             UPDATE Images
@@ -387,7 +399,7 @@ class Database(ABC): # Abstract class for all dataself types
         self.insert_to_database(bootstrap=True, insert_images=True, insert_predictions=True)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def retrieve_batch(self, batch_size: int, desired_class: int, min_confidence: float,
-                    herd_unit_id: str, model_id: str, img_folder: str) -> dict[Image, list[Prediction]]:
+                    herd_unit_id: str, model_id: str) -> dict[Image, list[Prediction]]:
         
         batch = {}
         rows = self.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit_id, model_id)
@@ -402,7 +414,7 @@ class Database(ABC): # Abstract class for all dataself types
                 name = img['name'],
                 herd_unit_id = herd_unit_id,
                 in_training = True if img['intraining'] == 1 else False,
-                local_path = img_folder,
+                local_path = os.path.join(self.root, 'Images', self.resolve_herd_unit(herd_unit_id)),
                 )
             batch[img_id]['image'] = image
             batch[img_id]['predictions'] = []
@@ -622,8 +634,8 @@ class SQLite(Database):
 class Postgres(Database):
     import psycopg2
     from psycopg2.extras import DictCursor
-    def __init__(self, db_config: dict):
-        super().__init__()
+    def __init__(self, db_config: dict, root: os.PathLike):
+        super().__init__(root)
         self._config = db_config
         self._conn = None
         self._cursor = None
