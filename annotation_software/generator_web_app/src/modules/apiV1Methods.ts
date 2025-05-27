@@ -8,7 +8,7 @@ import _ from 'lodash';
 import { Box, Image, Prediction, Crop, PredictionCrop } from '../types/generatorobjects';
 import type { Batch, Batches, BatchData, PredCropData, PredictionData} from '../types/interfaces';
 
-const api_url: string = 'http://192.168.0.49:5000/api/v1';
+const api_url: string = 'http://192.168.0.3:5000/api/v1';
 const uh_oh: string = 'You did something wrong! status:';
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -227,7 +227,7 @@ export async function approvePredictions(approved_predictions: Prediction[], bat
         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/approve_predictions`, {
             method: 'PUT',
             headers: {
-                'Cotnent-Type': 'application/json',
+                'Content-Type': 'application/json',
             },
             body: JSON.stringify(approved_predictions),
         }));

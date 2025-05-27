@@ -1,5 +1,5 @@
 <script lang="ts">
-import { createBatch, deleteBatch, createPredCrops} from '../../modules/apiV1Methods';
+import { createBatch, deleteBatch, createPredCrops, approvePredictions} from '../../modules/apiV1Methods';
 import type {Batches, Batch} from '../../types/interfaces';
 import {Prediction, Image, Crop, Box, PredictionCrop} from '../../types/generatorobjects';
 import { defineComponent } from 'vue'; 
@@ -70,6 +70,9 @@ export default defineComponent({
             document.addEventListener('keydown', this.handle_key_press)
         },
         async next_image() {
+            if (this.approved_predictions.length > 0) {
+                this.submit();
+            };
             if (this.current_image == this.image_ids[this.image_ids.length - 1]) {
                 await this.create_batch(this.batch_params);
                 await this.set_current_batch(this.current_batch + 1);
@@ -79,8 +82,12 @@ export default defineComponent({
             };
             this.image_idx += 1;
             await this.set_current_image(this.image_ids[this.image_idx]);
+            this.approved_predictions = [];
         },
         async last_image() {
+            if (this.approved_predictions.length > 0) {
+                this.approved_predictions = [];
+            };
             if (this.current_image == this.image_ids[0] && this.current_batch == this.batch_ids[0]) {
                 return;
             }
@@ -92,7 +99,7 @@ export default defineComponent({
             } else {
                 this.image_idx -= 1;
                 await this.set_current_image(this.image_ids[this.image_idx]);
-            }
+            };
         },
         toggle_approval(pred_crop: PredictionCrop) {
             for (const pred of this.predictions) {
@@ -112,6 +119,10 @@ export default defineComponent({
                 };
             };
         },
+        async submit() {
+            await approvePredictions(this.approved_predictions, this.current_batch, this.current_image)
+        },
+
         handle_key_press(event: KeyboardEvent) {
             switch(event.code) {
                 case 'ArrowRight': {

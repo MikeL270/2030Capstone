@@ -26,7 +26,7 @@ db_config = {
     'user': os.environ.get('DB_USER'),              
     'password': os.environ.get('DB_PASS'),    
     'host': os.environ.get('DB_HOST'),           
-    'port': '5432'              
+    'port': '5433'              
 }
 
 prefix = len('high-altitude-pronghorn-survey-')
@@ -146,7 +146,8 @@ def create_crops(batch_id: int, image_id: int):
 @app.route('/api/v1/batches/<int:batch_id>/images/<int:image_id>/approve_predictions', methods=['PUT'])
 def approve_predictions(batch_id: int, image_id: int):
     batches[batch_id][image_id]['approved_predictions'] = []
-    approved_predictions = request.json.get('approved_predictions')
+    approved_predictions = request.data
+    print(approved_predictions)
     for pred in approve_predictions:
         batches[batch_id][image_id]['approved_predictions'].append(
             Prediction(
@@ -159,8 +160,6 @@ def approve_predictions(batch_id: int, image_id: int):
             )
         )
     return 201
-
-
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Delete request: Delete a crop
