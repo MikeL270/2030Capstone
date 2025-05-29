@@ -18,7 +18,7 @@
         toggles a labeled view of the menu, this can be used to identify which component you need.</p>
     <br>
     <h2> Details </h2>
-    <p> This webapp is a S.P.A. (Single Plage Application) Built with Typescript on Vue.js. It is 
+    <p> This webapp is a S.P.A. (Single Page Application) Built with Typescript on Vue.js. It is 
         designed to be an easy to use tool for computer vision based wildlife census projects to create
         training data and eventually perform the census itself. The project is built on top of a python 
         based Restful API and Postgres database. This webapp makes use of a 'router,' a special Vue 

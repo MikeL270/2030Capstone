@@ -45,6 +45,13 @@ export interface PredCropData {
     }
 }
 
+export interface CropsData {
+    [crop_id: number]: {
+    'crop': Crop,
+    'predictions': Prediction[],
+    }
+}
+
 //---------------------------------------------------------------------------------------------------------------------------//
 // Interfaces describing the expected structure of a batch and containers of said batches (sorry)
 export interface Batch {
@@ -53,6 +60,7 @@ export interface Batch {
         predictions: Prediction[];
         approved_predictions: Prediction[];
         pred_crops: PredictionCrop[]; 
+        crops: CropsData;
     };
 }
 

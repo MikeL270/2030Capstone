@@ -1,7 +1,7 @@
 // Typescript Class definition analogues for crop_generator objects 
 // Author: Michael B. Lance
 // Created: April 9, 2025
-// Updated: May 14, 2025
+// Updated: May 28, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { mean } from 'lodash';

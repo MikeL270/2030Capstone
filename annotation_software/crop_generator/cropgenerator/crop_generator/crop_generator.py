@@ -183,22 +183,29 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
     points_in_crop = np.zeros(len(points))
   
     for crop_num, center in enumerate(centers):
-        crop = Crop(
-            name = f'{image.name}_crop_{crop_num}',
-            image_id = image.id,
-        )
+        
         crops[crop_num] = {}
         
         x_start = max(0, int(center[0]) - crop_size // 2)
         y_start = max(0, int(center[1]) - crop_size // 2)
         x_end = min(img.shape[1], x_start + crop_size)
         y_end = min(img.shape[0], y_start + crop_size)
+    
         if x_end == img.shape[1]:
             x_start -= (x_start + crop_size) - img.shape[1]
 
         if y_end == img.shape[0]:
             y_start -= (y_start + crop_size) - img.shape[0]
         
+        crop = Crop(
+            name = f'{image.name}_crop_{crop_num}',
+            image_id = image.id,
+            dimensions = Box(
+                            top_left = (x_start, y_start), 
+                            bottom_right = (x_end, y_end)
+            )
+        )
+
         crop.set_image(img[y_start:y_end, x_start:x_end].copy())
         crops[crop_num]['crop'] = crop
         crops[crop_num]['predictions'] = []
@@ -218,10 +225,6 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
                         model_id = pred.model_id
                     )  
                 )  
-        crop.dimensions = Box(
-            top_left = (x_start, y_start), 
-            bottom_right = (x_end, y_end)
-            )
 
     if np.all(points_in_crop >= 1):
         return crops

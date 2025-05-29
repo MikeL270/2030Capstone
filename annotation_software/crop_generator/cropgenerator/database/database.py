@@ -1,7 +1,7 @@
 # Database wrapper module for crop_generator
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: May 14, 2025
+# Updated: May 28, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
@@ -20,7 +20,7 @@ import signal
 #---------------------------------------------------------------------------------------------------------------------------#
 # Add user table and mutex to images table
 
-class Database(ABC): # Abstract class for all dataself types
+class Database(ABC): # Abstract class for all database types
     _conn: Any
     _cursor: Any
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#

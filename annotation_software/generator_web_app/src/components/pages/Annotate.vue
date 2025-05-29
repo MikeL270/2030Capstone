@@ -1,5 +1,5 @@
 <script lang="ts">
-import { createBatch, deleteBatch, createPredCrops, approvePredictions} from '../../modules/apiV1Methods';
+import { createBatch, deleteBatch, createPredCrops, approvePredictions, createFullCrops} from '../../modules/apiV1Methods';
 import type {Batches, Batch} from '../../types/interfaces';
 import {Prediction, Image, Crop, Box, PredictionCrop} from '../../types/generatorobjects';
 import { defineComponent } from 'vue'; 
@@ -20,9 +20,6 @@ export default defineComponent({
                 herd_unit_id: 4,
                 model_id: 3,
             },
-            pred_crop_params: {
-
-            },
             batches: {} as Batches,
             image_ids: [] as number[],
             batch_ids:[] as number[],
@@ -31,6 +28,7 @@ export default defineComponent({
             current_image: 0, // Overwritten on component mount
             predictions: [] as Prediction[],
             approved_predictions: [] as Prediction[],
+            crop_size: 2100,
         };
     },
     methods: {
@@ -71,7 +69,7 @@ export default defineComponent({
         },
         async next_image() {
             if (this.approved_predictions.length > 0) {
-                this.submit();
+                await this.submit();
             };
             if (this.current_image == this.image_ids[this.image_ids.length - 1]) {
                 await this.create_batch(this.batch_params);
@@ -107,22 +105,21 @@ export default defineComponent({
                     if (this.approved_predictions.includes(pred)) {
                         delete this.approved_predictions[this.approved_predictions.indexOf(pred)];
                         pred_crop.approved = false;
-                        console.log('removed prediction')
-
                     } else {
                         this.approved_predictions.push(pred);
                         pred_crop.approved = true;
-                        console.log('approved prediction')
                     }
-                    console.log(pred_crop)
-
                 };
             };
         },
         async submit() {
-            await approvePredictions(this.approved_predictions, this.current_batch, this.current_image)
+            await approvePredictions(this.approved_predictions, this.current_batch, this.current_image);
+            await this.create_full_crops();
         },
-
+        async create_full_crops() {
+            var responseData = await createFullCrops(this.current_batch, this.current_image, this.crop_size);
+            this.batches[this.current_batch][this.current_image]['crops'] = responseData;
+        },
         handle_key_press(event: KeyboardEvent) {
             switch(event.code) {
                 case 'ArrowRight': {
@@ -139,7 +136,6 @@ export default defineComponent({
     mounted() {
         this.start_up();
     },
-
     unmounted() {
         for (const batch_id of this.batch_ids) {
             this.delete_batch(+batch_id);
