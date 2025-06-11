@@ -1,10 +1,9 @@
 <script lang="ts">
-import { createBatch, deleteBatch, createPredCrops, approvePredictions, createFullCrops} from '../../modules/apiV1Methods';
+import { getBatchIds, createBatch, deleteBatch, createPredCrops, approvePredictions, createFullCrops} from '../../modules/apiV1Methods';
 import type {Batches, Batch} from '../../types/interfaces';
 import {Prediction, Image, Crop, Box, PredictionCrop} from '../../types/generatorobjects';
 import { defineComponent } from 'vue'; 
-import { Icon } from '@iconify/vue';
-
+import { ref } from 'vue';
 
 
 export default defineComponent({
@@ -13,6 +12,7 @@ export default defineComponent({
         return {
             loaded: false,
             pred_crops_loaded: false,
+            toggle_boxes: false, 
             batch_params: {
                 batch_size: 10,
                 desired_class: 2,
@@ -22,21 +22,24 @@ export default defineComponent({
             },
             batches: {} as Batches,
             image_ids: [] as number[],
-            batch_ids:[] as number[],
             image_idx: 0,
             current_batch: 0, // Overwritten on component mount 
             current_image: 0, // Overwritten on component mount
             predictions: [] as Prediction[],
             approved_predictions: [] as Prediction[],
             crop_size: 2100,
+            cv: null as null | any,
         };
     },
     methods: {
+         async get_batch_ids() {
+            const batch_ids = await getBatchIds();
+            return batch_ids;
+        },
         async create_batch(batch_params: Record<string, any>) {
             const responseData = await createBatch(batch_params);
             const batch_id = Object.keys(responseData)[0];
             this.batches[+batch_id] = Object.values(responseData)[0] as Batch;
-            this.batch_ids.push(+batch_id);
             this.image_ids = Object.values(this.batches[+batch_id])
         },
         async create_pred_crops(batch_id: number, image_id: number) {
@@ -52,15 +55,32 @@ export default defineComponent({
             this.pred_crops_loaded = false;
             this.current_batch = batch_id;
             this.image_ids = Object.keys(this.batches[this.current_batch]).map(Number);
+            this.set_current_image(this.image_ids[0]);
+        },
+        draw_pred_box(crop: PredictionCrop, image_ref: HTMLCanvasElement) {
+            const image = ref(image_ref);
+
         },
         async set_current_image(image_id: number) {
             this.pred_crops_loaded = false;
             this.current_image = image_id;
             await this.create_pred_crops(this.current_batch, this.current_image);
             this.predictions = this.batches[this.current_batch][this.current_image]['predictions'];
+            if (this.toggle_boxes) {
+                for (const crop of this.batches[this.current_batch][this.current_image]['pred_crops']) {
+
+                }
+            }
             this.pred_crops_loaded=true;
         },
          async start_up() {
+            const batch_ids = await this.get_batch_ids()
+            console.log(batch_ids.length)
+            if (batch_ids.length > 0) {
+                for (const batch_id of batch_ids) {
+                this.delete_batch(+batch_id);
+                }
+            }
             await this.create_batch(this.batch_params);
             await this.set_current_batch(+Object.keys(this.batches)[0]);
             this.set_current_image(this.image_ids[this.image_idx]);
@@ -86,10 +106,11 @@ export default defineComponent({
             if (this.approved_predictions.length > 0) {
                 this.approved_predictions = [];
             };
-            if (this.current_image == this.image_ids[0] && this.current_batch == this.batch_ids[0]) {
+            if (this.current_image == this.image_ids[0] && this.current_batch == 1) {
+                console.log("cant go back")
                 return;
             }
-            else if (this.current_image == this.image_ids[0] && this.current_batch == this.batch_ids[0]) {
+            else if (this.current_image == this.image_ids[0] && this.current_batch > 1) {
                 await this.set_current_batch(this.current_batch - 1);
                 this.image_idx = this.image_ids.length - 1;
                 await this.set_current_image(this.image_ids[this.image_idx]);
@@ -112,6 +133,10 @@ export default defineComponent({
                 };
             };
         },
+        async approve_all() {
+            this.approved_predictions = [...this.predictions];
+            this.next_image();
+        },
         async submit() {
             await approvePredictions(this.approved_predictions, this.current_batch, this.current_image);
             await this.create_full_crops();
@@ -129,6 +154,9 @@ export default defineComponent({
                 case 'ArrowLeft': {
                     this.last_image();
                     break;
+                };
+                case 'Digit1': {
+                    this.approve_all();
                 }
             };
         },
@@ -136,17 +164,18 @@ export default defineComponent({
     mounted() {
         this.start_up();
     },
-    unmounted() {
-        for (const batch_id of this.batch_ids) {
-            this.delete_batch(+batch_id);
-        }
+    async unmounted() {
+        var batch_ids: number[] = await this.get_batch_ids();
+         for (const batch_id of batch_ids) {
+             this.delete_batch(+batch_id);
+         }
     },
 });
 </script>
 
 <template>
-    <div class="Contianer"> 
-        <div class="Tool-Bar" v-if="loaded">
+    <div class="Page-Container"> 
+        <div id="Tool-Bar" v-if="loaded">
             <div class="Tool">
                 <label for="batches-explorer"> Batch: </label>
                 <select id="batches-explorer" v-model="current_batch" @change="set_current_batch(+current_batch)">
@@ -160,20 +189,19 @@ export default defineComponent({
                 <select id="image-explorer" v-model="current_image" @change="set_current_image(+current_image)">
                     <option v-for="image_id in Object.keys(batches[current_batch])">
                             {{ image_id }}
-                        </option>
+                    </option>
                 </select>
                 
             </div>
             <div class="Tool">
-                <button>
-                    <Icon icon="icon-park-outline:one-key" width="16" height="16"/>
-                    Approve All
-                </button>
+                <label for="boxes_toggle">Toggle Boxes: </label>
+                <input type="checkbox" id="boxes_toggle" v-model="toggle_boxes">
+                
             </div>
             <div class="Tool">
-                <button>
-                    <Icon icon="icon-park-outline:zero-key" width="16" height="16"/>
-                    Reject All
+                <button @click="approve_all()">
+                    <Icon icon="icon-park-outline:one-key" width="16" height="16"/>
+                    Approve All
                 </button>
             </div>
             <div class="Tool">
@@ -187,91 +215,123 @@ export default defineComponent({
                     <Icon icon="ooui:next-ltr" width="16" height="16"/>
                     Next Image
                 </button>
-            </div @click="submit()">
-            <div>
-
             </div>
         </div>
-        <div class="Annotator-Container">
-            <figure v-for="crop in batches[current_batch][current_image]['pred_crops']" v-if="pred_crops_loaded"> 
-                <button @click="toggle_approval(crop)">
-                <h2> Score: {{ crop.score?.toFixed(3) }} </h2>
-                <img v-bind:src="crop.url":class="{approved: crop.approved == true}">
+        <div id="Annotator-Container" v-if="pred_crops_loaded">
+            <figure v-for="predCrop in batches[current_batch][current_image]['pred_crops']" :key="predCrop.pred_crop_id"> 
+                <button @click="toggle_approval(predCrop)">
+                <h2> Score: {{ predCrop.score?.toFixed(3) }} </h2>
+                <img v-bind:src="predCrop.url":class="{approved: predCrop.approved == true}">
                 </button>
             </figure>
+        </div>
+        <div id="Annotator-Placeholder" v-else>
+            <Icon icon="eos-icons:three-dots-loading" width="96" height="96" />
         </div>
  
     </div>
 
 </template>
 <style scoped>
-.Contianer {
+.Page-Container {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    width: 100%;
-    align-items: center;
 }
-.Tool-Bar {
+#Tool-Bar {
     display: flex;
-    background-color: var(--color-background-mute);
+    justify-content: center;
+    align-items: center;
+    background-color: var(--wygf-bg-blue);
     align-self: flex-start;
+    border-radius: 4px 4px 0px 0px;
     width: 100%;
-    height: 6vh;
-    padding: 4px;
-    gap: 10px;
+    height: 7vh;
 }
-.Tool-Bar .Tool {
+#Tool-Bar .Tool {
     height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 2px;
+    min-width: 10vw;
+    margin: none;
+ }
+#Tool-Bar .Tool select {
+    border-radius: 4px;
 }
-.Tool-Bar .Tool select {
-    background-color: none;
+#Tool-Bar .Tool label {
+    color: var(--wygf-yellow);
+    margin-right: 5%;
 }
-.Tool-Bar .Tool button {
+#Tool-Bar .Tool input {
+    accent-color: var(--color-background-mute);
+}
+#Tool-Bar .Tool button {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: var(--color-background-soft);
-    color: var(--color-text);
+    background-color: var(--wygf-bg-blue);
+    color: var(--wygf-yellow);
     border-radius: 4px;
-    box-shadow: 0 4px 6px 2px var(--color-background-soft);
-    height: 24px;
+    width: 100%;
+    border: none;
+    padding: 0px;
 }
-.Annotator-Container {
+#Tool-Bar .Tool button:hover {
+    color: var(--color-text);
+    border: 1px var(--color-text);
+}
+#Tool-Bar .Tool button svg {
+    margin-right: 5%;
+}
+
+#Annotator-Container {
     align-self: center;
     display: grid;
-    grid-auto-columns: 150px;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-auto-columns: 10.5vw;
+    grid-template-columns: repeat(auto-fit, minmax(10.5vw, 1fr));
     align-self: center;
-    max-width: 80%;
-    gap: 10px;
+    max-width: 70%;
+    gap: 15px;
     justify-content: center;
     align-items: center;
     margin-top: auto;
     margin-bottom: auto;
+    overflow: auto;
 }
-.Annotator-Container figure {
+#Annotator-Container figure {
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     border-radius: 4px;
 }
-.Annotator-Container button {
-    background-color: var(--color-background-mute);
-    color: var(--color-text);
-    box-shadow: 0 4px 6px 2px var(--color-background-soft);
+#Annotator-Container button {
+    background-color: var(--wygf-bg-blue);
+    border: none;
+    color: var(--wygf-yellow);
+    box-shadow: 0 4px 6px 2px var(--color-background);
     border-radius: 4px;
+    
 }
-.Annotator-Container img {
-    width: 150px;
-    height: 150px;
+#Annotator-Container button:hover {
+    color: var(--color-text)
 }
-.Annotator-Container .approved {
-    border: solid 4px rgba(255, 0, 0, 0.571);
+#Annotator-Container button h2 {
+    padding: 2%;
+}
+ #Annotator-Container img {
+    width: 10.5vw;
+    height: 10.5vw;
+    margin: 1%;
+} 
+#Annotator-Container .approved {
+    border: solid 4px var(--wygf-yellow);
+}
+#Annotator-Placeholder {
+    height: 100%;
+    width: 80%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 </style>

@@ -1,16 +1,39 @@
 // Methods for approving predictions in the annotate vue component
 // Author: Michael B. Lance
 // Created: April 20, 2025
-// Updated: May 28, 2025
+// Updated: June 8, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import _ from 'lodash';
 import { Box, Image, Prediction, Crop, PredictionCrop } from '../types/generatorobjects';
 import type { Batch, Batches, BatchData, PredCropData, PredictionData, CropsData} from '../types/interfaces';
 
-const api_url: string = 'http://127.0.0.1:5000/api/v1';
+const api_url: string = 'http://localhost:5000/api/v1';
 const uh_oh: string = 'You did something wrong! status:';
-const test_token: string = "h5puC2EbTcYeP7lA7oq9qzXyr0Uoq01uHO9HV7EEJy3fgHT9EbkRZ3O5yC5AYpP3";
+
+
+//---------------------------------------------------------------------------------------------------------------------------//
+// User authentication
+export async function authSession(external_id: string): Promise<any> {   
+    try {
+        const response = await fetch(`${api_url}/authenticate`, {
+            method: 'POST',
+            headers: {
+                 'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                'external-id': external_id
+            }),
+            credentials: 'include',
+        }); 
+        if (!response.ok) {
+            throw new Error(` ${response.status}`);
+        }
+        return await response.json()
+    } catch (error) {
+        console.error("Error: ", error)
+    }
+}
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // Deserialization functions
@@ -113,11 +136,10 @@ export async function testApi(): Promise<any> {
     try {
         const response = await(fetch(`${api_url}/test`, {
             method: 'GET',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': test_token
             },
-            
         }));
 
         if (!response.ok) {
@@ -136,8 +158,9 @@ export async function getBatch(batch_id: number): Promise<any> {
  try {
     const response = await(fetch(`${api_url}/batches/${batch_id}`, {
         method: 'GET',
+        credentials: 'include',
         headers: {
-            'Authorization': test_token,
+             'Content-Type': 'application/json',
         },
     }));
     if (!response.ok) {
@@ -151,14 +174,15 @@ export async function getBatch(batch_id: number): Promise<any> {
  }
 };
 
-export async function getBatches(): Promise<any> {
+export async function getBatches(): Promise<Batches> {
     try { 
-        const response = await(fetch(`${api_url}/batches`, {
+        const response = await fetch(`${api_url}/batches`, {
             method: 'GET',
+            credentials: 'include',
             headers: {
-                'Authorization': test_token,
+                 'Content-Type': 'application/json',
             },
-        })); 
+        }); 
         if (!response.ok) {
             throw new Error(` ${response.status}`);
         }
@@ -168,9 +192,29 @@ export async function getBatches(): Promise<any> {
         return batches;
     } catch (error) {
         console.error("Error: ", error);
+        throw error;
     }
 }
 
+export async function getBatchIds(): Promise<number[]> {
+    try {
+       const response = await fetch(`${api_url}/batches/ids`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+       });
+       if (!response.ok) {
+        throw new Error(` ${response.status}`)
+       }
+       const data: unknown = await response.json();
+       return data as number[];
+    } catch (error) {
+        console.error("Error: ", error)
+        throw error;
+    }
+}
 //---------------------------------------------------------------------------------------------------------------------------//
 // POST requests:
 
@@ -179,9 +223,9 @@ export async function createBatch(params: Record<string, any>): Promise<any> {
     try {
         const response = await fetch(`${api_url}/images/create_batch`, {
             method: 'POST',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': test_token,
             },
             body: JSON.stringify(params),
         });
@@ -204,9 +248,10 @@ export async function createPredCrops(batch_id:number, image_id: number): Promis
     try {
         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/create_pred_crops`, {
             method: 'POST',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': test_token,
+                 
             },
         }));
         if (!response.ok) {
@@ -225,9 +270,10 @@ export async function createPredCrops(batch_id:number, image_id: number): Promis
     try {
         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/create_crops`, {
             method: 'POST',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': test_token,
+                 
             },
             body: JSON.stringify({'crop_size': crop_size}),
         }));
@@ -249,9 +295,10 @@ export async function approvePredictions(approved_predictions: Prediction[], bat
     try {
         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/approve_predictions`, {
             method: 'PUT',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': test_token,
+                 
             },
             body: JSON.stringify(approved_predictions),
         }));
@@ -269,8 +316,9 @@ export async function deleteBatch(batch_id: number) : Promise<any> {
     try {
         const response = await(fetch(`${api_url}/batches/${batch_id}`, {
             method: 'DELETE',
+            credentials: 'include',
             headers: {
-                'Authorization': test_token,
+                 
             },
         }));
 

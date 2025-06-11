@@ -21,7 +21,7 @@ export default {
 
 </script>
 <template>
-    <div class="Page-Content">
+    <div class="Page-Container">
         <div class="Tab-Bar">
             <button class="Tab" @click="active_tab = 0" title="V1 Testing tab" :class="{active: active_tab==0}">V1 </button>
             <button class="Tab" @click="active_tab = 1" title="V2 Testing tab":class="{active: active_tab==1}">V2 </button>
@@ -35,6 +35,9 @@ export default {
 </template>
 
 <style scoped>
+    .Page-Container {
+        flex-direction: column;
+    }
     .Tab-Bar {
         display: flex;
         align-items: center;

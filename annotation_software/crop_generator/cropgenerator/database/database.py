@@ -1,14 +1,14 @@
 # Database wrapper module for crop_generator
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: May 28, 2025
+# Updated: June 6, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod
 from typing import Any
 import json
 import os
-import datetime
+from datetime import datetime
 from uuid import uuid4
 from multiprocessing import Pool, cpu_count 
 from ..generatorobjects.generatorobjects import *
@@ -147,6 +147,23 @@ class Database(ABC): # Abstract class for all database types
                              label_id INT PRIMARY KEY,
                              label VARCHAR(15))
                     ''')
+        
+        # Create user management schema
+        self._cursor.execute('''CREATE SCHEMA IF NOT EXISTS UserManagement;''')
+
+        #Create user table
+        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS UserManagement.Users (
+                             UserId {auto_increment_column},
+                              uuid UUID UNIQUE NOT NULL,
+                             ExternalAuthId VARCHAR(255) UNIQUE NOT NULL,
+                             ExternalAuthProvider VARCHAR(50) NOT NULL,
+                             Status VARCHAR(20) NOT NULL DEFAULT 'active',
+                             Role VARCHAR(50) NOT NULL DEFAULT 'user'
+                             Created DateTime,
+                             Updated DateTime,
+                             LastLogin DateTime,
+                             locale VARCHAR(10) 
+                             )''')
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#  
     def create_indexes(self):
         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (ReviewLed);')
@@ -168,6 +185,37 @@ class Database(ABC): # Abstract class for all database types
             return self._cursor.fetchall()
         else:
             return self._cursor.rowcount
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    #User management methods
+    def get_user(self, external_id: str):
+        print("I was called")
+        query = '''
+            SELECT UserId, ExternalAuthId, Status, Role, Created, Updated, Locale, uuid 
+            FROM usermanagement.users
+            WHERE ExternalAuthId = ?
+        '''
+
+        rows = self.query(query, (external_id,))
+        if len(rows) == 0:
+            return
+        return {
+            'db_id': rows[0][0],
+            'external_auth_id': rows[0][1],
+            'status': rows[0][2],
+            'role': rows[0][3],
+            'created': rows[0][4],
+            'updated': rows[0][5],
+            'locale' : rows[0][6],
+            'uuid' : rows[0][7]
+        }
+
+    def set_last_login(self, db_id: int):
+        query = '''
+            UPDATE usermanagement.users
+            SET LastLogin =  ?
+            WHERE userid = ?'''
+        self.query(query, (datetime.now().strftime('%Y%m%d %H%M%S'), db_id))
+        self.commit()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def lastrowid(self) -> int:
         return self._cursor.lastrowid
@@ -257,6 +305,13 @@ class Database(ABC): # Abstract class for all database types
             WHERE ImageId = ?
         '''
         self.query(query, (image_id,))
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    def set_all_closed(self):
+        query = '''
+            UPDATE Images
+            Set Open = 0
+            WHERE Open = 1'''
+        self.query(query, ())
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def set_reviewed(self, image_id: int):
         query = '''
@@ -357,7 +412,7 @@ class Database(ABC): # Abstract class for all database types
         
         # Actual row insertion uses multiple processes to greatly speed up data insertion
         process_count = max(1, cpu_count())
-        print(f'Inserting into the dataself on {process_count} threads...')
+        print(f'Inserting into the database on {process_count} threads...')
         total_images = len(images)
         chunk_size = (total_images + process_count - 1) // process_count # Size of each block of
         pool = Pool(processes = process_count)
@@ -611,7 +666,7 @@ class Database(ABC): # Abstract class for all database types
 class SQLite(Database):
     import sqlite3
     def __init__(self, db_config: dict):
-        self._db_name = db_config['dataself']
+        self._db_name = db_config['database']
         self._conn = None
         self._cursor = None
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#             
@@ -647,12 +702,13 @@ class Postgres(Database):
             self._conn = self.psycopg2.connect(**self._config) #type: ignore
             self._cursor = self._conn.cursor()
             self._dict_cursor = self._conn.cursor(cursor_factory=self.DictCursor)
-        except (Exception, self.psycopg2.DataselfError) as error:
+        except (Exception, self.psycopg2.databaseError) as error:
             print(error)
         
         self.get_class_labels()
         self.get_herd_units()
         self.get_models()
+        #self.set_all_closed()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def get_auto_increment_column(self) -> str:
         return 'SERIAL NOT NULL PRIMARY KEY'
@@ -666,7 +722,7 @@ class Postgres(Database):
  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     #TODO: Make abstract function in base class   
     def get_pred_and_images(self, batch_size: int, desired_class: int, min_confidence: float, herd_unit_id: str, model_id: str) -> dict:
-        ''' Query batch_size Images and associated predictions above a minimum score from the dataself
+        ''' Query batch_size Images and associated predictions above a minimum score from the database
         
         Args:
             batch_size: number of images that will consist a batch 
@@ -678,7 +734,7 @@ class Postgres(Database):
         '''
 
        
-        print('Querying dataself...')
+        print('Querying database...')
         query = '''
             WITH SelectedImageIds AS (
                 SELECT DISTINCT I.ImageId

@@ -11,10 +11,7 @@ import { RouterView} from 'vue-router'
 
   <main>
     <Menu />
-    <div class="Page-Container">
       <RouterView />
-
-    </div>
   </main>
 
 
@@ -52,20 +49,6 @@ main {
 
 }
 
-.Page-Container {
-  justify-self: center;
-  align-self: center;
-  margin: 2.5%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 95%;
-  max-width: 95%;
-  height: 90%;
-  max-height: 90%;
-  background-color: var(--color-background-soft);
-  box-shadow: 0 4px 6px 2px var(--color-background-soft);
-  border-radius: 4px;
-}
+
 
 </style>

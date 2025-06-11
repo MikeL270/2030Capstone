@@ -75,7 +75,7 @@ const menu_toggled = ref(false)
         color: white;
     }
     .Toggle-Button:hover {
-        color: var(--wygf-yellow);
+        color: var(--color-text);
     }
     .Item {
         display: flex;
@@ -85,7 +85,7 @@ const menu_toggled = ref(false)
         width: 100%;
     }
     .Item:hover {
-        color: var(--wygf-yellow);
+        color: var(--color-text);
         background: none;
     }
     .router-link-active {
@@ -104,7 +104,7 @@ const menu_toggled = ref(false)
         box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
     }
     .GH-Link:hover {
-        color: var(--wygf-yellow);
+        color: var(--color-text);
         background-color:  rgba(0,0,0, 0);
     }
 </style>
