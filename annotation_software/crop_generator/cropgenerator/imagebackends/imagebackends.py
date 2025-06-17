@@ -19,37 +19,7 @@ class ImageBackend(ABC):
     @abstractmethod
     async def evaluate_crop(self, crop: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
         pass
-
-    def create_subcrop(self, image: Image, predictions: list[Prediction], crop_size: int=150, draw_box: bool=False) -> list[PredictionCrop]:
-        crops = []
-        img = image.get_image()
-        if len(predictions) == 0:        
-            return False
-
-        for pred in predictions:
-            box = pred.dimensions.get_points()
-            ymin = np.max([box[1] - crop_size, 0])
-            ymax = np.min([box[3] + crop_size, img.shape[0]])
-            xmin = np.max([box[0] - crop_size, 0])
-            xmax = np.min([box[2] + crop_size, img.shape[1]])
-            crop = PredictionCrop(
-                pred_crop_id=pred.id,
-                image_id = image.id,
-                name = f'{image.name}_pred_crop_{pred.id}',
-                score = pred.score,
-                label = pred.label,
-                dimensions = Box((int(xmin), int(ymax)), (int(xmax), int(ymin))),
-            )
-            crop.set_image(img[ymin:ymax, xmin:xmax].copy())
-            crops.append(crop)
-
-            if draw_box:
-                self.cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
-
-        return crops
     
-    def generate_pred_crops(self, image: Image, predictions: list[Prediction], crop_size: int) -> list[np.ndarray]:
-        return self.create_subcrop(image, predictions, crop_size)
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -90,8 +60,7 @@ class MatplotBackend(ImageBackend):
             except:
                 continue 
 
-    def evaluate_crop(self, image: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
-        crops = self.create_subcrop(image, predictions, draw_box)
+    def evaluate_crop(crops: list[PredictionCrop], class_name, draw_box:bool=False):
         img = image.get_image()
         scale_factor = 2
         crop_size = 2

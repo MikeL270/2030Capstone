@@ -1,12 +1,12 @@
 # Command line utility built on top of cropgenerator module
 # Authors: Michael B. Lance
 # Created: Nov 21, 2024
-# Updated: March 24, 2025
-
+# Updated: June 11, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import cropgenerator
 from cropgenerator.database import database
+from cropgenerator.generatorobjects import generatorobjects
 import sys
 import os
 from dotenv import load_dotenv
@@ -25,6 +25,10 @@ image_backend = 'matplot'
 approve_predictions = False
 upload_to_labelbox = False
 update_training = False
+
+IMAGE_FOLDER = f'{os.environ.get('ROOT')}/Images/2024/{os.environ.get('HERD_UNIT')}/'
+
+print(IMAGE_FOLDER)
 
 #flags to modify default values
 if 'matplot' in sys.argv:
@@ -49,17 +53,20 @@ db_config = {
 
 #---------------------------------------------------------------------------------------------------------------------------#
 #Program start
-base = database.Postgres(db_config)
+base = database.Postgres(db_config, os.environ.get('ROOT'))
 
 
 if 'create_db' in sys.argv:
-    cropgenerator.bootstrap_database()
+    base.bootstrap_database()
 elif 'append_full' in sys.argv:
-    cropgenerator.insert_full()
+    #TODO: create model and herdunit objects to pass as arguments
+    herd_unit = generatorobjects.HerdUnit(5, 'PR529', '2024')
+    model = generatorobjects.Model(4, '03-24-2025-11-46-27')
+    base.insert_full(cropgenerator.load_from_npy(herd_unit, model, os.environ.get('ROOT')), herd_unit, model)
 elif 'insert_images' in sys.argv:
-    cropgenerator.insert_new_images()
+    base.insert_new_images()
 elif 'insert_preds' in sys.argv:
-    cropgenerator.insert_new_preds()
+    base.insert_new_preds()
 
 
 '''

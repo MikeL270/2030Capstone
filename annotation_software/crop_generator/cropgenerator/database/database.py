@@ -154,7 +154,8 @@ class Database(ABC): # Abstract class for all database types
         #Create user table
         self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS UserManagement.Users (
                              UserId {auto_increment_column},
-                              uuid UUID UNIQUE NOT NULL,
+                            uuid UUID UNIQUE NOT NULL,
+                            userName VARCHAR(20) UNIQUE NOT NULL,
                              ExternalAuthId VARCHAR(255) UNIQUE NOT NULL,
                              ExternalAuthProvider VARCHAR(50) NOT NULL,
                              Status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -190,7 +191,7 @@ class Database(ABC): # Abstract class for all database types
     def get_user(self, external_id: str):
         print("I was called")
         query = '''
-            SELECT UserId, ExternalAuthId, Status, Role, Created, Updated, Locale, uuid 
+            SELECT UserId, ExternalAuthId, Status, Role, Created, Updated, Locale, uuid, userName 
             FROM usermanagement.users
             WHERE ExternalAuthId = ?
         '''
@@ -206,7 +207,8 @@ class Database(ABC): # Abstract class for all database types
             'created': rows[0][4],
             'updated': rows[0][5],
             'locale' : rows[0][6],
-            'uuid' : rows[0][7]
+            'uuid' : rows[0][7],
+            'userName': rows[0][8]
         }
 
     def set_last_login(self, db_id: int):
@@ -367,48 +369,55 @@ class Database(ABC): # Abstract class for all database types
             '''
             self.query(query, (image_id, model_id, os.path.splitext(image_info['file_name'])[0][prefix:], 1, 0, 0, 0, 0, current_date, str(uuid4()),))
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    def concurrent_populate_images(self, images: dict[Image, Prediction], model_id: int, 
+    def concurrent_populate_images(self, images: dict['str', Image], model_id: int, 
                                    herd_id: int, insert_images: bool, insert_predictions: bool):  
-        concurrent_base = type(self)(self._config)
+        concurrent_base = type(self)(self._config, os.environ.get('ROOT'))
         
         concurrent_base.connect()
+        image_count = len(images)
     
-        for image in images:
+        for num, image_dict in enumerate(images):
             # add max score to image table, insert score based on prediction values
             # /\ I have no clue what this talking about -ML 4/22/2025
-    
+            print(f'inserting image {num}/{image_count}')
             if insert_images:   
                 query = '''
-                    INSERT INTO Images (Name, HerdUnitID, InTraining, Reviewed, 'Error', CropsGen, Open)
+                    INSERT INTO Images (Name, HerdUnitID, InTraining, Reviewed, "Error", CropsGen, Open)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 '''
                 try:
-                    concurrent_base.query(query, (image.name, image.herd_unit_id, 1 if image.in_training == True else 0, 0, 0, 0, 0))
+                    concurrent_base.query(query, (image_dict['image'].name, image_dict['image'].herd_unit.id, 1 if image_dict['image'].in_training == True else 0, 0, 0, 0, 0))
                 except Postgres.psycopg2.errors.UniqueViolation: #TODO: Replace with generic exception
                     print('Image already in database...')
                     continue
-            image_id = image.id
+            image_id = concurrent_base.lastrowid()
+    
             if insert_predictions:
-                for pred in images[image]:
+                print(f'inserting {len(image_dict['predictions'])} predictions...')
+                for pred in image_dict['predictions']:
+                    
                     # Prediction level IOU would most likely be less efficient than comparing individual crops
+                    points = pred.dimensions.get_points()
                     query = '''
                         INSERT INTO Predictions (ImageId, ModelId, BoxTx, BoxTy, BoxBx, BoxBy, Score, Label)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     '''
                     try: 
-                        concurrent_base.query(query, (image_id, pred.model_id, pred.dimensions.get_points(), pred.score, pred.label)) #type: ignore
+                        concurrent_base.query(query, (image_id, pred.model.id, points[0], points[1], points[2], points[3], pred.score, pred.label)) #type: ignore
                     except Postgres.psycopg2.errors.UniqueViolation: #TODO: replace with more generic catch
                         print('Prediction Already in database...')
-    # Async await commit from other workers 
+                    
+        # Async await commit from other workers 
         concurrent_base.commit() 
         concurrent_base.close() 
+        print("done")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    def insert_to_database(self, images: dict[Image, Prediction],bootstrap: bool=False, 
+    def insert_to_database(self, images: dict[Image, Prediction], herd_unit: HerdUnit, model: Model, bootstrap: bool=False, 
                            insert_images: bool=True, insert_predictions: bool=True):
         
         # Cache the model_id and herd_unit_id
-        model_id = images.values()[0].model_id
-        herd_unit_id = images.keys(0)[0].herd_unit_id
+        model_id = model.id
+        herd_unit_id = herd_unit.id
         
         # Actual row insertion uses multiple processes to greatly speed up data insertion
         process_count = max(1, cpu_count())
@@ -422,6 +431,7 @@ class Database(ABC): # Abstract class for all database types
         for i in range(process_count):
             start = i * chunk_size
             end = (i + 1) * chunk_size if i != process_count - 1 else total_images
+            
             tasks.append((images[start:end], model_id, herd_unit_id, insert_images, insert_predictions))
             
         pool.starmap(self.concurrent_populate_images, tasks)
@@ -431,12 +441,12 @@ class Database(ABC): # Abstract class for all database types
         #TODO: Go and update these methods BEFORE TESTING 
         if bootstrap:
             self.insert_manual_crops(model_id)
-        self.update_training(model_id)
-        self.create_indexes()
+        #self.update_training(model_id)
+        #self.create_indexes()
         self.commit()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    def insert_full(self):
-        self.insert_to_database(bootstrap=False, insert_images=True, insert_predictions=True)
+    def insert_full(self, images: dict[Image, Prediction], herd_unit: HerdUnit, model: Model):
+        self.insert_to_database(images, herd_unit, model, bootstrap=False, insert_images=True, insert_predictions=True,)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def insert_new_images(self):
         self.insert_to_database(bootstrap=False, insert_images=True, insert_predictions=False)
@@ -450,15 +460,16 @@ class Database(ABC): # Abstract class for all database types
             Returns None, populate tables in a database
         '''
         # First part is single threaded for simplicity purposes
-        self.create_tabfles()     
+        self.create_tables()     
         self.insert_to_database(bootstrap=True, insert_images=True, insert_predictions=True)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def retrieve_batch(self, batch_size: int, desired_class: int, min_confidence: float,
                     herd_unit_id: str, model_id: str) -> dict[Image, list[Prediction]]:
         
         batch = {}
-        rows = self.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit_id, model_id)
     
+        rows = self.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit_id, model_id)
+
         for img in rows:
             img_id =img['imageid']
             self.set_open(img_id)
@@ -467,7 +478,7 @@ class Database(ABC): # Abstract class for all database types
             image = Image(
                 db_id = img_id,
                 name = img['name'],
-                herd_unit_id = herd_unit_id,
+                herd_unit = HerdUnit(herd_unit_id, self.resolve_herd_unit(herd_unit_id), '2024'), #TODO: change with parameter passed with function cal,l
                 in_training = True if img['intraining'] == 1 else False,
                 local_path = os.path.join(self.root, 'Images', self.resolve_herd_unit(herd_unit_id)),
                 )
@@ -484,7 +495,7 @@ class Database(ABC): # Abstract class for all database types
                         ),
                         score = pred['Score'],
                         label = pred['Label'],
-                        model_id = model_id
+                        model = Model(model_id, self.resolve_model(model_id))
                         )
                 )
         self.commit()
@@ -630,6 +641,7 @@ class Database(ABC): # Abstract class for all database types
             tasks.append((data_rows, start, end, dataset))
 
         pool.starmap(self.concurrent_upload, tasks)
+        print('got here')
         pool.close()
         pool.join()
         base.commit() #type: ignore
@@ -777,10 +789,14 @@ class Postgres(Database):
         rows = self.query(query, (herd_unit_id, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, model_id,)) #type: ignore
         
         if type(rows) == 'None':
-            # TODO: Raise an error here
-            print('No results returned, try lowering min confidence!')
+            raise BatchError("Database returned empty, please adjust your parameters!")
         else:
             return rows[0][0]
 
 #---------------------------------------------------------------------------------------------------------------------------#
+# Custom Exceptions
 
+class  BatchError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)

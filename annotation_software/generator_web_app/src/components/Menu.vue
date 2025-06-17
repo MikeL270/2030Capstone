@@ -12,9 +12,9 @@ const menu_toggled = ref(false)
             <Icon icon="material-symbols:menu" width="36" height="36"></Icon>
         </button>
         <nav>
-            <RouterLink to="/" class="Item" title="Home">
-                <Icon icon="uil:home" width="36" height="36" ></Icon>
-                <p v-if="menu_toggled"> Home </p>
+            <RouterLink to="/" class="Item" title="Dashboard">
+                <Icon icon="ic:round-dashboard" width="36" height="36" ></Icon>
+                <p v-if="menu_toggled"> Dashboard </p>
             </RouterLink>
             <RouterLink to="/annotate" class="Item" title="Annotate">
                 <Icon icon="foundation:annotate" width="36" height="36"></Icon>

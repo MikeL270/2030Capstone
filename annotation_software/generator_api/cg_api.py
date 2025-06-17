@@ -3,7 +3,7 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: June 8, 2025
+# Updated: June 17, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -13,15 +13,17 @@ from flask_caching import Cache
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from dotenv import load_dotenv
 import os
-import cropgenerator
-from cropgenerator import CropgenJSONPRovider
-from cropgenerator import Prediction, Box
+import io
+from cropgenerator import auto_crop, create_subcrop, save_crop
+from cropgenerator.generatorobjects import CgOBJ, CropgenJSONPRovider, Prediction, Box
+import cropgenerator.database as db
 import json
 from functools import wraps
 from datetime import datetime
 from uuid import uuid4
 
 #---------------------------------------------------------------------------------------------------------------------------#
+# Configuration
 
 load_dotenv()
 
@@ -40,13 +42,15 @@ root = os.environ.get('ROOT')
 herd_unit = os.environ.get('HERD_UNIT')
 save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
 os.makedirs(save_folder, exist_ok=True) # type: ignore
+use_s3 = True
 
 #---------------------------------------------------------------------------------------------------------------------------#
+# Flask Instantiation
 
 app = Flask(__name__)
 app.json_provider_class = CropgenJSONPRovider
 app.secret_key = os.environ.get('SECERET_KEY')
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True 
 
 CORS(app, resources={
@@ -71,11 +75,42 @@ cache.init_app(app, cache_config)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
-#Initialize image backend
-img_backend = cropgenerator.imagebackends.OpencvBackend()
-base = cropgenerator.database.Postgres(db_config, root)
+#Initialize image backend and database
+base = db.Postgres(db_config, root)
 base.connect()
 
+#Initialize s3 object storage
+if use_s3:
+    import boto3
+    from botocore.client import Config
+    from boto3.s3.transfer import TransferConfig
+
+    BUCKET_NAME = 'mlance4' # Change to production bucket name
+
+    extra_args = {
+        'ContentType': 'image/jpg',
+    }
+
+    s3_config = Config(
+        signature_version='s3',
+        s3={
+            'payload_signing_enabled': False,
+            'addressing_style': 'virtual',
+            'request_checksum_calculation': 'when_required',
+            'response_checksum_validation': 'when_required' 
+        }
+    )
+
+    pathfinder = boto3.client(
+        's3',
+        config = s3_config,
+        endpoint_url = os.environ.get('AWS_ENDPOINT_URL_S3') 
+    )
+
+    transfer_config = TransferConfig(
+        use_threads=True, #experimentally changed this to true, change to false if this things gets mad 
+        multipart_threshold=16 * 1024 * 1024
+    )   
 #---------------------------------------------------------------------------------------------------------------------------#
 
 batches = {}
@@ -83,9 +118,9 @@ batches = {}
 #---------------------------------------------------------------------------------------------------------------------------#
 # User Management
 
-class User(UserMixin):
+class User(UserMixin, CgOBJ):
     def __init__(self, db_id: int, external_id: str, status: str, role: str, created: datetime.date,
-                 updated: datetime.date, locale: str, uuid: uuid4):
+                 updated: datetime.date, locale: str, uuid: uuid4, userName: str):
         self.db_id = db_id
         self.external_id = str(external_id)
         self.status = status 
@@ -94,6 +129,7 @@ class User(UserMixin):
         self.updated = updated
         self.locale = locale
         self.uuid = uuid
+        self.userName = userName
     
     def get_id(self):
         return self.external_id
@@ -104,7 +140,6 @@ class User(UserMixin):
         resp_dict = base.get_user(external_id)
 
         if not resp_dict:
-            print(f"----- DEBUG: User.get(): No user found in DB for '{external_id}'. Returning None. -----")
             return None
 
         return User(
@@ -115,8 +150,20 @@ class User(UserMixin):
             created = resp_dict['created'],
             updated = resp_dict['updated'],
             locale = resp_dict['locale'],
-            uuid = resp_dict['uuid']
+            uuid = resp_dict['uuid'],
+            userName = resp_dict['userName']
         )
+
+    def serialize(self):
+        return {
+            'db_id': self.db_id,
+            'status': self.status,
+            'role': self.role,
+            'created': self.created,
+            'updated': self.updated,
+            'locale': self.locale,
+            'userName': self.userName
+        }
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -124,19 +171,19 @@ def load_user(user_id):
 
 @login_manager.unauthorized_handler
 def unauthorized_callback():        
-    abort(401)
+    abort(401, 'unathorized, are you logged in? Should you be accessing this?')
 
 @app.route('/api/v1/authenticate', methods=['POST'])
 def authenticate():
     data = request.get_json()
 
     if not data or 'external-id' not in data:
-        abort(400)
+        abort(400, 'malformed request')
 
     user = User.get(data['external-id'])
 
     if not user: 
-        abort(404)
+        abort(404, 'user not found')
 
     else:
         login_user(user)
@@ -144,16 +191,29 @@ def authenticate():
         session['bgroupid'] = user.uuid
         batches[session['bgroupid']] = {}
         session.modified = True
-        return jsonify(message="success"), 200
+        serialized_user = json.dumps(user, default=app.json_provider_class(app).default)
+        return Response(serialized_user, mimetype='application/json'), 201
+    1
+@app.route('/api/v1/check_auth', methods=["GET"])
+@login_required
+def check_auth():
+    return jsonify(mesage='success'), 201
 
-@app.route('/api/v1/deauthenticate')
+@app.route('/api/v1/deauthenticate', methods=["POST"])
 @login_required
 def logout():
     user = current_user
+
     for batch in batches[user.uuid]:
         delete_batch(batch)
     logout_user()
     
+#---------------------------------------------------------------------------------------------------------------------------#
+# Error Handling
+@app.errorhandler(404)
+def not_found(error):
+    return f'Error 404: {error.description}', 404
+
 #---------------------------------------------------------------------------------------------------------------------------#
 # GET requests
 # Get request: Test connectivity
@@ -165,7 +225,7 @@ def test_api():
 @app.route('/api/v1/batches', methods=['GET'])
 @login_required
 def get_batches():
-    serialized_data = json.dumps(batches,  default=app.json_provider_class(app).default)
+    serialized_data = json.dumps(batches[session['bgroupid']],  default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201
 
 # GET request: Retrieve a batch of images
@@ -189,12 +249,16 @@ def get_pred_crop(batch_id, image_id, crop_id):
     except Exception as e:
         return jsonify(message='Crop not found')
     
-    return Response(crop.serve(), mimetype='image/webp'), 201
+    return Response(crop.serve('.webp'), mimetype='image/webp'), 201
 
 # GET request: get batch ids 
 @app.route('/api/v1/batches/ids', methods=['GET'])
 @login_required
 def get_batch_ids():
+    try:
+        batches[session['bgroupid']]
+    except KeyError:
+        batches[session['bgroupid']] = {}
     return jsonify(list(batches[session['bgroupid']].keys())), 201
 
 # GET request: get a full crop
@@ -204,10 +268,10 @@ def get_crop(batch_id, image_id, crop_id):
     #TODO: Check session level authentication 
     try:
         crop = batches[session['bgroupid']][batch_id][image_id]['crops'][crop_id]
-    except Exception as e:
-        return jsonify(message='Crop not found')
-    
-    return Response(crop.serve(), mimetype='image/webp'), 201
+    except KeyError:
+        abort(404, 'crop not found')
+
+    return Response(crop.serve('.webp'), mimetype='image/webp'), 201
 
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -222,8 +286,11 @@ def retrieve_img_batch():
     min_confidence = request.json.get('min_confidence')
     herd_unit_id = request.json.get('herd_unit_id')
     model_Id = request.json.get('model_id')
-    batch = base.retrieve_batch(batch_size, desired_class, min_confidence, herd_unit_id, model_Id)
-    
+    try:
+        batch = base.retrieve_batch(batch_size, desired_class, min_confidence, herd_unit_id, model_Id)
+    except db.BatchError as e:
+        print(e)
+        abort(418, f'{db.BatchError}')
     try:
         batch_id = len(batches[session['bgroupid']]) + 1
         new_batch_obj = {batch_id: batch}
@@ -233,6 +300,7 @@ def retrieve_img_batch():
         batch_id = len(batches[session['bgroupid']]) + 1
         new_batch_obj = {batch_id: batch}
         batches[session['bgroupid']][batch_id] = batch
+
     serialized_data = json.dumps(new_batch_obj,  default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201 
 
@@ -240,10 +308,15 @@ def retrieve_img_batch():
 @app.route('/api/v1/batches/<int:batch_id>/images/<int:image_id>/create_pred_crops', methods=['POST'])
 @login_required
 def create_pred_crops(batch_id: int, image_id: int):
-     
-    image = batches[session['bgroupid']][batch_id][image_id]['image']
+    try:
+        image = batches[session['bgroupid']][batch_id][image_id]['image']
+    except KeyError:
+        abort(404, f'Image {image_id} not found')
     predictions = batches[session['bgroupid']][batch_id][image_id]['predictions']
-    crops = img_backend.create_subcrop(image, predictions)
+    if use_s3:
+        image_key = f'images/{2024}/{image.herd_unit.name.lower()}/{image.name}.JPG'
+        image.set_image(pathfinder.get_object(Bucket=BUCKET_NAME, Key=image_key)['Body'].read())
+    crops = create_subcrop(image, predictions)
     batches[session['bgroupid']][batch_id][image_id]['pred_crops'] = {}
     for crop in crops:
         batches[session['bgroupid']][batch_id][image_id]['pred_crops'][crop.pred_crop_id] = crop
@@ -255,11 +328,26 @@ def create_pred_crops(batch_id: int, image_id: int):
 @app.route('/api/v1/batches/<int:batch_id>/images/<int:image_id>/create_crops', methods=['POST'])
 @login_required
 def create_crops(batch_id: int, image_id: int):
-     
+    batch = batches[session['bgroupid']][batch_id][image_id]
     crop_size = request.json.get('crop_size')
-    image = batches[session['bgroupid']][batch_id][image_id]['image']
-    predictions = batches[session['bgroupid']][batch_id][image_id]['approved_predictions']
-    crops = cropgenerator.auto_crop(image=image, predictions=predictions, crop_size=crop_size)
+    image = batch['image']
+    base_key = f'crops/{image.herd_unit.survey_year}/{image.name}/'
+    predictions = [pred for pred in batch['predictions'] if pred.id in set(batch['approved_predictions'])]
+    crops = auto_crop(image=image, predictions=predictions, crop_size=crop_size)
+
+    if use_s3:
+       for crop_id in crops:
+        crop = crops[crop_id]['crop']
+        object_key = base_key + f'{crop.name}.JPG'
+        pathfinder.upload_fileobj(io.BytesIO(crop.serve('.JPG')), BUCKET_NAME, object_key, ExtraArgs=extra_args)
+    else: 
+        
+        for crop_id in crops:
+            crop = crops[crop_id]['crop']
+            save_crop(crop, save_folder)
+
+    # set image reviewed (which could be a flag for triggering IOU comparison)
+
     serialized_data = json.dumps(crops, default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201
 
@@ -271,20 +359,9 @@ def create_crops(batch_id: int, image_id: int):
 @login_required
 def approve_predictions(batch_id: int, image_id: int):
      
-    batches[session['bgroupid']][batch_id][image_id]['approved_predictions'] = []
-    approved_predictions = request.get_json()
-    for pred in approved_predictions:
-        batches[session['bgroupid']][batch_id][image_id]['approved_predictions'].append(
-            Prediction(
-                db_id = pred['id'],
-                model_id = pred['model_id'],
-                dimensions = Box(
-                    top_left = pred['dimensions']['top_left'],
-                    bottom_right = pred['dimensions']['bottom_right']
-                )
-            )
-        )
-    return jsonify( message="success" ),201
+    batches[session['bgroupid']][batch_id][image_id]['approved_predictions'] = request.get_json()
+    
+    return jsonify( message="success" ), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Delete request: Delete a crop
@@ -297,6 +374,6 @@ def delete_batch(batch_id):
     return jsonify(message='success'), 201
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True)
 
     

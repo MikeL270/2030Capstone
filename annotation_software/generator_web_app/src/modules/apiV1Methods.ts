@@ -1,20 +1,22 @@
-// Methods for approving predictions in the annotate vue component
+// Methods for interacting with the version 1 of the crop generator API 
 // Author: Michael B. Lance
 // Created: April 20, 2025
-// Updated: June 8, 2025
+// Updated: June 17, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import _ from 'lodash';
-import { Box, Image, Prediction, Crop, PredictionCrop } from '../types/generatorobjects';
-import type { Batch, Batches, BatchData, PredCropData, PredictionData, CropsData} from '../types/interfaces';
+import { Box, Image, Prediction, Crop, PredictionCrop } from '@/types/generatorobjects.ts';
+import type { Prediction_intf,  PredictionCrop_intf, CropData, BatchData, BatchesData, 
+              Crops, Batch, Batches } from '@/types/generatorobjects.ts';
 
-const api_url: string = 'http://localhost:5000/api/v1';
+const api_url: string = 'http://127.0.0.1:5000/api/v1';
 const uh_oh: string = 'You did something wrong! status:';
 
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // User authentication
-export async function authSession(external_id: string): Promise<any> {   
+// TODO: Return a promise of an image object
+export async function authUser(external_id: string): Promise<any> {   
     try {
         const response = await fetch(`${api_url}/authenticate`, {
             method: 'POST',
@@ -35,96 +37,82 @@ export async function authSession(external_id: string): Promise<any> {
     }
 }
 
+export async function checkAuth(): Promise<any> {
+    try {
+        const response = await fetch(`${api_url}/check_auth`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }, 
+            credentials: 'include',
+        });
+        return response;
+    } catch(error) {
+        console.error("Error: ", error)
+    }
+}
+
 //---------------------------------------------------------------------------------------------------------------------------//
 // Deserialization functions
 
-function deserialize_predictions(data: PredictionData[]): Prediction[] {
+function deserialize_predictions(data: Prediction_intf[]): Prediction[] {
     var predictions = [];
     for (const pred of data) {
-        predictions.push( new Prediction(
-            pred['pred_id'],
-            pred['model_id'],
-            new Box(pred['dimensions']['top_left'], 
-                    pred['dimensions']['bottom_right'],
-                ),
-            pred['score'],
-            pred['label'],
-    ));
+        predictions.push(new Prediction(pred));
     }
     return predictions
 }
 
-function deserialize_batch(data: Record<string, any>): Record<string, any> {
-    var batch_id = +Object.keys(data)[0];
-    var batch_data = Object.values(data)[0];
+function deserialize_batch(data: BatchData): Batch {
     var batch: Batch = {};
-    var batches: Batches = {};
-    batches[batch_id] = batch;
-
-    for (const image_id in batch_data) {
-        const image = batch_data[image_id]['image']
-        const predictions: PredictionData[] = batch_data[image_id]['predictions'];
+    
+    for (const image_id in data) {
+        const image = data[image_id]['image']
+        const predictions: Prediction_intf[] = data[image_id]['predictions'];
         batch[+image_id] = {
-        'image': new Image(
-            image['image_id'],
-            image['image_name'],
-            image['herd_unit_id'],
-            image['in_training'],
-            image['url'],
-        ),
+        'image': new Image(image),
         'predictions': deserialize_predictions(predictions),
         'approved_predictions': [],
         'pred_crops': [],
         'crops': []
-    }
+        }
     };
-    batches[batch_id] = batch;
-    return batches;
+    return batch;
 }
 
-function deserialize_pred_crops(crops_data: Record<string, any>, batch_id: number, image_id: number) : Record<string, any> {
+function deserialize_batches (data: BatchesData): Batches {
+    var batches = {} as Batches
+ 
+    for (const batch_id in data) {
+        batches[batch_id] = deserialize_batch(data[batch_id] as BatchData);
+    };
+    return batches
+}
+
+function deserialize_pred_crops(pred_crops_data: PredictionCrop_intf[], batch_id: number, image_id: number) : Record<string, any> {
     var pred_crops = []
     
-    for (const crop_id in crops_data) {
-        const crop_data = crops_data[crop_id];
+    for (const pred_crop of pred_crops_data) {
   
-        pred_crops.push( new PredictionCrop(
-            crop_data['pred_crop_id'],
-            crop_data['image_id'],
-            crop_data['score'],
-            crop_data['label'],
-            new Box(
-                crop_data['dimensions']['top_left'],
-                crop_data['dimensions']['bottom_right']
-            ),
-            `${api_url}/batches/${batch_id}/images/${image_id}/pred_crops/${crop_data['pred_crop_id']}`
-            )
-        );
+        pred_crops.push( new PredictionCrop
+            (pred_crop,
+             `${api_url}/batches/${batch_id}/images/${image_id}/pred_crops/${pred_crop.id}`
+        ));
     };
     return pred_crops;
 }
 
-function deserialize_crops(crops_data: Record<string, any>, batch_id: number, image_id: number) : CropsData {
-    var crops = {} as CropsData;
+function deserialize_crops(crops_data: CropData) : Crops {
+    var crops = {} as Crops;
     for (const crop_num in crops_data) {
         var crop_data = crops_data[crop_num]['crop'];
         var prediction_data = crops_data[crop_num]['predictions'];
-        console.log(crops_data[crop_num])
-        var crop_id = crop_data['crop_id'];
+        var crop_id = crop_data['id'];
         
         crops[crop_id] = {
-            'crop' : new Crop(
-                crop_data['crop_id'],
-                crop_data['image_id'],
-                crop_data['name'],
-                new Box(
-                    crop_data['dimensions']['top_left'],
-                    crop_data['dimensions']['bottom_right']
-                ),
-            `${api_url}/batches/${batch_id}/images/${image_id}/crops/${crops_data['crop_id']}`
-        ),
-        'predictions': deserialize_predictions(prediction_data)
-    }
+            'crop' : new Crop(crop_data),
+            'predictions': deserialize_predictions(prediction_data)
+        };
     };
     return crops;
 }
@@ -132,7 +120,7 @@ function deserialize_crops(crops_data: Record<string, any>, batch_id: number, im
 //---------------------------------------------------------------------------------------------------------------------------//
 // GET requests:
 
-export async function testApi(): Promise<any> {
+export async function testApi(): Promise<string> {
     try {
         const response = await(fetch(`${api_url}/test`, {
             method: 'GET',
@@ -154,7 +142,8 @@ export async function testApi(): Promise<any> {
     }
 };
 
-export async function getBatch(batch_id: number): Promise<any> {
+export async function getBatch(batch_id: number): Promise<Batches> {
+// Note: The api always returns a batch with its ID so Batches is always the return type
  try {
     const response = await(fetch(`${api_url}/batches/${batch_id}`, {
         method: 'GET',
@@ -166,11 +155,12 @@ export async function getBatch(batch_id: number): Promise<any> {
     if (!response.ok) {
         throw new Error(` ${response.status}`);
     }
-    const data = await response.json() as Record<string, BatchData>;
-    const batches = deserialize_batch(data);
-    return batches;
+    const data = await response.json() as BatchesData;
+    const batch = deserialize_batches(data);
+    return batch;
  } catch (error) {
     console.error("Error: ", error);
+    throw error;
  }
 };
 
@@ -186,7 +176,7 @@ export async function getBatches(): Promise<Batches> {
         if (!response.ok) {
             throw new Error(` ${response.status}`);
         }
-        const data = await response.json() as Record<string, BatchData>;
+        const data = await response.json() as BatchData;
         console.log(data)
         const batches = deserialize_batch(data);   
         return batches;
@@ -218,8 +208,8 @@ export async function getBatchIds(): Promise<number[]> {
 //---------------------------------------------------------------------------------------------------------------------------//
 // POST requests:
 
-export async function createBatch(params: Record<string, any>): Promise<any> {
-    // This hurt my soul. never delete this because remaking it hurts
+export async function createBatch(params: Record<string, number>): Promise<Batches> {
+    // Note: The api always returns a batch with its ID so Batches is always the return type
     try {
         const response = await fetch(`${api_url}/images/create_batch`, {
             method: 'POST',
@@ -234,8 +224,8 @@ export async function createBatch(params: Record<string, any>): Promise<any> {
             throw new Error(`${uh_oh} ${response.status}`)
         };
 
-        const data = await response.json() as Record<string, BatchData>;
-        const batches = deserialize_batch(data);
+        const data = await response.json() as BatchesData;
+        const batches = deserialize_batches(data);
 
         return batches;
     } catch (error: any) {
@@ -257,7 +247,7 @@ export async function createPredCrops(batch_id:number, image_id: number): Promis
         if (!response.ok) {
             throw new Error(`${uh_oh} ${response.status}`);
         }
-        const data = await response.json() as Record<string, any>;
+        const data = await response.json() as PredictionCrop_intf[];
         const crops = deserialize_pred_crops(data, batch_id, image_id);
         return crops;
     } catch (error: any) {
@@ -280,8 +270,8 @@ export async function createPredCrops(batch_id:number, image_id: number): Promis
         if (!response.ok) {
             throw new Error(`${uh_oh} ${response.status}`)
         }
-        const data = await response.json() as Record<string, any>;
-        const crops = deserialize_crops(data, batch_id, image_id);
+        const data = await response.json() as CropData;
+        const crops = deserialize_crops(data);
         return crops;
     } catch (error: any) {
         console.error('Error', error);
@@ -289,9 +279,9 @@ export async function createPredCrops(batch_id:number, image_id: number): Promis
  }
 
 //---------------------------------------------------------------------------------------------------------------------------//
-// PUT request
+// PUT requests
 
-export async function approvePredictions(approved_predictions: Prediction[], batch_id: number, image_id: number) : Promise<any> {
+export async function approvePredictions(approved_predictions: number[], batch_id: number, image_id: number) : Promise<any> {
     try {
         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/approve_predictions`, {
             method: 'PUT',
@@ -311,6 +301,8 @@ export async function approvePredictions(approved_predictions: Prediction[], bat
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
+
+// Delete requests
 
 export async function deleteBatch(batch_id: number) : Promise<any> {
     try {

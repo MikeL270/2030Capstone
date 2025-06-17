@@ -1,15 +1,18 @@
 # Class definition for objects used in the crop_generator module
 # Author: Michael B. Lance
 # Created: April 4, 2025
-# Updated: May 14, 2025
+# Updated: June 17, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
+
 import numpy as np
 import cv2
 import os
 from flask.json.provider import DefaultJSONProvider
 import cv2
 from abc import ABC, abstractmethod
-from PIL import Image
+from datetime import datetime
+import io
+import PIL.Image as PillowImage
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -68,23 +71,63 @@ class Box(CgOBJ):
         return {
             'top_left': list(self.top_left),
             'bottom_right': list(self.bottom_right),
-            }
+        }
+
+#---------------------------------------------------------------------------------------------------------------------------#
+
+class HerdUnit(CgOBJ):
+    def __init__(self, db_id: int=None, name: str=None, year: str=None):
+        self.id = db_id
+        self.name = name
+        self.survey_year = year
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'survey_year': self.survey_year
+        }
+    
+#---------------------------------------------------------------------------------------------------------------------------#
+
+class Model(CgOBJ):
+    def __init__(self, db_id: int=None, model_name: str=None):
+        self.id = db_id
+        self.name = model_name
+    
+    def serialize(self):
+        return {
+            'id': self.id,
+            'name': self.name
+        }
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Image(CgOBJ):
-    def __init__(self, db_id: int=None, name: str=None, herd_unit_id: int=None, in_training:bool=False, local_path: str=None):
+    def __init__(self, db_id: int=None, name: str=None, herd_unit: HerdUnit=None, in_training:bool=False, local_path: str=None):
         self.id = db_id
         self.name = name
-        self.herd_unit_id = herd_unit_id
+        self.herd_unit = herd_unit
         self.in_training = in_training
         self.local_path = local_path
         self.url = None
         self.image = None
         self.img_encoded = None
 
-    def set_image(self, image: np.ndarray):
-        self.image = image
+    def set_image(self, image_data: np.ndarray):
+        if isinstance(image_data, bytes):
+            try:
+                pil_image = PillowImage.open(io.BytesIO(image_data))
+                pil_image = pil_image.convert('RGB')
+                self.image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+            except Exception as e:
+                print(f"Error converting bytes to image: {e}")
+                self.image = None
+        elif isinstance(image_data, np.ndarray):
+            self.image = image_data
+        else:
+            print(f"Unsupported type: {type(image_data)}")
+            self.image = None
 
     def get_image(self) -> np.ndarray:
         if self.image is not None:
@@ -92,39 +135,41 @@ class Image(CgOBJ):
         else:
             self.image = cv2.imread(os.path.join(f'{self.local_path}', f'{self.name}.JPG'))
             return self.image
-        
-    def serve(self):
-        _, self.img_encoded = cv2.imencode('.webp', self.get_image())
+
+    def delete_image(self):
+        del self.image
+
+    def serve(self, img_format: str):
+        _, self.img_encoded = cv2.imencode(img_format, self.get_image())
         return self.img_encoded.tobytes()
         
 
     def serialize(self) -> dict:
         return {
-            'image_id': self.id,
-            'image_name': self.name,
-            'herd_unit_id': self.herd_unit_id,
+            'id': self.id,
+            'name': self.name,
+            'herd_unit': self.herd_unit.serialize(),
+            'in_training': self.in_training,
             'url': self.url,
-            'in_training': 1 if self.in_training else 0
         }
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Prediction(CgOBJ):
-    def __init__(self, db_id: int, dimensions: Box=None, score: float=None, label: int=None, model_id: int=None):
+    def __init__(self, db_id: int=None, dimensions: Box=None, score: float=None, label: int=None, model: Model=None):
         self.id = db_id
-        self.model_id = model_id
+        self.model = model
         self.dimensions = dimensions
         self.score = score
         self.label = label
     
     def serialize(self) -> dict:
         return {
-            'pred_id': self.id,
-            'model_id': self.model_id,
+            'id': self.id,
+            'model': self.model.serialize(),
             'dimensions': self.dimensions.serialize(),
             'score': self.score,
             'label': self.label,
-            
         }
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -140,11 +185,10 @@ class Crop(Image):
     
     def serialize(self) -> dict:
         return {
-            'crop_id': self.id,
+            'id': self.id,
             'image_id': self.image_id,
-            'crop_name': self.name,
+            'name': self.name,
             'dimensions': self.crop_dimensions.serialize(),
-            'herd_unit_id': self.herd_unit_id,
             'url' : self.url,
         }
     
@@ -155,18 +199,21 @@ class PredictionCrop(Crop):
                  url: str=None):
         self.pred_crop_id = pred_crop_id
         self.image_id = image_id
+        self.name = name
         self.score = score
         self.label = label 
         self.dimensions = dimensions
-        self.url = url
+        self.approved = False
     
     def serialize(self) -> dict:
         return {
-            'pred_crop_id': self.pred_crop_id,
+            'id': self.pred_crop_id,
             'image_id': self.image_id,
+            'name': self.name,
             'score': self.score,
             'label': self.label,
             'dimensions': self.dimensions.serialize(),
+            'approved': self.approved,
         }
 
 

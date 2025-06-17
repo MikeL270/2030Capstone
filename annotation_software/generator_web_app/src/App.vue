@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import Header from './components/Header.vue'
 import Menu from './components/Menu.vue'
-import { RouterView} from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
+
+const route = useRoute();
 </script>
 
 <template>
@@ -10,7 +12,7 @@ import { RouterView} from 'vue-router'
   </header>
 
   <main>
-    <Menu />
+    <Menu v-if="!route.meta.requiresNoLayout" />
       <RouterView />
   </main>
 

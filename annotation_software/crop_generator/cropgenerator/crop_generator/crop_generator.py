@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..database import database
 from ..imagebackends import imagebackends
-from ..generatorobjects.generatorobjects import Box, Prediction, Image, Crop, CropgenJSONPRovider
+from typing import Union
+from ..generatorobjects.generatorobjects import Box, HerdUnit, Model, Prediction, PredictionCrop, Image, Crop
 from sklearn.cluster import KMeans
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -32,8 +33,8 @@ def load_training_image_names(train_json_path: str, prefix: str, suffix:str, cro
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def load_prediction(image_file: str, model_id: int) -> Prediction:
-    ''' Load model predictions for a given image name`
+def load_prediction(image_name: str, model: Model, source_folder: str) -> list[Prediction]:
+    ''' Load model predictions for a given image name
 
     Args:
         image_file: string file path to an image
@@ -41,59 +42,75 @@ def load_prediction(image_file: str, model_id: int) -> Prediction:
     Returns a dictionary containing the predictions
     '''
     # Get corresponding box file for image
+    predictions_folder = os.path.join(source_folder, model.name, 'data')
     box_file = os.path.join(predictions_folder, f'{image_name}_boxes.npy') #type: ignore
+
+
     if not os.path.exists(box_file):
-        raise Exception(f'{image_file} missing box file.')
+        raise Exception(f'{image_name} missing box file.')
     else:
         boxes = np.load(box_file)
     # Get corresponding score file for image
     score_file = os.path.join(predictions_folder, f'{image_name}_scores.npy') #type: ignore
     if not os.path.exists(score_file):
-        raise Exception(f'{image_file} missing score file.')
+        raise Exception(f'{image_name} missing score file.')
     else:
         scores = np.load(score_file)
     # Get corresponding object class file for image
     label_file = os.path.join(predictions_folder, f'{image_name}_labels.npy') #type: ignore
     if not os.path.exists(label_file):
-        raise Exception(f'{image_file} missing labels file.')
+        raise Exception(f'{image_name} missing labels file.')
     else:
         labels = np.load(label_file)
-    # TODO modify to comply with new memory model
 
     predictions = []
 
-
     for box, score, label in zip(boxes, scores, labels):
+        if len(box) == 0:
+            print('empty box')
+            continue
         pred = Prediction(
-            model_id=model_id,
-            dimensions=box,
-            score=score,
-            label=label,
+            model = model,
+            dimensions = Box (top_left=(int(box[0]),int(box[1])), bottom_right=(int(box[2]),int(box[3]))),
+            score = float(score),
+            label = int(label),
         )
         predictions.append(pred)
     return predictions
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def load_from_npy(images_folder: str, herd_unit_id: int, model_id: int) -> dict[Image, Prediction]:
+def load_from_npy(herd_unit: HerdUnit, model: Model, source_folder: str) -> list[dict[Image, Prediction]]:
     ''' Create Image and Predictions objects from .npy files
 
     Returns a dictionary contianing images and predictions
     '''
-    training = load_training_image_names()
+
+    images_folder = os.path.join(source_folder, 'Images', herd_unit.survery_year, herd_unit.name)
+    train_json_path = os.path.join(source_folder, model.name, 'annotations', 'train.json')
     image_files = sorted(glob.glob(os.path.join(images_folder, f'*.[jJ][pP][gG]'))) # type: ignore
+    training = load_training_image_names(train_json_path, len("high-altitude-pronghorn-survey-"), len("_crop_xx"))
     print(f'{len(image_files)} files found.')
-    images = {}
+    images = []
     for image_file in image_files:
         image_name = os.path.splitext(os.path.basename(image_file))[0]
-        #TODO: Derive herd unit id with regex
         image = Image (
             name = image_name,
-            herd_unit_id = herd_unit_id,
+            herd_unit = herd_unit,
             in_training= True if image_name in training else False,
             local_path= images_folder,
         )
-        images[image] = load_prediction(image_file, model_id)
+        try:
+            predictions = load_prediction(image_name, model, source_folder)
+        except Exception as e:
+            print(e)
+            continue
+        image_dict = {
+            'image': image,
+            'predictions': predictions
+        }
+        images.append(image_dict.copy())
+
     return images
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -128,7 +145,7 @@ def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[Crop, list[Prediction]]:
+def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[int, dict[str, Union[Crop, Prediction]]]:
     ''' Automatically create crops of a given size containing all images with approved annotations 
     
     Args:
@@ -222,7 +239,7 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
                         ),
                         score = pred.score,
                         label = pred.label, 
-                        model_id = pred.model_id
+                        model = pred.model
                     )  
                 )  
 
@@ -240,6 +257,36 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
         plt.show()
         return crops 
     
+#---------------------------------------------------------------------------------------------------------------------------#
+
+def create_subcrop(image: Image, predictions: list[Prediction], crop_size: int=150, draw_box: bool=False) -> list[PredictionCrop]:
+        crops = []
+        img = image.get_image()
+        if len(predictions) == 0:        
+            return False
+
+        for pred in predictions:
+            box = pred.dimensions.get_points()
+            ymin = np.max([box[1] - crop_size, 0])
+            ymax = np.min([box[3] + crop_size, img.shape[0]])
+            xmin = np.max([box[0] - crop_size, 0])
+            xmax = np.min([box[2] + crop_size, img.shape[1]])
+            crop = PredictionCrop(
+                pred_crop_id=pred.id,
+                image_id = image.id,
+                name = f'{image.name}_pred_crop_{pred.id}',
+                score = pred.score,
+                label = pred.label,
+                dimensions = Box((int(xmin), int(ymax)), (int(xmax), int(ymin))),
+            )
+            crop.set_image(img[ymin:ymax, xmin:xmax].copy())
+            crops.append(crop)
+
+            if draw_box:
+                cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
+
+        return crops
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 def generate_crops(image: Image, predictions: list[Prediction], crop_size: int, model_id: int,

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { getBatchIds, createBatch, deleteBatch, createPredCrops, approvePredictions, createFullCrops} from '../../modules/apiV1Methods';
-import type {Batches, Batch} from '../../types/interfaces';
-import {Prediction, Image, Crop, Box, PredictionCrop} from '../../types/generatorobjects';
+import type { Batches, Batch } from '@/types/generatorobjects';
+import {Prediction, Image, Crop, Box, PredictionCrop} from '@/types/generatorobjects';
 import { defineComponent } from 'vue'; 
 import { ref } from 'vue';
 
@@ -16,9 +16,9 @@ export default defineComponent({
             batch_params: {
                 batch_size: 10,
                 desired_class: 2,
-                min_confidence: 0.9,
-                herd_unit_id: 4,
-                model_id: 3,
+                min_confidence: 0.99,
+                herd_unit_id: 5,
+                model_id: 4,
             },
             batches: {} as Batches,
             image_ids: [] as number[],
@@ -26,7 +26,7 @@ export default defineComponent({
             current_batch: 0, // Overwritten on component mount 
             current_image: 0, // Overwritten on component mount
             predictions: [] as Prediction[],
-            approved_predictions: [] as Prediction[],
+            approved_predictions: [] as number[],
             crop_size: 2100,
             cv: null as null | any,
         };
@@ -36,7 +36,7 @@ export default defineComponent({
             const batch_ids = await getBatchIds();
             return batch_ids;
         },
-        async create_batch(batch_params: Record<string, any>) {
+        async create_batch(batch_params: Record<string, number>) {
             const responseData = await createBatch(batch_params);
             const batch_id = Object.keys(responseData)[0];
             this.batches[+batch_id] = Object.values(responseData)[0] as Batch;
@@ -66,16 +66,15 @@ export default defineComponent({
             this.current_image = image_id;
             await this.create_pred_crops(this.current_batch, this.current_image);
             this.predictions = this.batches[this.current_batch][this.current_image]['predictions'];
-            if (this.toggle_boxes) {
-                for (const crop of this.batches[this.current_batch][this.current_image]['pred_crops']) {
+            // if (this.toggle_boxes) {
+            //     for (const crop of this.batches[this.current_batch][this.current_image]['pred_crops']) {
 
-                }
-            }
+            //     }
+            // }
             this.pred_crops_loaded=true;
         },
          async start_up() {
             const batch_ids = await this.get_batch_ids()
-            console.log(batch_ids.length)
             if (batch_ids.length > 0) {
                 for (const batch_id of batch_ids) {
                 this.delete_batch(+batch_id);
@@ -122,19 +121,19 @@ export default defineComponent({
         },
         toggle_approval(pred_crop: PredictionCrop) {
             for (const pred of this.predictions) {
-                if (pred.id == pred_crop.pred_crop_id) {
-                    if (this.approved_predictions.includes(pred)) {
-                        delete this.approved_predictions[this.approved_predictions.indexOf(pred)];
+                if (pred.id == pred_crop.id) {
+                    if (this.approved_predictions.includes(pred.id)) {
+                        delete this.approved_predictions[this.approved_predictions.indexOf(pred.id)];
                         pred_crop.approved = false;
                     } else {
-                        this.approved_predictions.push(pred);
+                        this.approved_predictions.push(pred.id);
                         pred_crop.approved = true;
                     }
-                };
+                }
             };
         },
         async approve_all() {
-            this.approved_predictions = [...this.predictions];
+            for (const pred of this.predictions) this.approved_predictions.push(pred.id);
             this.next_image();
         },
         async submit() {
@@ -218,10 +217,10 @@ export default defineComponent({
             </div>
         </div>
         <div id="Annotator-Container" v-if="pred_crops_loaded">
-            <figure v-for="predCrop in batches[current_batch][current_image]['pred_crops']" :key="predCrop.pred_crop_id"> 
+            <figure v-for="predCrop in batches[current_batch][current_image]['pred_crops']" :key="predCrop.id"> 
                 <button @click="toggle_approval(predCrop)">
                 <h2> Score: {{ predCrop.score?.toFixed(3) }} </h2>
-                <img v-bind:src="predCrop.url":class="{approved: predCrop.approved == true}">
+                <img v-bind:src="predCrop.url":class="{approved: predCrop.approved == true} ">
                 </button>
             </figure>
         </div>
@@ -254,6 +253,7 @@ export default defineComponent({
     align-items: center;
     min-width: 10vw;
     margin: none;
+    font-size: 1em;
  }
 #Tool-Bar .Tool select {
     border-radius: 4px;
@@ -287,8 +287,8 @@ export default defineComponent({
 #Annotator-Container {
     align-self: center;
     display: grid;
-    grid-auto-columns: 10.5vw;
-    grid-template-columns: repeat(auto-fit, minmax(10.5vw, 1fr));
+    grid-auto-columns: 11.5vw;
+    grid-template-columns: repeat(auto-fit, minmax(11.5vw, 1fr));
     align-self: center;
     max-width: 70%;
     gap: 15px;
@@ -306,10 +306,15 @@ export default defineComponent({
     border-radius: 4px;
 }
 #Annotator-Container button {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     background-color: var(--wygf-bg-blue);
     border: none;
     color: var(--wygf-yellow);
     box-shadow: 0 4px 6px 2px var(--color-background);
+    padding: 3%;
     border-radius: 4px;
     
 }
@@ -318,11 +323,12 @@ export default defineComponent({
 }
 #Annotator-Container button h2 {
     padding: 2%;
+    font-size: 1.2em;
 }
  #Annotator-Container img {
     width: 10.5vw;
     height: 10.5vw;
-    margin: 1%;
+    border-radius: 4px;
 } 
 #Annotator-Container .approved {
     border: solid 4px var(--wygf-yellow);
