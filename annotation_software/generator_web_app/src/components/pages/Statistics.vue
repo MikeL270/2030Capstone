@@ -1,3 +1,5 @@
 <template>
-    <p> Statistics </p>
+    <div class="Page-Container">
+         <h2> Statistics </h2>
+    </div>
 </template>

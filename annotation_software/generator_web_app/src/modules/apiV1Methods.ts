@@ -8,9 +8,12 @@ import _ from 'lodash';
 import { Box, Image, Prediction, Crop, PredictionCrop } from '@/types/generatorobjects.ts';
 import type { Prediction_intf,  PredictionCrop_intf, CropData, BatchData, BatchesData, 
               Crops, Batch, Batches } from '@/types/generatorobjects.ts';
+import { useToast } from 'vue-toastification'
 
-const api_url: string = 'http://127.0.0.1:5000/api/v1';
+const api_url: string = 'http://192.168.0.3:5000/api/v1';
 const uh_oh: string = 'You did something wrong! status:';
+
+const toast = useToast()
 
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -46,7 +49,10 @@ export async function checkAuth(): Promise<any> {
             }, 
             credentials: 'include',
         });
-        return response;
+        if (!response.ok) {
+            throw new Error(` ${response.status}`);
+        }
+        return await response.json();
     } catch(error) {
         console.error("Error: ", error)
     }
@@ -89,7 +95,7 @@ function deserialize_batches (data: BatchesData): Batches {
     return batches
 }
 
-function deserialize_pred_crops(pred_crops_data: PredictionCrop_intf[], batch_id: number, image_id: number) : Record<string, any> {
+function deserialize_pred_crops(pred_crops_data: PredictionCrop_intf[], batch_id: number, image_id: number) : PredictionCrop[] {
     var pred_crops = []
     
     for (const pred_crop of pred_crops_data) {
@@ -138,6 +144,7 @@ export async function testApi(): Promise<string> {
         return data;
     } catch (error) {
         console.error("Error:", error);
+        toast.error(`${error}`);
         throw error;
     }
 };
@@ -160,6 +167,7 @@ export async function getBatch(batch_id: number): Promise<Batches> {
     return batch;
  } catch (error) {
     console.error("Error: ", error);
+    toast.error(`${error}`);;
     throw error;
  }
 };
@@ -177,11 +185,11 @@ export async function getBatches(): Promise<Batches> {
             throw new Error(` ${response.status}`);
         }
         const data = await response.json() as BatchData;
-        console.log(data)
         const batches = deserialize_batch(data);   
         return batches;
     } catch (error) {
         console.error("Error: ", error);
+        toast.error(`${error}`);;
         throw error;
     }
 }
@@ -201,7 +209,36 @@ export async function getBatchIds(): Promise<number[]> {
        const data: unknown = await response.json();
        return data as number[];
     } catch (error) {
-        console.error("Error: ", error)
+        console.error("Error: ", error);
+        toast.error(`${error}`);;
+        throw error;
+    }
+}
+
+interface Schema {
+    [class_name: string]: {
+        'label': number,
+        'image_link': string,
+    }
+}
+
+export async function getSchema(): Promise<Schema> {
+    try {
+        const response = await fetch(`${api_url}/schema`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) throw new Error(`${uh_oh} ${response.status}`);
+
+        return await response.json() as Schema;
+
+    } catch (error: any) {
+        console.error("There was an error fetching the data:", error);
+        toast.error(`${error}`);;
         throw error;
     }
 }
@@ -230,11 +267,12 @@ export async function createBatch(params: Record<string, number>): Promise<Batch
         return batches;
     } catch (error: any) {
         console.error("There was an error fetching the data:", error);
+        toast.error(`${error}`);
         throw error;
     }
 }
 
-export async function createPredCrops(batch_id:number, image_id: number): Promise<any> {
+export async function createPredCrops(batch_id:number, image_id: number): Promise<PredictionCrop[]> {
     try {
         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/create_pred_crops`, {
             method: 'POST',
@@ -252,6 +290,8 @@ export async function createPredCrops(batch_id:number, image_id: number): Promis
         return crops;
     } catch (error: any) {
         console.error("Error", error);
+        toast.error(`${error}`);;
+        throw error;
     }
  }
 

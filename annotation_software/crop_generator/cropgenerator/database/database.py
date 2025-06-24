@@ -25,8 +25,8 @@ class Database(ABC): # Abstract class for all database types
     _cursor: Any
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def __init__(self, root: os.PathLike):
-        self.class_labels_foward = {}
-        self.class_labels_reverse = {}
+        self.schema = {}
+        # TODO: rework how this works
         self.herd_units_forward = {}
         self.herd_units_reverse = {}
         self.models_forward = {}
@@ -142,12 +142,14 @@ class Database(ABC): # Abstract class for all database types
                         PRIMARY KEY (Modelid, Cropid)
                     )''')
         
-        # Create Classlabels table
-        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS ClassLabels (
-                             label_id INT PRIMARY KEY,
-                             label VARCHAR(15))
-                    ''')
-        
+        # Crete Schema table
+        self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS Schema (
+                             SchemaId {auto_increment_column},
+                             label INT NOT NULL,
+                             name VARCHAR(30) NOT NULL,
+                             imagelink VARCHAR(1000)
+                    )''')
+
         # Create user management schema
         self._cursor.execute('''CREATE SCHEMA IF NOT EXISTS UserManagement;''')
 
@@ -159,11 +161,11 @@ class Database(ABC): # Abstract class for all database types
                              ExternalAuthId VARCHAR(255) UNIQUE NOT NULL,
                              ExternalAuthProvider VARCHAR(50) NOT NULL,
                              Status VARCHAR(20) NOT NULL DEFAULT 'active',
-                             Role VARCHAR(50) NOT NULL DEFAULT 'user'
-                             Created DateTime,
-                             Updated DateTime,
-                             LastLogin DateTime,
-                             locale VARCHAR(10) 
+                             Role VARCHAR(50) NOT NULL DEFAULT 'user',
+                             Created date,
+                             Updated date,
+                             LastLogin TIMESTAMP WITHOUT TIME ZONE,
+                             locale VARCHAR(10)
                              )''')
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#  
     def create_indexes(self):
@@ -177,9 +179,13 @@ class Database(ABC): # Abstract class for all database types
         self.commit()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def commit(self):
+        self.close()
         self._conn.commit()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def query(self, query: str, params=None):
+        if not self._cursor:
+            print('no cursor')
+            self.connect()
         query = query.replace('?', self.get_placeholder()) #type: ignore
         self._cursor.execute(query, params or ())
         if 'select' in query.strip().lower():
@@ -228,18 +234,6 @@ class Database(ABC): # Abstract class for all database types
     def close(self):
         if self._conn:
             self._conn.close
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    def get_class_labels(self):      
-        self.class_labels_forward = {}
-        self.class_labels_reverse = {}
-        query = '''
-            SELECT * FROM classlabels
-            
-        '''
-        rows = self.query(query,())
-        for id, name in rows:
-            self.class_labels_forward[id] = name
-            self.class_labels_reverse[name] = id
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def get_herd_units(self):
         query = '''
@@ -323,6 +317,16 @@ class Database(ABC): # Abstract class for all database types
         '''
         self.query(query, (image_id,))
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    def get_schema(self):
+        query = '''SELECT * FROM Schema'''
+        rows = self.query(query, ())
+        for row in rows:
+            self.schema[row[2]] = {
+                'label': row[1],
+                'image_link': row[3]
+            }
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def update_training(self, image_names: list, modelId):
         for name in image_names:
             query = '''
@@ -369,11 +373,10 @@ class Database(ABC): # Abstract class for all database types
             '''
             self.query(query, (image_id, model_id, os.path.splitext(image_info['file_name'])[0][prefix:], 1, 0, 0, 0, 0, current_date, str(uuid4()),))
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    def concurrent_populate_images(self, images: dict['str', Image], model_id: int, 
+    def populate_images(self, images: dict['str', Image], model_id: int, 
                                    herd_id: int, insert_images: bool, insert_predictions: bool):  
-        concurrent_base = type(self)(self._config, os.environ.get('ROOT'))
         
-        concurrent_base.connect()
+      
         image_count = len(images)
     
         for num, image_dict in enumerate(images):
@@ -386,11 +389,11 @@ class Database(ABC): # Abstract class for all database types
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 '''
                 try:
-                    concurrent_base.query(query, (image_dict['image'].name, image_dict['image'].herd_unit.id, 1 if image_dict['image'].in_training == True else 0, 0, 0, 0, 0))
-                except Postgres.psycopg2.errors.UniqueViolation: #TODO: Replace with generic exception
-                    print('Image already in database...')
+                    self.query(query, (image_dict['image'].name, image_dict['image'].herd_unit.id, 1 if image_dict['image'].in_training == True else 0, 0, 0, 0, 0))
+                except Exception as e: #TODO: Replace with generic exception
+                    print(e)
                     continue
-            image_id = concurrent_base.lastrowid()
+            image_id = self.lastrowid()
     
             if insert_predictions:
                 print(f'inserting {len(image_dict['predictions'])} predictions...')
@@ -403,13 +406,13 @@ class Database(ABC): # Abstract class for all database types
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     '''
                     try: 
-                        concurrent_base.query(query, (image_id, pred.model.id, points[0], points[1], points[2], points[3], pred.score, pred.label)) #type: ignore
-                    except Postgres.psycopg2.errors.UniqueViolation: #TODO: replace with more generic catch
+                        self.query(query, (image_id, pred.model.id, points[0], points[1], points[2], points[3], pred.score, pred.label)) #type: ignore
+                    except Exception as e: #TODO: replace with more generic catch
                         print('Prediction Already in database...')
                     
         # Async await commit from other workers 
-        concurrent_base.commit() 
-        concurrent_base.close() 
+        self.commit() 
+        self.close() 
         print("done")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def insert_to_database(self, images: dict[Image, Prediction], herd_unit: HerdUnit, model: Model, bootstrap: bool=False, 
@@ -419,31 +422,33 @@ class Database(ABC): # Abstract class for all database types
         model_id = model.id
         herd_unit_id = herd_unit.id
         
-        # Actual row insertion uses multiple processes to greatly speed up data insertion
-        process_count = max(1, cpu_count())
-        print(f'Inserting into the database on {process_count} threads...')
-        total_images = len(images)
-        chunk_size = (total_images + process_count - 1) // process_count # Size of each block of
-        pool = Pool(processes = process_count)
-        tasks = []
+        self.populate_images(images,model_id, herd_unit_id, insert_images, insert_predictions)
 
-        # delegate chunks of total images to threads evenly
-        for i in range(process_count):
-            start = i * chunk_size
-            end = (i + 1) * chunk_size if i != process_count - 1 else total_images
-            
-            tasks.append((images[start:end], model_id, herd_unit_id, insert_images, insert_predictions))
-            
-        pool.starmap(self.concurrent_populate_images, tasks)
-        pool.close()
-        pool.join()
+        # # Actual row insertion uses multiple processes to greatly speed up data insertion
+        # process_count = max(1, cpu_count())
+        # print(f'Inserting into the database on {process_count} threads...')
+        # total_images = len(images)
+        # chunk_size = (total_images + process_count - 1) // process_count # Size of each block of
+        # pool = Pool(processes = process_count)
+        # tasks = []
 
-        #TODO: Go and update these methods BEFORE TESTING 
-        if bootstrap:
-            self.insert_manual_crops(model_id)
-        #self.update_training(model_id)
-        #self.create_indexes()
-        self.commit()
+        # # delegate chunks of total images to threads evenly
+        # for i in range(process_count):
+        #     start = i * chunk_size
+        #     end = (i + 1) * chunk_size if i != process_count - 1 else total_images
+            
+        #     tasks.append((images[start:end], model_id, herd_unit_id, insert_images, insert_predictions))
+            
+        # pool.starmap(self.concurrent_populate_images, tasks)
+        # pool.close()
+        # pool.join()
+
+        # #TODO: Go and update these methods BEFORE TESTING 
+        # if bootstrap:
+        #     self.insert_manual_crops(model_id)
+        # #self.update_training(model_id)
+        # #self.create_indexes()
+        # self.commit()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def insert_full(self, images: dict[Image, Prediction], herd_unit: HerdUnit, model: Model):
         self.insert_to_database(images, herd_unit, model, bootstrap=False, insert_images=True, insert_predictions=True,)
@@ -526,35 +531,32 @@ class Database(ABC): # Abstract class for all database types
         '''
         signal.signal(signal.SIGINT, self.interrupt_handler)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    def upload_crops(self, crops: dict[Crop, list[Prediction]]):
+    def upload_crops(self, crops: dict[str, Union[Crop, list[Prediction]]]) -> int:
         current_date = datetime.now()
-        for crop, predictions in crops.items():
+        for crop_id in crops:
+            num_crops = 0
+            model_id = crops[crop_id]['predictions'][0].model.id
+            crop = crops[crop_id]['crop']
+            predictions = crops[crop_id]['predictions']
+            points = crop.crop_dimensions.get_points()
             query = '''
                 INSERT INTO Crops (ModelID, ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             '''
 
-            self.query(query, (crop.model_id, crop.image_id, crop.name, 0, crop.dimensions.get_points(), current_date, str(uuid4()))) 
+            self.query(query, (model_id, crop.image_id, crop.name, 0, points[0], points[1], points[2], points[3], current_date, str(uuid4()))) 
             num_crops += 1
 
             for pred in predictions:
+                points = pred.dimensions.get_points()
                 query = '''
                     INSERT INTO CropPredictions (CropId, PredId, ImageId, BoxTx, BoxTy, BoxBx, BoxBy)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 '''
-                self.query(query, (crop.id, pred.id, crop.image_id, pred.dimensions.get_points())) #type: ignore
+                self.query(query, (crop.id, pred.id, crop.image_id, points[0], points[1], points[2], points[3])) #type: ignore
             
-            # Save with opencv without compression, highest quality score
-            self.commit() #type: ignore
-        query = '''
-            UPDATE Images
-            SET Reviewed = 1, Open = 0, CropsGen = ?
-            WHERE ImageId = ?
-        '''
-        self.query(query, (num_crops, pred['image_id'])) 
         self.commit() 
 
-        return num_crops
  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def upload_to_labelbox(self, batch_size, desired_class: int, save_folder: str):
         #TODO: update to use new data structures and derive save folder from image object to reduce number of args because you 
@@ -674,10 +676,15 @@ class Database(ABC): # Abstract class for all database types
             print(task.errors)
 
 #---------------------------------------------------------------------------------------------------------------------------#
-
+    #TODO: Update sqlite class to work with updated features, eg: write get_pred_and_images method
 class SQLite(Database):
-    import sqlite3
     def __init__(self, db_config: dict):
+        try: 
+            import sqlite3
+            self._sqlite3 = sqlite3
+        except ImportError:
+            raise RuntimeError("sqlite3 module missing.")
+        
         self._db_name = db_config['database']
         self._conn = None
         self._cursor = None
@@ -699,27 +706,35 @@ class SQLite(Database):
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Postgres(Database):
-    import psycopg2
-    from psycopg2.extras import DictCursor
     def __init__(self, db_config: dict, root: os.PathLike):
+        try: 
+            import psycopg
+            self._psycopg = psycopg
+        except ImportError:
+            raise RuntimeError("psycopg not installed. Please install it with 'pip install psycopg[binary]'")
+
         super().__init__(root)
         self._config = db_config
         self._conn = None
         self._cursor = None
         self._dict_cursor = None
         self._pooled_conn = None
+
+        self.connect()
+        self.get_herd_units()
+        self.get_models()
+        #self.get_schema()
+        self.close()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def connect(self):
         try:
-            self._conn = self.psycopg2.connect(**self._config) #type: ignore
+            self._conn = self._psycopg.connect(**self._config) #type: ignore
             self._cursor = self._conn.cursor()
-            self._dict_cursor = self._conn.cursor(cursor_factory=self.DictCursor)
-        except (Exception, self.psycopg2.databaseError) as error:
+            self._dict_cursor = self._conn.cursor(row_factory=self._psycopg.rows.dict_row)
+        except (Exception, self._psycopg.DatabaseError) as error:
             print(error)
         
-        self.get_class_labels()
-        self.get_herd_units()
-        self.get_models()
+        
         #self.set_all_closed()
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     def get_auto_increment_column(self) -> str:
@@ -752,11 +767,11 @@ class Postgres(Database):
                 SELECT DISTINCT I.ImageId
                 FROM Images I
                 INNER JOIN Predictions P ON I.ImageId = P.ImageId
-                WHERE I.HerdUnitId = ?
-                    AND I.Reviewed = ?
+                WHERE I.HerdUnitId = %s
+                    AND I.Reviewed = %s
                     AND I.Open = 0
-                    AND P.Label = ?
-                    AND P.Score > ?
+                    AND P.Label = %s
+                    AND P.Score > %s
                 LIMIT ?
             )
             SELECT json_agg(row_to_json(img_preds))
@@ -780,9 +795,9 @@ class Postgres(Database):
                 FROM Images I
                 INNER JOIN Predictions P ON I.ImageId = P.ImageId
                 WHERE I.ImageId IN (SELECT ImageId FROM SelectedImageIds)
-                    AND P.Label = ?
-                    AND P.Score > ?
-                    AND P.ModelId = ?
+                    AND P.Label = %s
+                    AND P.Score > %s
+                    AND P.ModelId = %s
                 GROUP BY I.ImageId, I.Name, I.InTraining
             ) AS img_preds;
         '''

@@ -28,7 +28,7 @@ from uuid import uuid4
 load_dotenv()
 
 db_config = {
-    'database': os.environ.get('DB_NAME'),
+    'dbname': os.environ.get('DB_NAME'),
     'user': os.environ.get('DB_USER'),              
     'password': os.environ.get('DB_PASS'),    
     'host': os.environ.get('DB_HOST'),           
@@ -49,13 +49,16 @@ use_s3 = True
 
 app = Flask(__name__)
 app.json_provider_class = CropgenJSONPRovider
-app.secret_key = os.environ.get('SECERET_KEY')
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_SECURE'] = True 
+app.secret_key = os.environ.get('SECRET_KEY')
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = False 
 
 CORS(app, resources={
     r'/api/*': {
-        'origins': 'http://localhost:5173',
+        'origins': [
+            'http://192.168.0.3:5173',
+            'http://localhost:5173',
+        ],
         'supports_credentials': True     
     }
 })
@@ -108,8 +111,8 @@ if use_s3:
     )
 
     transfer_config = TransferConfig(
-        use_threads=True, #experimentally changed this to true, change to false if this things gets mad 
-        multipart_threshold=16 * 1024 * 1024
+        use_threads = True, #experimentally changed this to true, change to false if this things gets mad 
+        multipart_threshold = 16 * 1024 * 1024
     )   
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -197,7 +200,9 @@ def authenticate():
 @app.route('/api/v1/check_auth', methods=["GET"])
 @login_required
 def check_auth():
-    return jsonify(mesage='success'), 201
+    serialized_user = json.dumps(current_user, default=app.json_provider_class(app).default)
+
+    return Response(serialized_user, mimetype='application/json'), 201
 
 @app.route('/api/v1/deauthenticate', methods=["POST"])
 @login_required
@@ -273,6 +278,11 @@ def get_crop(batch_id, image_id, crop_id):
 
     return Response(crop.serve('.webp'), mimetype='image/webp'), 201
 
+# GET request: get the schema information for the current project
+@app.route('/api/v1/schema', methods=['GET'])
+@login_required
+def get_schema():
+    return jsonify(base.schema), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # POST Requests
@@ -290,7 +300,7 @@ def retrieve_img_batch():
         batch = base.retrieve_batch(batch_size, desired_class, min_confidence, herd_unit_id, model_Id)
     except db.BatchError as e:
         print(e)
-        abort(418, f'{db.BatchError}')
+        abort(418, f'{db.BatchError}, also I am a teapot.')
     try:
         batch_id = len(batches[session['bgroupid']]) + 1
         new_batch_obj = {batch_id: batch}
@@ -341,12 +351,11 @@ def create_crops(batch_id: int, image_id: int):
         object_key = base_key + f'{crop.name}.JPG'
         pathfinder.upload_fileobj(io.BytesIO(crop.serve('.JPG')), BUCKET_NAME, object_key, ExtraArgs=extra_args)
     else: 
-        
         for crop_id in crops:
             crop = crops[crop_id]['crop']
             save_crop(crop, save_folder)
-
-    # set image reviewed (which could be a flag for triggering IOU comparison)
+    
+    base.upload_crops(crops) # upload crops to database and set image reviewed
 
     serialized_data = json.dumps(crops, default=app.json_provider_class(app).default)
     return Response(serialized_data, mimetype='application/json'), 201
@@ -358,9 +367,12 @@ def create_crops(batch_id: int, image_id: int):
 @app.route('/api/v1/batches/<int:batch_id>/images/<int:image_id>/approve_predictions', methods=['PUT'])
 @login_required
 def approve_predictions(batch_id: int, image_id: int):
-     
-    batches[session['bgroupid']][batch_id][image_id]['approved_predictions'] = request.get_json()
-    
+    try:
+        batches[session['bgroupid']][batch_id][image_id]['approved_predictions'] = request.get_json()
+        base.set_reviewed(image_id)
+    except KeyError:
+        abort(404, 'Image Not Found')
+
     return jsonify( message="success" ), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -374,6 +386,6 @@ def delete_batch(batch_id):
     return jsonify(message='success'), 201
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')
 
     

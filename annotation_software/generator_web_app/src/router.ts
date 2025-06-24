@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Authenticate  from '@/components/Authenticate.vue';
-import { checkAuth } from '@/modules/apiV1Methods';
 import { useUserStore } from '@/modules/userManagement';
 
 
@@ -33,9 +32,9 @@ const router = createRouter({
       },
     },
     { 
-      path: '/annotate', 
-      name: 'annotate', 
-      component: () => import('./components/pages/Annotate.vue'),
+      path: '/auto-cropper', 
+      name: 'Auto-Cropper', 
+      component: () => import('./components/pages/Auto-Cropper.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -79,16 +78,15 @@ router.beforeEach(async (to, from, next) => {
     if (user_store.logged_in) {
       next();
     } else {
-      const response = await checkAuth();
-
-    if (response.ok) {
-        next();
-    } else {
-      next({
-        name: 'authenticator',
-        query: { redirect: to.fullPath },
-      });
-    }
+      await user_store.check_auth();
+      if (await user_store.check_auth()) {
+          next();
+      } else {
+        next({
+          name: 'authenticator',
+          query: { redirect: to.fullPath },
+        });
+      }
     }
     
   } else {

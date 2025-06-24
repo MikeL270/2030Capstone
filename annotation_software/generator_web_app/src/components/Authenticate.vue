@@ -2,21 +2,23 @@
 import { defineComponent, ref, computed } from 'vue'; 
 import { useUserStore } from '@/modules/userManagement';
 import { useRouter, useRoute } from 'vue-router';
+import { useToast } from "vue-toastification";
 
 export default defineComponent({
     name: 'Authenticate',
     setup() {
+        const toast = useToast();
         const user_store = (useUserStore());
         const router = useRouter();
         const route = useRoute();
-
+        
+ 
         const redirection_path = route.query.redirect as string; 
-
-        return { user_store, router, route, redirection_path }
+  
+        return { user_store, router, route, redirection_path, toast }
     },
     data() {
         return {
-            show_message: false,
             message: '',
             id_input: '',
         };
@@ -25,7 +27,7 @@ export default defineComponent({
         async establish_auth(external_id: string) {
             await this.user_store.authenticate(external_id)
             if (this.user_store.logged_in) {
-                this.create_message(`Welcome, ${this.user_store.user?.userName}`)
+                this.toast.success(`Welcome, ${this.user_store.user?.userName}`);
                 if (this.redirection_path) {
                     this.router.push(this.redirection_path);
                 }
@@ -33,36 +35,30 @@ export default defineComponent({
                     this.router.push('/');
                 }
             } else {
-                this.create_message('Authentication Failed!')
+                this.toast('Authentication Failed!');
             }
         },
-        // TODO: Move this to its own component mounted in app.vue to persist 
-        create_message(message: string) {
-            this.show_message = true;
-            this.message = message;
-        }
+        start_up_toast() {
+            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                window.requestIdleCallback(() => {
+                    this.toast.warning('You must authenticate to access this resource!');
+                });
+            } else {
+                setTimeout(() => {
+                    this.toast.warning('You must authenticate to access this resource!');
+                }, 0);
+            }
+        },
     },
-    watch: {
-        show_message(newValue) {
-            if (newValue) setTimeout(() => {
-                this.show_message = false;
-            }, 3000)
-        }
-    },
-    mounted() {
-        this.create_message("You must be logged in to view this resource!");
+   
+    mounted() {        
+        this.start_up_toast()
     },
 }); 
 </script>
 
 <template>
     <div class="Page-Container">
-        <transition name="fade">
-            <div v-if="show_message" id="Popup-Message">
-                <Icon icon="material-symbols:info" width="16" height="16" />
-                <p> {{ message }} </p>
-            </div>
-        </transition>
         <div id="auth-wrapper">
             <div id="wrapper-title">
                 <h2> Authentication Required </h2>
@@ -92,7 +88,7 @@ export default defineComponent({
         max-height: 10vh;
         border-radius: 4px 4px 0px 0px;
         padding: 1%;
-        font-size: 1em;
+        font-size: 0.75em;
     }
     #auth-wrapper {
         background-color: var(--color-background-mute);
@@ -135,31 +131,5 @@ export default defineComponent({
     #auth-wrapper button:hover {
         background-color: var(--wygf-yellow);
         color: var(--wygf-bg-blue)
-    }
-    #Popup-Message {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background-color: var(--wygf-bg-blue);
-        color: var(--wygf-yellow);
-        padding: 1%;
-        position: absolute;
-        top: 0;
-        margin-top: 6vh;
-        border-radius: 4px;
-        height: 5vh;
-        min-width: 35vw;
-    }
-    #Popup-Message svg {
-        margin-right: 1%;
-    }
-    .fade-enter-active,
-    .fade-leave-active {
-        transition: opacity 0.5s ease;
-    }
-
-    .fade-enter-from,
-    .fade-leave-to {
-    opacity: 0;
     }
 </style>

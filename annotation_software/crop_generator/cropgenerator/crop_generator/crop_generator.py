@@ -86,7 +86,7 @@ def load_from_npy(herd_unit: HerdUnit, model: Model, source_folder: str) -> list
     Returns a dictionary contianing images and predictions
     '''
 
-    images_folder = os.path.join(source_folder, 'Images', herd_unit.survery_year, herd_unit.name)
+    images_folder = os.path.join(source_folder, 'Images', herd_unit.survey_year, herd_unit.name)
     train_json_path = os.path.join(source_folder, model.name, 'annotations', 'train.json')
     image_files = sorted(glob.glob(os.path.join(images_folder, f'*.[jJ][pP][gG]'))) # type: ignore
     training = load_training_image_names(train_json_path, len("high-altitude-pronghorn-survey-"), len("_crop_xx"))
@@ -145,7 +145,7 @@ def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence:
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[int, dict[str, Union[Crop, Prediction]]]:
+def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, crop_size: int=2100) -> dict[int, dict[str, Union[Crop, list[Prediction]]]]:
     ''' Automatically create crops of a given size containing all images with approved annotations 
     
     Args:

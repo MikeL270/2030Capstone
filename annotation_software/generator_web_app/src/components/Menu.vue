@@ -7,21 +7,18 @@ const menu_toggled = ref(false)
 </script>
 
 <template>
-    <div class="Menu" :class= {active:menu_toggled}>     
-        <button class="Toggle-Button" @click="menu_toggled = !menu_toggled"title="Toggle Menu">
-            <Icon icon="material-symbols:menu" width="36" height="36"></Icon>
-        </button>
+    <div class="Menu" :class= {active:menu_toggled} @mouseenter="menu_toggled=true" @mouseleave="menu_toggled=false">     
         <nav>
             <RouterLink to="/" class="Item" title="Dashboard">
                 <Icon icon="ic:round-dashboard" width="36" height="36" ></Icon>
                 <p v-if="menu_toggled"> Dashboard </p>
             </RouterLink>
-            <RouterLink to="/annotate" class="Item" title="Annotate">
-                <Icon icon="foundation:annotate" width="36" height="36"></Icon>
-                <p v-if="menu_toggled"> Annotate </p>
+            <RouterLink to="/auto-cropper" class="Item" title="Auto Crop">
+                <Icon icon="fluent:crop-sparkle-24-filled" width="36" height="36"></Icon>
+                <p v-if="menu_toggled"> Auto Crop </p>
             </RouterLink>
             <RouterLink to="/statistics" class="Item" title="Statistics">
-                <Icon icon="uil:statistics" width="36" height="36"></Icon>
+                <Icon icon="wpf:statistics" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Statistics </p>
             </RouterLink>
             <RouterLink to="/profile" class="Item" title="Profile">
@@ -55,7 +52,6 @@ const menu_toggled = ref(false)
         width: auto;
         background-color: var(--wygf-bg-blue);
         box-shadow: 0 4px 6px 2px var(--color-background-soft);
-        
     }
     nav {
         display: flex;
@@ -65,9 +61,9 @@ const menu_toggled = ref(false)
         width: 100%;
     }
   
-    .active {
-        width: 200px;
+    .Menu:hover {
         align-items: flex-start;
+        padding-right: 5px;
     }
     .Toggle-Button {
         background: none;
@@ -83,6 +79,7 @@ const menu_toggled = ref(false)
         justify-content: flex-start;
         gap: 1vw;
         width: 100%;
+        font-size: 0.75em;
     }
     .Item:hover {
         color: var(--color-text);

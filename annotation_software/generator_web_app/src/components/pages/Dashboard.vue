@@ -7,10 +7,12 @@ export default {
 
 </script>
 <template>
-    <h2> Dashboard </h2>
+    <div class="Page-Container">
+       <p> Dashboard </p>
+    </div>
 </template>
     
 <style scoped>
-    
+   
 </style>
 

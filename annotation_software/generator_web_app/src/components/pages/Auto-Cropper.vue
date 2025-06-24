@@ -1,22 +1,26 @@
 <script lang="ts">
-import { getBatchIds, createBatch, deleteBatch, createPredCrops, approvePredictions, createFullCrops} from '../../modules/apiV1Methods';
+import { getBatchIds, createBatch, deleteBatch, createPredCrops, approvePredictions, createFullCrops,
+         getSchema, } from '../../modules/apiV1Methods';
 import type { Batches, Batch } from '@/types/generatorobjects';
 import {Prediction, Image, Crop, Box, PredictionCrop} from '@/types/generatorobjects';
-import { defineComponent } from 'vue'; 
-import { ref } from 'vue';
+import { defineComponent, computed, ref } from 'vue'; 
 
+// Typescript is proving to be very annoying when doing basically anything
 
 export default defineComponent({
-    name: 'Annotator',
+    name: 'Auto-Cropper',
     data() {
         return {
-            loaded: false,
+            ready: false,
+            loading: false,
             pred_crops_loaded: false,
+            batch_loaded: false,
             toggle_boxes: false, 
+            selected_class_name: 'pronghorn',
             batch_params: {
-                batch_size: 10,
+                batch_size: 50,
                 desired_class: 2,
-                min_confidence: 0.99,
+                min_confidence: 0.90,
                 herd_unit_id: 5,
                 model_id: 4,
             },
@@ -28,7 +32,6 @@ export default defineComponent({
             predictions: [] as Prediction[],
             approved_predictions: [] as number[],
             crop_size: 2100,
-            cv: null as null | any,
         };
     },
     methods: {
@@ -37,15 +40,17 @@ export default defineComponent({
             return batch_ids;
         },
         async create_batch(batch_params: Record<string, number>) {
+            this.loading = true;
             const responseData = await createBatch(batch_params);
             const batch_id = Object.keys(responseData)[0];
             this.batches[+batch_id] = Object.values(responseData)[0] as Batch;
             this.image_ids = Object.values(this.batches[+batch_id])
         },
         async create_pred_crops(batch_id: number, image_id: number) {
-
+            this.loading = true;
             const responseData = await createPredCrops(batch_id, image_id);
             this.batches[batch_id][image_id]['pred_crops'] = responseData;
+            this.loading = false;
         },
         async delete_batch(batch_id: number) {
             await deleteBatch(batch_id);
@@ -63,6 +68,7 @@ export default defineComponent({
         },
         async set_current_image(image_id: number) {
             this.pred_crops_loaded = false;
+            this.loading=true;
             this.current_image = image_id;
             await this.create_pred_crops(this.current_batch, this.current_image);
             this.predictions = this.batches[this.current_batch][this.current_image]['predictions'];
@@ -72,6 +78,7 @@ export default defineComponent({
             //     }
             // }
             this.pred_crops_loaded=true;
+            this.loading=false;
         },
          async start_up() {
             const batch_ids = await this.get_batch_ids()
@@ -83,13 +90,15 @@ export default defineComponent({
             await this.create_batch(this.batch_params);
             await this.set_current_batch(+Object.keys(this.batches)[0]);
             this.set_current_image(this.image_ids[this.image_idx]);
-            this.loaded = true;
-            document.addEventListener('keydown', this.handle_key_press)
+            document.addEventListener('keydown', this.handle_key_press);
+            this.ready = true;
         },
         async next_image() {
-            if (this.approved_predictions.length > 0) {
-                await this.submit();
-            };
+           if (this.loading) {
+                console.log('action blocked!');
+                return;
+            }
+            this.loading = true;
             if (this.current_image == this.image_ids[this.image_ids.length - 1]) {
                 await this.create_batch(this.batch_params);
                 await this.set_current_batch(this.current_batch + 1);
@@ -100,8 +109,14 @@ export default defineComponent({
             this.image_idx += 1;
             await this.set_current_image(this.image_ids[this.image_idx]);
             this.approved_predictions = [];
+            this.loading = false;
         },
         async last_image() {
+            if (this.loading) {
+                console.log('action blocked!');
+                return;
+            }
+            this.loading = true;
             if (this.approved_predictions.length > 0) {
                 this.approved_predictions = [];
             };
@@ -132,13 +147,23 @@ export default defineComponent({
                 }
             };
         },
-        async approve_all() {
-            for (const pred of this.predictions) this.approved_predictions.push(pred.id);
-            this.next_image();
-        },
         async submit() {
             await approvePredictions(this.approved_predictions, this.current_batch, this.current_image);
-            await this.create_full_crops();
+            if (this.approved_predictions.length > 0) {
+                console.log('Cropping')
+                await this.create_full_crops();
+            }
+            await this.next_image();
+        },
+        async approve_all() {
+            if (this.loading) {
+                console.log('action blocked!');
+                return;
+            }
+            this.loading = true;
+            for (const pred of this.predictions) this.approved_predictions.push(pred.id);
+            this.loading = false;
+            await this.submit();
         },
         async create_full_crops() {
             var responseData = await createFullCrops(this.current_batch, this.current_image, this.crop_size);
@@ -154,8 +179,13 @@ export default defineComponent({
                     this.last_image();
                     break;
                 };
-                case 'Digit1': {
+                case 'Space': {
                     this.approve_all();
+                    break;
+                };
+                case 'Enter': {
+                    this.submit();
+                    break;
                 }
             };
         },
@@ -173,10 +203,13 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="Page-Container"> 
-        <div id="Tool-Bar" v-if="loaded">
+    <div class="Page-Container" > 
+        <div id="Tool-Bar" v-if="ready">
             <div class="Tool">
-                <label for="batches-explorer"> Batch: </label>
+                <label for="batches-explorer"> 
+                    <Icon icon="carbon:batch-job-step" width="16" height="16"/>
+                    Batch:
+                </label>
                 <select id="batches-explorer" v-model="current_batch" @change="set_current_batch(+current_batch)">
                     <option v-for="batch_id in Object.keys(batches)">
                         {{ batch_id }}
@@ -184,7 +217,10 @@ export default defineComponent({
                 </select>
             </div>
             <div class="Tool">
-                <label for="image-explorer"> Image: </label>
+            <label for="image-explorer">
+                    <Icon icon="material-symbols:image" width="16" height="16"/>
+                    Image: 
+                </label>
                 <select id="image-explorer" v-model="current_image" @change="set_current_image(+current_image)">
                     <option v-for="image_id in Object.keys(batches[current_batch])">
                             {{ image_id }}
@@ -193,26 +229,35 @@ export default defineComponent({
                 
             </div>
             <div class="Tool">
-                <label for="boxes_toggle">Toggle Boxes: </label>
+                <label for="boxes_toggle">
+                    <Icon icon="foundation:annotate" width="16" height="16"/>
+                    Outlines:
+                 </label>
                 <input type="checkbox" id="boxes_toggle" v-model="toggle_boxes">
                 
             </div>
             <div class="Tool">
                 <button @click="approve_all()">
-                    <Icon icon="icon-park-outline:one-key" width="16" height="16"/>
+                    <Icon icon="uis:space-key" width="16" height="16"/>
                     Approve All
+                </button>
+            </div>  
+            <div class="Tool">
+                <button @click="submit()">
+                    <Icon icon="vaadin:enter-arrow" width="16" height="16"/>
+                    Submit
                 </button>
             </div>
             <div class="Tool">
                 <button @click="last_image()">
                     <Icon icon="ooui:next-rtl" width="16" height="16"/>
-                    Previous Image
+                    Previous 
                 </button>
             </div>
             <div class="Tool">
                 <button @click="next_image()">
                     <Icon icon="ooui:next-ltr" width="16" height="16"/>
-                    Next Image
+                    Next 
                 </button>
             </div>
         </div>
@@ -224,7 +269,7 @@ export default defineComponent({
                 </button>
             </figure>
         </div>
-        <div id="Annotator-Placeholder" v-else>
+        <div id="Annotator-Placeholder" v-else-if="loading ">
             <Icon icon="eos-icons:three-dots-loading" width="96" height="96" />
         </div>
  
@@ -237,53 +282,69 @@ export default defineComponent({
     flex-direction: column;
 }
 #Tool-Bar {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     justify-content: center;
     align-items: center;
     background-color: var(--wygf-bg-blue);
     align-self: flex-start;
     border-radius: 4px 4px 0px 0px;
     width: 100%;
-    height: 7vh;
+    min-height: 8vh;
+    max-height: 20vh;
+    padding: 0.5%;
+    gap: 1%;
+    grid-row-gap: 10px;
 }
 #Tool-Bar .Tool {
-    height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 100%;
+    max-height: 5vh;
+    display: flex;
+    color: var(--wygf-yellow);
+    justify-content: center;
+    align-items: center;
     min-width: 10vw;
-    margin: none;
     font-size: 1em;
+    padding: 1%
+ }
+ #Tool-Bar .Tool:hover {
+    color: var(--color-text);
  }
 #Tool-Bar .Tool select {
     border-radius: 4px;
 }
 #Tool-Bar .Tool label {
-    color: var(--wygf-yellow);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: inherit;
+    color: inherit;
     margin-right: 5%;
 }
 #Tool-Bar .Tool input {
     accent-color: var(--color-background-mute);
 }
 #Tool-Bar .Tool button {
+    background: none;
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: var(--wygf-bg-blue);
-    color: var(--wygf-yellow);
+    color: inherit;
     border-radius: 4px;
     width: 100%;
+    height: 100%;
     border: none;
-    padding: 0px;
+    font-size: 1em;
 }
-#Tool-Bar .Tool button:hover {
-    color: var(--color-text);
-    border: 1px var(--color-text);
+#Tool-Bar .Tool button:active {
+        box-shadow: 0 2px 3px 1px var(--color-background);
 }
-#Tool-Bar .Tool button svg {
+#Tool-Bar .Tool  svg {
     margin-right: 5%;
 }
-
 #Annotator-Container {
     align-self: center;
     display: grid;
