@@ -2,18 +2,28 @@ services:
   pronghorn-api:
     build:
       context: .
-      dockerfile: ./generator_api/containerfile.prongapi
+      dockerfile: production.prongapi.containerfile
+    environment:
+      ROOT: "${ROOT}"
+      HERD_UNIT: "${HERD_UNIT}"
+      CROP_FOLDER: "${CROP_FOLDER}"
+      IMAGES: "${CROP_FOLDER}"
+      SECRET_KEY: "${SECRET_KEY}"
+      VALKEY_HOST: "${VALKEY_HOST}"
+      VALKEY_PASS: "${VALKEY_PASS}"
+      AWS_ENDPOINT_URL_S3: "${AWS_ENDPOINT_URL_S3}"
+      DB_HOST: "${DB_HOST}"
+      DB_USER: "${DB_USER}"
+      DB_PASS: "${DB_PASS}" 
+      DB_NAME: "${DB_NAME}"
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ${DATA_PATH}:/data
-      - ./generator_api:/app
-      - ./requirements.txt:/app/requirements.txt
     ports:
-      - "5000:5000"
-    command: >
-      /bin/bash -c "source /venv/api_env/bin/activate && python /app/cg_api.py"
+      - "8000:8000"
     networks: 
       - pronghorn_app_network 
-
   valkey:
     container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
@@ -29,14 +39,10 @@ services:
       - pronghorn_app_network 
   web-app:
     build:
-      context: ./generator_web_app
-      dockerfile: containerfile.prongwebapp
-    volumes:
-      - ./generator_web_app:/app
-      - /app/node_modules
+      context: .
+      dockerfile: production.prongwebapp.containerfile
     ports:
-      - "5173:5173"
-    command: npm run dev -- --host 0.0.0.0
+      - "6900:6900"
     networks: 
       - pronghorn_app_network
 

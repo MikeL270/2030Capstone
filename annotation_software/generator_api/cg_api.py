@@ -3,7 +3,7 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: June 17, 2025
+# Updated: June 24, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -40,8 +40,8 @@ suffix = len('_crop_xx')
 
 root = os.environ.get('ROOT')
 herd_unit = os.environ.get('HERD_UNIT')
-save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
-os.makedirs(save_folder, exist_ok=True) # type: ignore
+#save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
+#os.makedirs(save_folder, exist_ok=True) # type: ignore
 use_s3 = True
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -56,7 +56,8 @@ app.config['SESSION_COOKIE_SECURE'] = False
 CORS(app, resources={
     r'/api/*': {
         'origins': [
-            'http://192.168.0.3:5173',
+            'http://192.168.0.3:5173', # Development
+            #'http://192.168.0.3:6900', # Production
             'http://localhost:5173',
         ],
         'supports_credentials': True     

@@ -2,7 +2,7 @@
 import { testApi, getBatch, getBatches, createBatch, deleteBatch,
          createPredCrops,
  } from '../../../modules/apiV1Methods';
- import type {Batches, Batch} from '../../../types/interfaces.ts';
+ import type {Batches, Batch} from '@/types/generatorobjects';
 import { defineComponent } from 'vue';
 
 var request_type: string = 'GET';

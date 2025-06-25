@@ -1,0 +1,77 @@
+services:
+  pronghorn-api-dev:
+    build:
+      context: .
+      dockerfile: development.prongapi.containerfile
+    environment:
+        ROOT: "${ROOT}"
+        HERD_UNIT: "${HERD_UNIT}"
+        CROP_FOLDER: "${CROP_FOLDER}"
+        IMAGES: "${CROP_FOLDER}"
+        SECRET_KEY: "${SECRET_KEY}"
+        VALKEY_HOST: "${VALKEY_HOST}"
+        VALKEY_PASS: "${VALKEY_PASS}"
+        AWS_ENDPOINT_URL_S3: "${AWS_ENDPOINT_URL_S3}"
+        DB_HOST: "${DB_HOST}"
+        DB_USER: "${DB_USER}"
+        DB_PASS: "${DB_PASS}" 
+        DB_NAME: "${DB_NAME}"
+        AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+        AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - ${DATA_PATH}:/data
+      - ./generator_api:/app
+      - ./requirements.txt:/app/requirements.txt
+    ports:
+      - "5000:5000"
+    command: >
+      /bin/bash -c "source /venv/api_env/bin/activate && python /app/cg_api.py"
+    networks: 
+      - pronghorn_app_network 
+  valkey:
+    container_name: prong-valkey
+    image: docker.io/valkey/valkey:8.1.1
+    mem_limit: 256M
+    cpus: 0.25
+    healthcheck:
+      test: valkey-cli ping || exit 1
+    restart: always
+    ports:
+      - "6379:6379"
+    command: valkey-server --requirepass ${VALKEY_PASS}
+    networks: 
+      - pronghorn_app_network 
+  web-app-dev:
+    build:
+      context: .
+      dockerfile: development.prongwebapp.containerfile
+    volumes:
+      - ./generator_web_app:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host 0.0.0.0
+    networks: 
+      - pronghorn_app_network
+
+  # Postgres database, uncomment if not using external database host
+  # db:
+  #   container_name: postgres_container
+  #   image: postgres
+  #   restart: always
+  #   environment:
+  #     POSTGRES_USER: root
+  #     POSTGRES_PASSWORD: $(DB_ROOT_PASS)
+  #     POSTGRES_DB: annotation_db
+  #   volumes:
+  #     - $(DB_STORAGE):/var/lib/postgresql/data
+  #   networks:
+  #     - pronghorn_app_network
+  #   ports:
+  #     - "5432:5432"
+  #   user: "999:999"
+
+
+networks: 
+  pronghorn_app_network:
+    driver: bridge
