@@ -1,7 +1,7 @@
 # Database wrapper module for crop_generator
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: June 6, 2025
+# Updated: June 25, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from abc import ABC, abstractmethod

@@ -1,7 +1,7 @@
 // user state management layer
 // Author: Michael B. Lance
 // Created: June 16, 2025
-// Updated: June 16, 2025
+// Updated: June 24, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { authUser, checkAuth } from './apiV1Methods.ts';

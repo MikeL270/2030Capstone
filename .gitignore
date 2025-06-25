@@ -169,3 +169,4 @@ cython_debug/
 # Michael's Dev env
 scratch.txt
 .stfolder
+*.env

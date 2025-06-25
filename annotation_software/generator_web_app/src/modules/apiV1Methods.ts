@@ -1,7 +1,7 @@
 // Methods for interacting with the version 1 of the crop generator API 
 // Author: Michael B. Lance
 // Created: April 20, 2025
-// Updated: June 17, 2025
+// Updated: June 25, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import _ from 'lodash';
@@ -10,6 +10,7 @@ import type { Prediction_intf,  PredictionCrop_intf, CropData, BatchData, Batche
               Crops, Batch, Batches } from '@/types/generatorobjects.ts';
 import { useToast } from 'vue-toastification'
 
+//const api_url: string = 'http://192.168.0.3:8000/api/v1'; //"production"
 const api_url: string = 'http://192.168.0.3:5000/api/v1';
 const uh_oh: string = 'You did something wrong! status:';
 

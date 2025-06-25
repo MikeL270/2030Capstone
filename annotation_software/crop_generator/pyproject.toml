@@ -11,7 +11,7 @@ authors = [
     { name = "Michael Lance", email = "mlance4@uwyo.edu"}
     ]
 dependencies = [
-    "opencv-python>=4.11.0.86",
+    "opencv-python-headless>=4.11.0.86",
     "matplotlib>=3.10.0",
     "numpy>=2.2.2",
     "scikit-learn>=1.6.1",
