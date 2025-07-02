@@ -1,7 +1,7 @@
 # Generate high quality crops of training data with model assisted labeling and Kmeans clustering
 # Authors: Ben Koger, Michael B. Lance
 # Created: November 11, 2024
-# Updated: April 23, 2025
+# Updated: June 27, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -11,8 +11,6 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from ..database import database
-from ..imagebackends import imagebackends
 from typing import Union
 from ..generatorobjects.generatorobjects import Box, HerdUnit, Model, Prediction, PredictionCrop, Image, Crop
 from sklearn.cluster import KMeans
@@ -155,7 +153,6 @@ def auto_crop(image: Image, predictions: list[Prediction], num_clusters: int=1, 
         num_clusters: number of centers for kmeans to determine clusters 
 
     Returns list of crops based on original image
-    TODO: finish implementing boundary checks
     '''
     points = []
     centers = []
@@ -289,28 +286,28 @@ def create_subcrop(image: Image, predictions: list[Prediction], crop_size: int=1
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def generate_crops(image: Image, predictions: list[Prediction], crop_size: int, model_id: int,
-                   base: database.Database) -> dict[Crop, list[Prediction]]:
-    ''' Present the user with cropped images and their predictions for validation '''
+# def generate_crops(image: Image, predictions: list[Prediction], crop_size: int, model_id: int,
+#                    base: database.Database) -> dict[Crop, list[Prediction]]:
+#     ''' Present the user with cropped images and their predictions for validation '''
 
-    crops = auto_crop(image=image, predictions=predictions, crop_size=crop_size)  
-    query = '''
-        SELECT *
-        FROM Crops
-        WHERE ModelID != ? AND ImageId = ?
-    '''
-    #TODO: Move IOU check to own function that takes both 
-    """
-    existing_crops = base.query(query, (model_id, image.id))
+#     crops = auto_crop(image=image, predictions=predictions, crop_size=crop_size)  
+#     query = '''
+#         SELECT *
+#         FROM Crops
+#         WHERE ModelID != ? AND ImageId = ?
+#     '''
+#     #TODO: Move IOU check to own function that takes both 
+#     """
+#     existing_crops = base.query(query, (model_id, image.id))
 
-    # Perform Iou check to prevent duplicate data
-    for crop in crops.keys():
-        for ecrop in existing_crops:
-            if crop.calc_iou(Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
-                print('duplicate crop')
-                crops.pop(crop, None)
-    """
-    return crops
+#     # Perform Iou check to prevent duplicate data
+#     for crop in crops.keys():
+#         for ecrop in existing_crops:
+#             if crop.calc_iou(Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
+#                 print('duplicate crop')
+#                 crops.pop(crop, None)
+#     """
+#     return crops
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

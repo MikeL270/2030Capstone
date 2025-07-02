@@ -3,7 +3,7 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: June 24, 2025
+# Updated: June 27, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -16,9 +16,8 @@ import os
 import io
 from cropgenerator import auto_crop, create_subcrop, save_crop
 from cropgenerator.generatorobjects import CgOBJ, CropgenJSONPRovider, Prediction, Box
-import cropgenerator.database as db
+import database as db
 import json
-from functools import wraps
 from datetime import datetime
 from uuid import uuid4
 
@@ -40,8 +39,8 @@ suffix = len('_crop_xx')
 
 root = os.environ.get('ROOT')
 herd_unit = os.environ.get('HERD_UNIT')
-#save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
-#os.makedirs(save_folder, exist_ok=True) # type: ignore
+save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
+os.makedirs(save_folder, exist_ok=True) # type: ignore
 use_s3 = True
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -170,7 +169,9 @@ class User(UserMixin, CgOBJ):
         }
 
 @login_manager.user_loader
-def load_user(user_id):
+def load_user(user_id_in_session):
+    db_id = int(user_id_in_session)
+    
     return User.get(user_id)
 
 @login_manager.unauthorized_handler

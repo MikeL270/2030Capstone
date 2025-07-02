@@ -1,7 +1,7 @@
-# Class definition for objects used in the crop_generator module
+# Class definition for objects used in the crop_generator module and database
 # Author: Michael B. Lance
 # Created: April 4, 2025
-# Updated: June 17, 2025
+# Updated: July 1, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import numpy as np
@@ -13,14 +13,164 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import io
 import PIL.Image as PillowImage
+from dataclasses import dataclass
+from uuid import UUID
+from flask_login import UserMixin
 
 #---------------------------------------------------------------------------------------------------------------------------#
+# ABC for easy serialization of child classes
 
 class CgOBJ(ABC):
     @abstractmethod
     def serialize(self) -> dict:
         pass
     
+#---------------------------------------------------------------------------------------------------------------------------#
+# Project Management -- For Database use only
+
+@dataclass
+class Project(CgOBJ):
+    ''' Dataclass for representing projects from the databse
+    
+    '''
+    project_id: int
+    name: str
+    created: datetime.date
+    modified: datetime.date
+    uuid: UUID
+
+    def serialize(self) -> dict:
+        return {
+            'name': self.name,
+            'created': self.created,
+            'modified': self.modified,
+            'uuid': self.uuid
+        }
+
+@dataclass
+class Schema(CgOBJ):
+    ''' Dataclass for representing Schemas from the database
+    
+    '''
+    schema_id: int
+    name: str
+    created: datetime.date
+    modified: datetime.date
+    uuid: UUID
+
+    def serialize(self) -> dict:
+        return {
+            'name': self.name,
+            'created': self.created,
+            'modified': self.modified,
+            'uuid': self.uuid
+        }
+    
+@dataclass
+class Label(CgOBJ):
+    ''' Dataclass for representing Labels from the database
+    
+    '''
+    label_id: int
+    schema_id: int
+    label: int
+    name: str
+    image_link: str
+    created: datetime.date
+    modified: datetime.date
+    uuid: UUID
+
+    def serialize(self) -> dict:
+        return {
+            'label': self.label,
+            'name': self.name,
+            'image_link': self.image_link,
+            'created': self.created,
+            'modified': self.modified,
+            'uuid': self.uuid
+        }
+
+@dataclass
+class HerdUnit(CgOBJ):
+    ''' Dataclass for representing Herd Units from the database
+    
+    '''
+    herd_unit_id: int
+    name: str
+    created: datetime.date
+    modified: datetime.date
+    uuid: UUID
+
+    def serialize(self) -> dict:
+        return {
+            'name': self.Name,
+            'created': self.created,
+            'modified': self.modified,
+            'uuid': self.UUID,
+        }
+
+@dataclass
+class Model(CgOBJ):
+    ''' Dataclass for representing Models from the database
+    
+    '''
+    model_id: int
+    name: str
+    created: datetime.date
+    modified: datetime.date
+    uuid: UUID
+
+    def serialize(self) -> dict:
+        return {
+            'name': self.Name,
+            'created': self.created,
+            'modified': self.modified,
+            'uuid' : self.UUID,
+        }
+
+@dataclass
+class Survey(CgOBJ):
+    ''' Dataclass for representing Surveys from the database
+    
+    '''
+    survey_id: int
+    survey_year: int
+    name: str
+    created: datetime.date
+    modified: datetime.date
+    uuid: UUID
+
+    def serialize(self) -> dict:
+        return {
+            'survey_year': self.survey_year,
+            'name': self.name,
+            'created': self.created,
+            'modified': self.modified,
+            'uuid': self.uuid
+        }
+    
+#---------------------------------------------------------------------------------------------------------------------------#
+# User Management -- For Database use only
+
+class User(UserMixin):
+    def __init__(self, user_id: int, username: str, external_auth_id: str, external_auth_provider: str, status: str,
+                 created: datetime.date, updated: datetime.date, locale: str, uuid: UUID, roles: tuple[str] | None = None):
+        self.id = str(user_id)
+        self.Username = username
+        self.ExternalAuthId = external_auth_id
+        self.ExternalAuthProvider = external_auth_provider
+        self.Status = status
+        self.Created = created
+        self.Updated = updated
+        self.Locale = locale
+        self.UUID = UUID
+        self.Roles = roles
+    
+    def get_id(self) -> int:
+        return self.id
+    
+    def has_role(self, role_name: str):
+        return role_name in self.Roles
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Box(CgOBJ):
@@ -73,35 +223,30 @@ class Box(CgOBJ):
             'bottom_right': list(self.bottom_right),
         }
 
-#---------------------------------------------------------------------------------------------------------------------------#
+# class HerdUnit(CgOBJ):
+#     def __init__(self, db_id: int=None, name: str=None, year: str=None):
+#         self.id = db_id
+#         self.name = name
+#         self.survey_year = year
 
-class HerdUnit(CgOBJ):
-    def __init__(self, db_id: int=None, name: str=None, year: str=None):
-        self.id = db_id
-        self.name = name
-        self.survey_year = year
+#     def serialize(self):
+#         return {
+#             'id': self.id,
+#             'name': self.name,
+#             'survey_year': self.survey_year
+#         }
 
-    def serialize(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'survey_year': self.survey_year
-        }
+
+# class Model(CgOBJ):
+#     def __init__(self, db_id: int=None, model_name: str=None):
+#         self.id = db_id
+#         self.name = model_name
     
-#---------------------------------------------------------------------------------------------------------------------------#
-
-class Model(CgOBJ):
-    def __init__(self, db_id: int=None, model_name: str=None):
-        self.id = db_id
-        self.name = model_name
-    
-    def serialize(self):
-        return {
-            'id': self.id,
-            'name': self.name
-        }
-
-#---------------------------------------------------------------------------------------------------------------------------#
+#     def serialize(self):
+#         return {
+#             'id': self.id,
+#             'name': self.name
+#         }
 
 class Image(CgOBJ):
     def __init__(self, db_id: int=None, name: str=None, herd_unit: HerdUnit=None, in_training:bool=False, local_path: str=None):
@@ -153,8 +298,6 @@ class Image(CgOBJ):
             'url': self.url,
         }
 
-#---------------------------------------------------------------------------------------------------------------------------#
-
 class Prediction(CgOBJ):
     def __init__(self, db_id: int=None, dimensions: Box=None, score: float=None, label: int=None, model: Model=None):
         self.id = db_id
@@ -171,8 +314,6 @@ class Prediction(CgOBJ):
             'score': self.score,
             'label': self.label,
         }
-
-#---------------------------------------------------------------------------------------------------------------------------#
 
 class Crop(Image):
     def __init__(self, db_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
@@ -192,8 +333,6 @@ class Crop(Image):
             'url' : self.url,
         }
     
-#---------------------------------------------------------------------------------------------------------------------------#
-
 class PredictionCrop(Crop):
     def __init__(self, pred_crop_id: int=None, image_id: int=None, name: str=None, score: float=None, label: int=None, dimensions: Box=None, 
                  url: str=None):
@@ -215,8 +354,6 @@ class PredictionCrop(Crop):
             'dimensions': self.dimensions.serialize(),
             'approved': self.approved,
         }
-
-
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class CropgenJSONPRovider(DefaultJSONProvider):
