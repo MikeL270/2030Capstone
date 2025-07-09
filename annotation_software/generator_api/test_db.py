@@ -206,7 +206,44 @@ class TestDatabase(unittest.TestCase):
         # attempt to retrieve model to verify deletion
         deleted_model = self.db.get_model(model.model_id)
         self.assertNotIsInstance(deleted_model, gen_objs.Model)
-        
+
+    def test_survey_crud(self):
+        print('testing survey lifecycle...')
+        survey = self.db.create_survey('survey_1')
+
+        self.assertIsInstance(survey, gen_objs.Survey)
+
+        # get survey by id
+        survey_1 = self.db.get_survey(survey.survey_id)
+        self.assertIsInstance(survey_1, gen_objs.Survey)
+
+        # get survey by uuid
+        survey_2 = self.db.get_survey(survey.uuid)
+        self.assertIsInstance(survey_2, gen_objs.Survey)
+
+        # Ensure all 3 surveys are identical
+        self.assertEqual(survey_1, survey_2)
+        self.assertEqual(survey_2, survey)
+
+        # modify the survey -- change name
+
+        self.assertTrue(self.db.update_survey(survey.survey_id, name='survey_1'))
+
+        new_name_survey = self.db.get_survey(survey.survey_id)
+
+        self.assertEqual(new_name_survey.name, 'survey_1')
+
+        self.assertTrue(self.db.update_survey(survey.uuid,name = 'survey_2'))
+        new_name_survey_2 = self.db.get_survey(survey.uuid)
+        self.assertEqual(new_name_survey_2.name, 'survey_2')
+
+        # delete survey
+        self.assertTrue(self.db.delete_survey(survey))
+
+        # attempt to retrieve survey to verify deletion
+        deleted_survey = self.db.get_survey(survey.survey_id)
+        self.assertNotIsInstance(deleted_survey, gen_objs.Survey)
+
 
 
 
