@@ -6,7 +6,7 @@
 
 import os 
 from uuid import UUID
-from cropgenerator.generatorobjects import Project, Schema, Label, HerdUnit, Model, Survey, User
+from cropgenerator.generatorobjects import Project, Schema, Label, HerdUnit, Model, Survey, User, Role
 import psycopg
 from psycopg_pool import ConnectionPool
 from psycopg.rows import class_row, scalar_row
@@ -746,11 +746,13 @@ class Database:
         survey = cursor.fetchone()
         return survey if isinstance(survey, Survey) else None
     
-    def create_survey(self, survey_year: int, name: str, additional_info: str) -> Survey | None:
+    def create_survey(self, survey_year: int, name: str, additional_info: str | None = None) -> Survey | None:
         ''' Insert a new survey object into the database
 
         Args:
+            survey_year: the year of the survey
             name: the survey name 
+            additional_info: any information that may be important regarding the survey (can be null)
         '''
         return self._create_survey(survey_year=survey_year, name=name, additional_info=additional_info)
 
@@ -783,12 +785,12 @@ class Database:
         Args:
             survey_id: either the survey's internal database id or its universally unique identifier
         '''
-        return self.get_survey(survey_id = survey_id)
+        return self._get_survey(survey_id = survey_id)
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _update_survey(cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID, survey_year: int, name: str, additional_info: str) -> bool:
+    def _update_survey(cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID, survey_year: int | None = None, name: str | None = None, additional_info: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -801,20 +803,20 @@ class Database:
         elif isinstance(survey_id, int):
             cursor.execute('''
                 UPDATE projectmanagement.surveys
-                SET ''' + ', '.join([f"{key} = '{value}" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
                 WHERE survey_id = %s;
             ''', (survey_id,))
         elif isinstance(survey_id, UUID):
             cursor.execute('''
                 UPDATE projectmanagement.surveys
-                SET ''' + ', '.join([f"{key} = '{value}" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
                 WHERE uuid = %s;
             ''', (survey_id,))
         else:
             raise TypeError('survey_id MUST be an integer, UUID or Survey type, survey_year must be an int, name must be a string, and additional info must be a string (or all 3 null)')
         return True if cursor.rowcount > 0 else False
 
-    def update_survey(self, survey_id: Survey | int | UUID, survey_year: int, name: str, additional_info: str):
+    def update_survey(self, survey_id: Survey | int | UUID, survey_year: int | None = None, name: str | None = None, additional_info: str | None = None):
         ''' Augment a survey in the database by providing a modified Survey object or a valid id and a new name, and or survey_year, and or additional_info
         
         Args:
@@ -836,7 +838,7 @@ class Database:
             cursor.execute('''
                 DELETE FROM projectmanagement.surveys
                 WHERE survey_id = %s
-            ''', (survey_id.survey_id))
+            ''', (survey_id.survey_id,))
         elif isinstance(survey_id, int):
             cursor.execute('''
                 DELETE FROM projectmanagement.surveys
@@ -852,7 +854,7 @@ class Database:
         return True if cursor.rowcount > 0 else False
     
     def delete_survey(self, survey_id: Survey | int | UUID) -> bool:
-        ''' Delete a survey_id object from the database
+        ''' Delete a survey object from the database
         
         Args:
              survey_id: either a survey object, a database id, or a universally unique identifier
@@ -962,6 +964,69 @@ class Database:
             external_auth_id: the identifier key provided by an oauth2 provider
             external_auth_provider: The oauth2 provider
         '''
+        return self._update_user(user_id = user_id, username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, status = status, locale = locale)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _delete_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(user_id, User):
+            cursor.execute('''
+                DELETE FROM usermanagement.users
+                WHERE user_id = %s;
+            ''', (int(user_id.id),))
+        elif isinstance(user_id, int):
+            cursor.execute('''
+                DELETE FROM usermanagement.users
+                WHERE user_id = %s;
+            ''', (user_id,))
+        elif isinstance(user_id, UUID):
+            cursor.execute('''
+                DELETE FROM usermanagement.users
+                WHERE uuid = %s;
+            ''', (user_id,))
+        else:
+            raise TypeError('user_id MUST be an integer, UUID or User type')
+        return True if cursor.rowcount > 0 else False
+
+    def delete_user(self, user_id: User | int | UUID) -> bool:
+        ''' Delete a user object from the database
+        
+        Args:
+             user_id: either a user object, a database id, or a universally unique identifier
+        '''
+        return self._delete_user(user_id = user_id)
+        
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _create_role(cursor: psycopg.Cursor[Role], role: str) -> Role | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Role)
+        cursor.execute('''
+            INSERT INTO usermanagement.roles (role)
+            VALUES (%s);
+        ''', (role,))
+        role = cursor.fetchone()
+        return role if isinstance(role, Role) else None
+    
+    def create_role(self, role: str) -> Role | None:
+        ''' Insert a new role object into the database
+
+        Args:
+            role: The human readable role version
+        '''
+        return self._create_role(role = role)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    
+
 
 # class Database(ABC): # Abstract class for all database types
 #     _conn: Any

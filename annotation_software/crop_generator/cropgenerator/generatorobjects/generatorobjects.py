@@ -154,7 +154,7 @@ class Survey(CgOBJ):
 #---------------------------------------------------------------------------------------------------------------------------#
 # User Management -- For Database use only
 
-class User(UserMixin):
+class User(UserMixin, CgOBJ):
     def __init__(self, user_id: int, username: str, external_auth_id: str, external_auth_provider: str, status: str,
                  created: datetime.date, modified: datetime.date, locale: str, uuid: UUID, roles: tuple[str] | None = None):
         self.id = str(user_id) # this is this way to make Flask-Login happy
@@ -173,6 +173,23 @@ class User(UserMixin):
     
     def has_role(self, role_name: str):
         return role_name in self.roles
+    
+@dataclass
+class Role(CgOBJ):
+    role_id: int
+    role: str
+    created: datetime.date
+    modified: datetime.date
+    uuid: UUID
+
+    def serialize(self):
+        return {
+            'role': self.role,
+            'created': self.created,
+            'modified': self.modified,
+            'uuid': self.uuid
+        }
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Box(CgOBJ):

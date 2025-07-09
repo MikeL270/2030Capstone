@@ -227,13 +227,13 @@ class TestDatabase(unittest.TestCase):
 
         # modify the survey -- change name
 
-        self.assertTrue(self.db.update_survey(survey.survey_id, name='survey_1'))
+        self.assertTrue(self.db.update_survey(survey.survey_id, survey_year = 1996, name='survey_1', additional_info='nothing of note'))
 
         new_name_survey = self.db.get_survey(survey.survey_id)
 
         self.assertEqual(new_name_survey.name, 'survey_1')
 
-        self.assertTrue(self.db.update_survey(survey.uuid,name = 'survey_2'))
+        self.assertTrue(self.db.update_survey(survey.uuid,  survey_year = 1996, name='survey_2', additional_info='nothing of note'))
         new_name_survey_2 = self.db.get_survey(survey.uuid)
         self.assertEqual(new_name_survey_2.name, 'survey_2')
 
