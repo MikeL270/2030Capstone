@@ -590,13 +590,13 @@ class Database:
             raise TypeError('herd_unit_id MUST be an integer, UUID or HerdUnit type')
         return True if cursor.rowcount > 0 else False
 
-    def delete_herd_unit(self, herd_unit: HerdUnit | int | UUID) -> bool:
+    def delete_herd_unit(self, herd_unit_id: HerdUnit | int | UUID) -> bool:
         ''' Delete a herd unit object from the database
         
         Args:
              herd_unit_id: either a herd unit object, a database id, or a universally unique identifier
         '''
-        return self._delete_herd_unit(herd_unit = herd_unit)
+        return self._delete_herd_unit(herd_unit_id = herd_unit_id)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
