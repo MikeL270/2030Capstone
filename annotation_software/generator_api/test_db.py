@@ -209,7 +209,7 @@ class TestDatabase(unittest.TestCase):
 
     def test_survey_crud(self):
         print('testing survey lifecycle...')
-        survey = self.db.create_survey('survey_1')
+        survey = self.db.create_survey(2025, 'name', 'additional_info')
 
         self.assertIsInstance(survey, gen_objs.Survey)
 
