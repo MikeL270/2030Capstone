@@ -1,7 +1,7 @@
 # Class definition for objects used in the crop_generator module and database
 # Author: Michael B. Lance
-# Created: April 4, 2025
-# Updated: July 1, 2025
+# created: April 4, 2025
+# updated: July 9, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import numpy as np
@@ -39,7 +39,7 @@ class Project(CgOBJ):
     modified: datetime.date
     uuid: UUID
 
-    def serialize(self) -> dict:
+    def serialize(self):
         return {
             'name': self.name,
             'created': self.created,
@@ -49,7 +49,7 @@ class Project(CgOBJ):
 
 @dataclass
 class Schema(CgOBJ):
-    ''' Dataclass for representing Schemas from the database
+    ''' Dataclass for representing scehmas from the databse
     
     '''
     schema_id: int
@@ -58,17 +58,17 @@ class Schema(CgOBJ):
     modified: datetime.date
     uuid: UUID
 
-    def serialize(self) -> dict:
+    def serialize(self):
         return {
             'name': self.name,
             'created': self.created,
             'modified': self.modified,
             'uuid': self.uuid
         }
-    
+
 @dataclass
 class Label(CgOBJ):
-    ''' Dataclass for representing Labels from the database
+    ''' Dataclass for representing labels from the databse
     
     '''
     label_id: int
@@ -80,7 +80,7 @@ class Label(CgOBJ):
     modified: datetime.date
     uuid: UUID
 
-    def serialize(self) -> dict:
+    def serialize(self):
         return {
             'label': self.label,
             'name': self.name,
@@ -101,12 +101,12 @@ class HerdUnit(CgOBJ):
     modified: datetime.date
     uuid: UUID
 
-    def serialize(self) -> dict:
+    def serialize(self):
         return {
-            'name': self.Name,
+            'name': self.name,
             'created': self.created,
             'modified': self.modified,
-            'uuid': self.UUID,
+            'uuid': self.uuid
         }
 
 @dataclass
@@ -120,14 +120,14 @@ class Model(CgOBJ):
     modified: datetime.date
     uuid: UUID
 
-    def serialize(self) -> dict:
+    def serialize(self):
         return {
-            'name': self.Name,
+            'name': self.name,
             'created': self.created,
             'modified': self.modified,
-            'uuid' : self.UUID,
+            'uuid': self.uuid
         }
-
+    
 @dataclass
 class Survey(CgOBJ):
     ''' Dataclass for representing Surveys from the database
@@ -136,14 +136,16 @@ class Survey(CgOBJ):
     survey_id: int
     survey_year: int
     name: str
+    additional_info: str
     created: datetime.date
     modified: datetime.date
     uuid: UUID
 
-    def serialize(self) -> dict:
+    def serialize(self):
         return {
             'survey_year': self.survey_year,
             'name': self.name,
+            'additional_info': self.additional_info,
             'created': self.created,
             'modified': self.modified,
             'uuid': self.uuid
@@ -154,23 +156,23 @@ class Survey(CgOBJ):
 
 class User(UserMixin):
     def __init__(self, user_id: int, username: str, external_auth_id: str, external_auth_provider: str, status: str,
-                 created: datetime.date, updated: datetime.date, locale: str, uuid: UUID, roles: tuple[str] | None = None):
-        self.id = str(user_id)
-        self.Username = username
-        self.ExternalAuthId = external_auth_id
-        self.ExternalAuthProvider = external_auth_provider
-        self.Status = status
-        self.Created = created
-        self.Updated = updated
-        self.Locale = locale
-        self.UUID = UUID
-        self.Roles = roles
+                 created: datetime.date, modified: datetime.date, locale: str, uuid: UUID, roles: tuple[str] | None = None):
+        self.id = str(user_id) # this is this way to make Flask-Login happy
+        self.username = username
+        self.external_auth_id = external_auth_id
+        self.external_auth_provider = external_auth_provider
+        self.status = status
+        self.created = created
+        self.modified = modified
+        self.locale = locale
+        self.uuid = uuid
+        self.roles = roles
     
     def get_id(self) -> int:
         return self.id
     
     def has_role(self, role_name: str):
-        return role_name in self.Roles
+        return role_name in self.roles
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Box(CgOBJ):

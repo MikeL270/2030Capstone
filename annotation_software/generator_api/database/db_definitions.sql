@@ -400,7 +400,7 @@ INSERT INTO projectmanagement.models (model_id, name) VALUES (0, 'NO_MODEL');
 
 INSERT INTO projectmanagement.schemas (schema_id, name) VALUES (0, 'NO_SCHEMA');
 
-INSERT INTO projectmanagement.labels (label_id, label, name) VALUES (0, -9999, 'NO_label');
+INSERT INTO projectmanagement.labels (label_id, label, name) VALUES (0, -9999, 'NO_LABEL');
 
 INSERT INTO projectmanagement.projects (project_id, name) VALUES (0, 'NO_PROJECT');
 

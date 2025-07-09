@@ -1,12 +1,12 @@
 # Psycopg3 database abstraction layer for crop generator_api
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: July 1, 2025
+# Updated: July 9, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import os 
 from uuid import UUID
-from cropgenerator.generatorobjects import Project, Schema, User
+from cropgenerator.generatorobjects import Project, Schema, Label, HerdUnit, Model, Survey, User
 import psycopg
 from psycopg_pool import ConnectionPool
 from psycopg.rows import class_row, scalar_row
@@ -58,11 +58,12 @@ class Database:
         return wrapper
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    
     @connect
-    def _bootstrap(_cursor: psycopg.cursor) -> bool:
+    def _bootstrap(cursor: psycopg.cursor) -> bool:
             try:
                 with open(os.path.join(os.path.dirname(__file__), 'db_definitions.sql')) as script:
-                    _cursor.execute(script.read())
+                    cursor.execute(script.read())
             except Exception as e: 
                 print(e)
                 return False
@@ -71,11 +72,10 @@ class Database:
 
     def bootstrap(self) -> bool:
         ''' Create tables detailed in sql file
-        
-        Args:
-            _cursor: The database cursor object (handeled by @connect wrapper, do not modify)
+         
         '''
         return self._bootstrap()
+    
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     # Project Management - Projects
@@ -101,28 +101,28 @@ class Database:
         Args:
             name: The name of the project you want to create
         '''
-        
         return self._create_project(name=name)
        
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# 
+
     @connect
-    def _get_project( cursor: psycopg.Cursor[Project], project_id: int | UUID) -> Project | None:
+    def _get_project(cursor: psycopg.Cursor[Project], project_id: int | UUID) -> Project | None:
         ''' Internal helper function, do not call directly
         
         '''
         cursor.row_factory = class_row(Project)
-        if isinstance(project_id, int):
+        if isinstance(project_id, int): 
             cursor.execute('''
                 SELECT * FROM projectmanagement.projects 
-                WHERE project_id = %s
+                WHERE project_id = %s;
             ''', (project_id,))
         elif isinstance(project_id, UUID):
             cursor.execute('''
                 SELECT * FROM projectmanagement.projects
-                WHERE uuid = %s
+                WHERE uuid = %s;
             ''', (project_id,))
         else:
-            raise TypeError("project_id MUST be an integer or a UUID")
+            raise TypeError('project_id MUST be an integer or a UUID')
         project = cursor.fetchone()
         return project if isinstance(project, Project) else None
 
@@ -132,148 +132,718 @@ class Database:
         Args:
             project_id: either the project's internal database id or its universally unique identifier
         '''
-        
         return self._get_project(project_id=project_id)
+    
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _update_project(_cursor: psycopg.Cursor[Project], project: Project | int | UUID, name: str) -> bool:
+    def _update_project(cursor: psycopg.Cursor[Project], project_id: Project | int | UUID, name: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(project, Project):
-            _cursor.execute('''
+        if isinstance(project_id, Project):
+            cursor.execute('''
                 UPDATE projectmanagement.projects
                 SET name = %s, modified = CURRENT_DATE
-                WHERE project_id = %s
-            ''', (name, project.project_id))
-        elif isinstance(project, int):
-            _cursor.execute('''
+                WHERE project_id = %s;
+            ''', (project_id.name, project_id.project_id))
+        elif isinstance(project_id, int) and isinstance(name, str):
+            cursor.execute('''
                 UPDATE projectmanagement.projects
                 SET name =%s, modified = CURRENT_DATE
-                WHERE project_id = %s
-            ''', (name, project))
-        elif isinstance(project, UUID):
-            _cursor.execute('''
+                WHERE project_id = %s;
+            ''', (name, project_id))
+        elif isinstance(project_id, UUID) and isinstance(name, str):
+            cursor.execute('''
                 UPDATE projectmanagement.projects
                 SET name = %s, modified = CURRENT_DATE
-                WHERE uuid = %s
-            ''', (name, project))
+                WHERE uuid = %s;
+            ''', (name, project_id))
         else: 
-            raise TypeError('project must be a project, an integer, or a uuid')
-        return True if _cursor.rowcount > 0 else False
+            raise TypeError('project_id MUST be an integer, UUID or Project type, and name must be a string')
+        return True if cursor.rowcount > 0 else False
 
-    def update_project(self, project: Project | int | UUID, name: str=None) -> bool:
-        ''' Augment a project in the database by providing a modified Project object
+    def update_project(self, project_id: Project | int | UUID, name: str=None) -> bool:
+        ''' Augment a project in the database by providing either a modified Project object or a valid id and a new name
         
         Args:
-            project: either a project object, a database id, or a universally unique identifier 
+            project_id: either a project object, a database id, or a universally unique identifier 
             name: the new name for the project
         '''
-        
-        return self._update_project(project=project, name=name)
+        return self._update_project(project_id=project_id, name=name)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _delete_project(cursor: psycopg.Cursor[Project], project: Project | int | UUID) -> bool:
-        cursor.execute('''
-            DELETE FROM projectmanagement.projects
-            WHERE project_id = %s;
-        ''', (project.project_id,))
-    
+    def _delete_project(cursor: psycopg.Cursor[Project], project_id: Project | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(project_id, Project):
+            cursor.execute('''
+                DELETE FROM projectmanagement.projects
+                WHERE project_id = %s;
+            ''', (project_id.project_id,))
+        elif isinstance(project_id, int):
+            cursor.execute('''
+                DELETE FROM projectmanagement.projects
+                WHERE project_id = %s;
+            ''', (project_id,))
+        elif isinstance(project_id, UUID):
+            cursor.execute('''
+                DELETE FROM projectmanagement.projects
+                WHERE uuid = %s;
+            ''', (project_id,))
+        else: 
+            raise TypeError('project_id MUST be an integer, UUID or Project type')
         return True if cursor.rowcount > 0 else False    
 
-    def delete_project(self, project: Project | int | UUID) -> bool:
+    def delete_project(self, project_id: Project | int | UUID) -> bool:
         ''' Delete a project object from the database
         
         Args:
-             project: either a project object, a database id, or a universally unique identifier 
-             _cursor: The database cursor object (handeled by @connect wrapper, do not modify)
+             project_id: either a project object, a database id, or a universally unique identifier
         '''
-        
-        return self._delete_project(project)
+        return self._delete_project(project_id = project_id)
         
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
-    # ProjectManagement - Schemas
+    # Project Management - Schemas
 
     @connect
-    def create_schema(self, cursor: psycopg.Cursor, name) -> Schema | None:
-        ''' Insert a new schema object into the database
-
-        Args:
-            name: the schema name 
+    def _create_schema(cursor: psycopg.Cursor[Schema], name: str) -> Schema | None:
+        ''' Internal helper function, do not call directly
+        
         '''
         cursor.row_factory = class_row(Schema)
         cursor.execute('''
             INSERT INTO projectmanagement.schemas (name)
             VALUES (%s)
-            RETURNING *
+            RETURNING *;
         ''', (name,))
         schema = cursor.fetchone()
-
         return schema if isinstance(schema, Schema) else None
+
+    def create_schema(self, name: str) -> Schema | None:
+        ''' Insert a new schema object into the database
+
+        Args:
+            name: the schema name 
+        '''
+        return self._create_schema(name=name)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect 
-    def get_schema(self, cursor: psycopg.Cursor, schema_id: int | UUID) -> Schema | None:
+    def _get_schema(cursor: psycopg.Cursor[Schema], schema_id: int | UUID) -> Schema | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Schema)
+        if isinstance(schema_id, int):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.schemas
+                WHERE schema_id = %s;
+            ''', (schema_id,))
+        elif isinstance(schema_id, UUID):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.schemas
+                WHERE uuid = %s;
+            ''', (schema_id,))
+        else:
+            raise TypeError("schema_id MUST be an integer or a UUID")
+        schema = cursor.fetchone()
+        return schema if isinstance(schema, Schema) else None
+
+    def get_schema(self, schema_id: int | UUID):
         ''' Query the database for a schema 
         
         Args:
             schema_id: either the schema's internal database id or its universally unique identifier
         '''
-        cursor.row_factory = class_row(Schema)
-
-        if isinstance(schema_id, int):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.schemas
-                WHERE schema_id = %s
-            ''', (schema_id,))
-        elif isinstance(schema_id, UUID):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.schemas
-                WHERE uuid = %s
-            ''', (schema_id,))
-        else:
-            raise TypeError("schema_id MUST be an integer or a UUID")
-        schema = cursor.fetchone()
-
-        return schema if isinstance(schema, Schema) else None
-
+        return self._get_schema(schema_id=schema_id)
+    
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def update_schema(self, cursor: psycopg.Cursor, schema: Schema) -> bool:
+    def _update_schema(cursor: psycopg.Cursor[Schema], schema_id: Schema | int | UUID, name: str | None = None) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(schema_id, Schema):
+            cursor.execute('''
+                UPDATE projectmanagement.schemas
+                SET name = %s, modified = CURRENT_DATE
+                WHERE schema_id = %s;
+            ''', (schema_id.name, schema_id.schema_id))
+        elif isinstance(schema_id, int) and isinstance(name, str):
+            cursor.execute('''
+                UPDATE projectmanagement.schemas
+                SET name = %s, modified = CURRENT_DATE
+                WHERE schema_id = %s;
+            ''', (name, schema_id))
+        elif isinstance(schema_id, UUID) and isinstance(name, str):
+            cursor.execute('''
+                UPDATE projectmanagement.schemas
+                SET name = %s, modified = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (name, schema_id))
+        else:
+            raise TypeError('schema MUST be an integer, UUID or Schema type, and name must be a string')
+        return True if cursor.rowcount > 0 else False
+
+    def update_schema(self, schema_id: Schema | int | UUID, name: str):
         ''' Augment a schema in the database by providing a modified Project object
         
         Args:
             schema: A schema object
         '''
-        cursor.execute('''
-            UPDATE projectmanagement.schemas
-            SET name = %s, modified = CURRENT_DATE
-            WHERE schema_id = %s
-        ''', (schema.name, schema.schema_id))
-
-        return True if cursor.rowcount > 0 else False
+        return self._update_schema(schema_id=schema_id, name=name)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def delete_schema(self, cursor: psycopg.Cursor, schema: Schema) -> Schema | None:
+    def _delete_schema(cursor: psycopg.Cursor[Schema], schema: Schema | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(schema, Schema):
+            cursor.execute('''
+                DELETE FROM projectmanagement.schemas
+                WHERE schema_id = %s
+            ''', (schema.schema_id,))
+        elif isinstance(schema, int):
+            cursor.execute('''
+                DELETE FROM projectmanagement.schemaas
+                WHERE schema_id = %s;
+            ''', (schema,))
+        elif isinstance(schema, UUID):
+            cursor.execute('''
+                DELETE FROM projectmanagement.schemas
+                WHERE uuid = %s;
+            ''', (schema,))
+        else:
+            raise TypeError('schema MUST be an integer or a UUID')
+        return True if cursor.rowcount > 0 else False
+    
+    def delete_schema(self, schema: Schema | int | UUID):
         ''' Delete a scehma object from the database
         
         Args:
             schema: A schema object
         '''
+        return self._delete_schema(schema=schema)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Project Management - labels
+    @connect 
+    def _create_label(cursor: psycopg.Cursor[Label], name: str, label: int, image_link: str | None = None) -> Label | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Label)
+        cursor.execute('''
+            INSERT INTO projectmanagement.labels (name, label, image_link)
+            VALUES (%s, %s, %s)
+            RETURNING *;
+        ''', (name, label, image_link))
+        label = cursor.fetchone()
+        return label if isinstance(label, Label) else None
+    
+    def create_label(self, name: str, label: int, image_link: str) -> Label | None:
+        ''' Insert a new label object into the database
+
+        Args:
+            name: The name of the label you want to create
+            label: the integer value associated to the class being labeled
+            image_link: optional parameter for the generator to grab an image representing the class
+        '''
+        return self._create_label(name=name, label=label, image_link=image_link)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_label(cursor: psycopg.Cursor[Label], label_id: int | UUID) -> Label | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Label)
+        if isinstance(label_id, int):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.labels
+                WHERE label_id = %s;
+            ''', (label_id,))
+        elif isinstance(label_id, UUID):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.labels
+                WHERE uuid = %s;
+            ''', (label_id,))
+        else: 
+            raise TypeError('label_id must be an integer or a UUID')
+        label = cursor.fetchone()
+        return label if isinstance(label, Label) else None
+    
+    def get_label(self, label_id: int | UUID):
+        ''' Query the database for a label 
+        
+        Args:
+            label_id: either the label's internal database id or its universally unique identifier
+        '''
+        return self._get_label(label_id=label_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _update_label(cursor: psycopg.Cursor[Label], label_id: Label | int | UUID, name: str | None = None, 
+                      label: int | None = None, image_link: str | None = None) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(label_id, Label):
+            cursor.execute('''
+                UPDATE projectmanagement.labels
+                SET name = %s, label = %s, image_link = %s, modified = CURRENT_DATE
+                WHERE schema_id = %s;
+            ''', (label_id.name, label_id.label, label_id.image_link))
+        elif isinstance(label_id, int):
+            cursor.execute('''
+                UPDATE projectmanagement.labels
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['label', 'name', 'image_link']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE label_id = %s;
+            ''', (label_id,))
+        elif isinstance(label_id, UUID):
+            cursor.execute('''
+                UPDATE projectmanagement.labels
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['label', 'name', 'image_link']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (label_id,))
+        else:
+            raise TypeError('label_id MUST be an integer, UUID or Label type, label must be an int, name must be a string, and image_link must be a string (or all 3 null)')
+        return True if cursor.rowcount > 0 else False
+            
+    def update_label(self, label_id: Label | int | UUID, name: str | None = None, 
+                      label: int | None = None, image_link: str | None = None, **kwargs) -> bool:
+        ''' Augment a label in the database by providing a modified Label object or a valid id and a new name, and or label, and or image_link
+        
+        Args:
+            label_id: either a Label object, a database id, or a universally unique identifier 
+            label: the integer value representing the label in models
+            name: the new name for the label
+            image_link: a link to an example image of the object the label represents
+        '''
+        return self._update_label(label_id=label_id, name=name, label=label, image_link=image_link)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _delete_label(cursor: psycopg.Cursor[Label], label_id: Label | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(label_id, Label):
+            cursor.execute('''
+                DELETE FROM projectmanagement.labels
+                WHERE label_id = %s;
+            ''', (label_id.label_id,))
+        elif isinstance(label_id, int):
+            cursor.execute(''' 
+                DELETE FROM projectmanagement.labels
+                WHERE label_id = %s;
+            ''', (label_id,))
+        elif isinstance(label_id, UUID):
+            cursor.execute('''
+                DELETE FROM projectmanagement.labels
+                WHERE uuid = %s;
+            ''', (label_id,))
+        else:
+            raise TypeError('label must be a label, an integer, or a uuid')
+        return True if cursor.rowcount > 0 else False 
+    
+    def delete_label(self, label_id: Label | int | UUID) -> bool:
+        ''' Delete a label object from the database
+        
+        Args:
+             label: either a label object, a database id, or a universally unique identifier 
+        '''
+
+        return self._delete_label(label_id = label_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Project Management - Herd Units
+
+    @connect
+    def _create_herd_unit(cursor: psycopg.Cursor[HerdUnit], name: str) -> HerdUnit | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(HerdUnit)
+        cursor.execute('''
+            INSERT INTO projectmanagement.herd_units (name)
+            VALUES (%s)
+            RETURNING *;
+        ''', (name,))
+        herd_unit = cursor.fetchone()
+        return herd_unit if isinstance(herd_unit, HerdUnit) else None
+    
+    def create_herd_unit(self, name: str):
+        ''' Insert a new herd unit object into the database
+
+        Args:
+            name: the herd unit name 
+        '''
+        return self._create_herd_unit(name=name)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit_id: int | UUID) -> HerdUnit | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(HerdUnit)
+        if isinstance(herd_unit_id, int):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.herd_units
+                WHERE herd_unit_id = %s;
+            ''', (herd_unit_id,))
+        elif isinstance(herd_unit_id, UUID):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.herd_units
+                WHERE uuid = %s;
+            ''', (herd_unit_id,))
+        else:
+            raise TypeError('herd_unit_id MUST be an integer or a UUID')
+        herd_unit = cursor.fetchone()
+        return herd_unit if isinstance(herd_unit, HerdUnit) else None
+    
+    def get_herd_unit(self, herd_unit_id: int | UUID) -> HerdUnit | None:
+         ''' Query the database for a herd unit 
+        
+        Args:
+            herd_unit_id: either the herd unit's internal database id or its universally unique identifier
+        '''
+         return self._get_herd_unit(herd_unit_id=herd_unit_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _update_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit_id: HerdUnit | int | UUID, name: str | None = None) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(herd_unit_id, HerdUnit):
+            cursor.execute('''
+                UPDATE projectmanagement.herd_units
+                SET name = %s, updated = CURRENT_DATE
+                WHERE herd_unit_id = %s;
+            ''', (herd_unit_id.name, herd_unit_id.herd_unit_id))
+        elif isinstance(herd_unit_id, int):
+            cursor.execute('''
+                UPDATE projectmanagement.herd_units
+                SET name = %s, updated = CURRENT_DATE
+                WHERE herd_unit_id = %s;
+            ''', (name, herd_unit_id))
+        elif isinstance(herd_unit_id, UUID):
+            cursor.execute('''
+                UPDATE projectmanagement.herd_units
+                SET name = %s, updated = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (name, herd_unit_id))
+        else:
+            raise TypeError('herd_unit MUST be an integer, UUID or Herd_Unit type, and name must be a string')
+        return True if cursor.rowcount > 0 else False
+
+    def update_herd_unit(self, herd_unit_id: HerdUnit | int | UUID) -> bool:
+        ''' Augment a herd unit in the database by providing a modified HerdUnit object or a valid id and a new name
+        
+        Args:
+            herd_unit_id: either a HerdUnit object, a database id, or a universally unique identifier 
+            name: the new name for the herd unit
+        '''
+        return self._update_herd_unit(herd_unit = herd_unit_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _delete_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit: HerdUnit | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(herd_unit, HerdUnit):
+            cursor.execute('''
+                DELETE FROM projectmanagment.herd_units
+                WHERE herd_unit_id = %s;
+            ''', (herd_unit.herd_unit_id))
+        elif isinstance(herd_unit, int):
+            cursor.execute('''
+                DELETE FROM projectmanagement.herd_units
+                WHERE herd_unit_id = %s;
+            ''', (herd_unit,))
+        elif isinstance(herd_unit, UUID):
+            cursor.execute('''
+                DELETE FROM projectmanagement.herd_units
+                WHERE uuid = %s;
+            ''', (herd_unit,))
+        else:
+            raise TypeError('herd_unit MUST be an integer, UUID or Herd_Unit type')
+        return True if cursor.rowcount > 0 else False
+
+    def delete_project(self, herd_unit: HerdUnit | int | UUID) -> bool:
+        ''' Delete a herd unit object from the database
+        
+        Args:
+             herd_unit: either a herd unit object, a database id, or a universally unique identifier
+        '''
+        return self._delete_herd_unit(herd_unit = herd_unit)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Project Management - Models
+    
+    @connect
+    def _create_model(cursor: psycopg.Cursor[Model], name: str) -> Model | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory=class_row(Model)
+        cursor.execute('''
+            INSERT into projectmanagement.models (name)
+            VALUES (%s)
+            RETURNING *;
+        ''', (name,))
+        model = cursor.fetchone()
+        return model if isinstance(model, Model) else None
+
+    def create_model(self, name: str) -> Model | None:
+        ''' Insert a new model object into the database
+
+        Args:
+            name: the model name 
+        '''
+        return self._create_model(name = name)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _get_model(cursor: psycopg.Cursor[Model], model_id: int | UUID) -> Model | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(model_id)
+        if isinstance(model_id, int):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.models
+                WHERE model_id = %s;
+            ''', (model_id,))
+        elif isinstance(model_id, UUID):
+            cursor.execute('''
+                SELECT * FROM projectmanagemnet.models
+                WHERE uuid = %s
+            ''', (model_id,))
+        else: 
+            raise TypeError('model_id MUST be an integer or a UUID')
+        model = cursor.fetchone()
+        return model if isinstance(model, Model) else None
+    
+    def get_model(self, model_id: int | UUID):
+        ''' Query the database for a model
+        
+        Args:
+            model_id: either the models's internal database id or its universally unique identifier
+        '''
+        return self._get_model(model_id = model_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _update_model(cursor: psycopg.Cursor[Model], model_id: Model | int | UUID, name: str | None = None) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Model)
+        if isinstance(model_id, Model):
+            cursor.execute('''
+                UPDATE projectmanagement.models
+                SET name = %s, updated = CURRENT_DATE
+                WHERE herd_unit_id = %s;
+            ''', (model_id.name, model_id.model_id))
+        elif isinstance(model_id, int):
+            cursor.execute('''
+                UPDATE projectmanagement.models
+                SET name = %s, updated = CURRENT_DATE
+                WHERE herd_unit_id = %s;
+            ''', (name, model_id))
+        elif isinstance(model_id, UUID):
+            cursor.execute('''
+                UPDATE projectmanagement.models
+                SET name = %s, updated = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (name, model_id))
+        else:
+            raise TypeError('model MUST be an integer, UUID or Model type, and name must be a string')
+        return True if cursor.rowcount > 0 else False
+    
+    def update_model(self, model_id: Model | int | UUID, name: str | None = None) -> bool:
+        ''' Augment a model in the database by providing a modified Model object or a valid id and a new name
+        
+        Args:
+            model: either a Model object, a database id, or a universally unique identifier 
+            name: the new name for the model
+        '''
+        return self._update_model(model_id = model_id, name = name)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Project Management - Surveys
+
+    @connect
+    def _create_survey(cursor: psycopg.Cursor[Survey], survey_year: int, name: str, additional_info: int) -> Survey | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Survey)
+        cursor.execute('''
+            INSERT into projectmanagement.surveys (survey_year, name, additional_info)
+            VALUES (%s, %s, %s)
+            RETURNING *;
+        ''', (survey_year, name, additional_info))
+        survey = cursor.fetchone()
+        return survey if isinstance(survey, Survey) else None
+    
+    def create_survey(self, survey_year: int, name: str, additional_info: str) -> Survey | None:
+        ''' Insert a new survey object into the database
+
+        Args:
+            name: the survey name 
+        '''
+        return self._create_survey(survey_year=survey_year, name=name, additional_info=additional_info)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_survey(cursor: psycopg.Cursor[Survey], survey_id: int | UUID) -> Survey | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Survey)
+        if isinstance(survey_id, int):
+            cursor.execute('''
+                SELECT * from projectmanagement.surveys 
+                WHERE survey_id = %s;
+            ''', (survey_id,))
+        elif isinstance(survey_id, UUID):
+            cursor.execute('''
+                SELECT * FROM projectmanagement.surveys
+                WHERE uuid = %s;
+            ''', (survey_id,))
+        else:
+            raise TypeError('survey_id MUST be an integer or a UUID')
+        survey = cursor.fetchone()
+        return survey if isinstance(survey, Survey) else None
+
+    def get_survey(self, survey_id: int | UUID) -> Survey | None:
+        ''' Query the database for a survey
+        
+        Args:
+            survey_id: either the survey's internal database id or its universally unique identifier
+        '''
+        return self.get_survey(survey_id = survey_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _update_survey(cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID, survey_year: int, name: str, additional_info: str) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(survey_id, Survey):
+            cursor.execute('''
+                UPDATE projectmanagement.surveys
+                SET survey_year = %s, name = %s, additional_info = %s
+                WHERE survey_id = %s;
+            ''', (survey_year, name, additional_info, survey_id.survey_id))
+        elif isinstance(survey_id, int):
+            cursor.execute('''
+                UPDATE projectmanagement.surveys
+                SET ''' + ', '.join([f"{key} = '{value}" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE survey_id = %s;
+            ''', (survey_id,))
+        elif isinstance(survey_id, UUID):
+            cursor.execute('''
+                UPDATE projectmanagement.surveys
+                SET ''' + ', '.join([f"{key} = '{value}" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (survey_id,))
+        else:
+            raise TypeError('survey_id MUST be an integer, UUID or Survey type, survey_year must be an int, name must be a string, and additional info must be a string (or all 3 null)')
+        return True if cursor.rowcount > 0 else False
+
+    def update_survey(self, survey_id: Survey | int | UUID, survey_year: int, name: str, additional_info: str):
+        ''' Augment a survey in the database by providing a modified Survey object or a valid id and a new name, and or survey_year, and or additional_info
+        
+        Args:
+            survey_id: either a Survey object, a database id, or a universally unique identifier 
+            survey_year: the integer value representing the survey in models
+            name: the new name for the survey
+            additional_info: a link to an additional info regarding the survey
+        '''
+        return self._update_survey(survey_id = survey_id, survey_year = survey_year, name = name, additional_info = additional_info)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _delete_survey(cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(survey_id, Survey):
+            cursor.execute('''
+                DELETE FROM projectmanagement.surveys
+                WHERE survey_id = %s
+            ''', (survey_id.survey_id))
+        elif isinstance(survey_id, int):
+            cursor.execute('''
+                DELETE FROM projectmanagement.surveys
+                WHERTE survey_id = %s
+            ''', (survey_id,))
+        elif isinstance(survey_id, UUID):
+            cursor.execute('''
+                DELETE FROM projectmanagement.surveys
+                WHERE uuid = %s
+            ''', (survey_id,))
+        else:
+            raise TypeError('survey_id MUST be an integer, UUID or Survey type')
+        return True if cursor.rowcount > 0 else False
+    
+    def delete_survey(self, survey_id: Survey | int | UUID) -> bool:
+        ''' Delete a survey_id object from the database
+        
+        Args:
+             survey_id: either a survey object, a database id, or a universally unique identifier
+        '''
+        return self._delete_survey(survey_id = survey_id)
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     # User Management
 
     @connect
-    def create_user(self, cursor: psycopg.Cursor, username: str, external_auth_id: str, external_auth_provider, locale: str):
+    def _create_user(cursor: psycopg.Cursor[User], username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
+        ''' Internal helper function, do not call directly
+        
+        '''  
+        cursor.row_factory = class_row(User)
+        cursor.execute('''
+            INSERT INTO usermanagement.users (username, external_auth_id, external_auth_provider, locale)
+            VALUES (%s, %s, %s, %s)
+            RETURNING *;
+        ''', (username, external_auth_id, external_auth_provider, locale))
+        user = cursor.fetchone()
+        return user if isinstance(user, User) else None
+    
+    def create_user(self, username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
         ''' Insert a new user object into the database
         
         Args:
@@ -282,20 +852,15 @@ class Database:
             external_auth_provider: name of the identity service provider
             locale: the user's locale (ex: en_us)
         '''
-        cursor.execute('''
-            INSERT INTO "usermanagement"."Users" ("Username", "ExternalAuthId", "ExternalAuthProvider", "Locale")
-            VALUES (%s, %s, %s, %s);
-        ''', (username, external_auth_id, external_auth_provider, locale))
+        self._create_user(username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, locale = locale)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def get_user(self, cursor: psycopg.Cursor, user_id: int| UUID) -> User | None:
-        ''' Query the database for a user
+    def _get_user(cursor: psycopg.Cursor[User], user_id: int | UUID) -> User | None:
+        ''' Internal helper function, do not call directly
         
-        Args:
-            user_id: The user's unique database id 
-        '''
+        '''  
         cursor.row_factory = class_row(User)
         cursor.execute('''
             SELECT "UserId", "Username", "ExternalAuthId", "ExternalAuthProvider", "Status", "Created", "Updated", "Locale", "UUID"
@@ -307,12 +872,62 @@ class Database:
         roles = cursor.execute('''
             SELECT "Role"
             FROM "usermanagement"."Roles" 
-            JOIN "usermanagement"."UserRoles" On "Roles"."RoleId" = "UserRoles"."RoleId"               
+            JOIN "usermanagement"."UserRoles" On "Roles"."RoleId" = "UserRoles"."RoleId";              
         ''')
         roles = cursor.fetchall()
         user.Roles = roles
         return user if isinstance(user, User) else None
 
+    def get_user(self, user_id: int | UUID) -> User | None:
+        ''' Query the database for a user
+        
+        Args:
+            user_id: The user's unique database id 
+        '''
+        return self._get_user(user_id = user_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _update_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID, username: str | None = None, 
+                     external_auth_id: str | None = None, external_auth_provider: str | None = None,
+                     status: str | None = None, locale: str | None = None) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(user_id, User):
+            cursor.execute('''
+                UPDATE usermanagement.users
+                SET username = %s, external_auth_id = %s, external_auth_provider = %s, status = %s, locale = %s
+                WHERE user_id = %s;
+            ''', (user_id.username, user_id.external_auth_id, user_id.external_auth_provider, user_id.status, user_id.locale, user_id.user_id))
+        elif isinstance(user_id, int):
+            cursor.execute('''
+                UPDATE usermanagement.users
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE user_id = %s;
+            ''', (user_id,))
+        elif isinstance(user_id, UUID):
+            cursor.execute('''
+                UPDATE usermanagement.users
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (user_id,))
+        else:
+            raise TypeError('user_id MUST be an integer, UUID or User type, username, external_auth_id, external_auth_provider, status, locale must all be either string or none')
+        return True if cursor.rowcount > 0 else False
+    
+    def update_user(self, user_id: User | int | UUID, username: str | None = None, 
+                     external_auth_id: str | None = None, external_auth_provider: str | None = None,
+                     status: str | None = None, locale: str | None = None) -> bool:
+        ''' Augment a user in the database by providing a modified User object or a valid id and a new username, and or external_auth_id, and or external_auth_provider, and or status, and or locale
+        
+        Args:
+            user_id: either a User object, a database id, or a universally unique identifier 
+            username: the user's human readable name
+            external_auth_id: the identifier key provided by an oauth2 provider
+            external_auth_provider: The oauth2 provider
+        '''
 
 # class Database(ABC): # Abstract class for all database types
 #     _conn: Any
