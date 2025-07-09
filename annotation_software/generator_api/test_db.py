@@ -58,7 +58,7 @@ class TestDatabase(unittest.TestCase):
 
         # delete project
         self.assertTrue(self.db.delete_project(project))
-
+    
         # attempt to retrive project to verify deletion
         deleted_project = self.db.get_project(project.project_id)
         self.assertNotIsInstance(deleted_project, gen_objs.Project)

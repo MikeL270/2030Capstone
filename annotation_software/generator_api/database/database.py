@@ -590,7 +590,7 @@ class Database:
             raise TypeError('herd_unit MUST be an integer, UUID or Herd_Unit type')
         return True if cursor.rowcount > 0 else False
 
-    def delete_project(self, herd_unit: HerdUnit | int | UUID) -> bool:
+    def delete_herd_unit(self, herd_unit: HerdUnit | int | UUID) -> bool:
         ''' Delete a herd unit object from the database
         
         Args:
