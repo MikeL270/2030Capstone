@@ -157,7 +157,7 @@ class TestDatabase(unittest.TestCase):
 
         # attempt to retrieve herd unit to verify deletion
         deleted_herd_unit = self.db.get_herd_unit(herd_unit.herd_unit_id)
-        self.assertNotIsInstance(deleted_herd_unit, gen_objs.herd_unit)
+        self.assertNotIsInstance(deleted_herd_unit, gen_objs.HerdUnit)
 
     def test_model_crud(self):
         print('testing model lifecycle...')
@@ -181,13 +181,13 @@ class TestDatabase(unittest.TestCase):
 
         self.assertTrue(self.db.update_model(model.model_id, name='model_1'))
 
-        new_name_model = self.db.get_model(model.model.id)
+        new_name_model = self.db.get_model(model.model_id)
 
         self.assertEqual(new_name_model.name, 'model_1')
 
-        self.assertTrue(self.db.update_label(model.uuid,name = 'model_2'))
-        new_name_label_2 = self.db.get_label(model.uuid)
-        self.assertEqual(new_name_label_2.name, 'model_2')
+        self.assertTrue(self.db.update_model(model.uuid,name = 'model_2'))
+        new_name_model_2 = self.db.get_model(model.uuid)
+        self.assertEqual(new_name_model_2.name, 'model_2')
 
         # delete model
         self.assertTrue(self.db.delete_model(model))

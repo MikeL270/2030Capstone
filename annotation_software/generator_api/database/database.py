@@ -536,65 +536,65 @@ class Database:
         if isinstance(herd_unit_id, HerdUnit):
             cursor.execute('''
                 UPDATE projectmanagement.herd_units
-                SET name = %s, updated = CURRENT_DATE
+                SET name = %s, modified = CURRENT_DATE
                 WHERE herd_unit_id = %s;
             ''', (herd_unit_id.name, herd_unit_id.herd_unit_id))
         elif isinstance(herd_unit_id, int):
             cursor.execute('''
                 UPDATE projectmanagement.herd_units
-                SET name = %s, updated = CURRENT_DATE
+                SET name = %s, modified = CURRENT_DATE
                 WHERE herd_unit_id = %s;
             ''', (name, herd_unit_id))
         elif isinstance(herd_unit_id, UUID):
             cursor.execute('''
                 UPDATE projectmanagement.herd_units
-                SET name = %s, updated = CURRENT_DATE
+                SET name = %s, modified = CURRENT_DATE
                 WHERE uuid = %s;
             ''', (name, herd_unit_id))
         else:
             raise TypeError('herd_unit MUST be an integer, UUID or Herd_Unit type, and name must be a string')
         return True if cursor.rowcount > 0 else False
 
-    def update_herd_unit(self, herd_unit_id: HerdUnit | int | UUID) -> bool:
+    def update_herd_unit(self, herd_unit_id: HerdUnit | int | UUID, name: str | None = None) -> bool:
         ''' Augment a herd unit in the database by providing a modified HerdUnit object or a valid id and a new name
         
         Args:
             herd_unit_id: either a HerdUnit object, a database id, or a universally unique identifier 
             name: the new name for the herd unit
         '''
-        return self._update_herd_unit(herd_unit = herd_unit_id)
+        return self._update_herd_unit(herd_unit_id = herd_unit_id, name=name)
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit: HerdUnit | int | UUID) -> bool:
+    def _delete_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit_id: HerdUnit | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(herd_unit, HerdUnit):
-            cursor.execute('''
-                DELETE FROM projectmanagment.herd_units
-                WHERE herd_unit_id = %s;
-            ''', (herd_unit.herd_unit_id))
-        elif isinstance(herd_unit, int):
+        if isinstance(herd_unit_id, HerdUnit):
             cursor.execute('''
                 DELETE FROM projectmanagement.herd_units
                 WHERE herd_unit_id = %s;
-            ''', (herd_unit,))
-        elif isinstance(herd_unit, UUID):
+            ''', (herd_unit_id.herd_unit_id,))
+        elif isinstance(herd_unit_id, int):
+            cursor.execute('''
+                DELETE FROM projectmanagement.herd_units
+                WHERE herd_unit_id = %s;
+            ''', (herd_unit_id,))
+        elif isinstance(herd_unit_id, UUID):
             cursor.execute('''
                 DELETE FROM projectmanagement.herd_units
                 WHERE uuid = %s;
-            ''', (herd_unit,))
+            ''', (herd_unit_id,))
         else:
-            raise TypeError('herd_unit MUST be an integer, UUID or Herd_Unit type')
+            raise TypeError('herd_unit_id MUST be an integer, UUID or HerdUnit type')
         return True if cursor.rowcount > 0 else False
 
     def delete_herd_unit(self, herd_unit: HerdUnit | int | UUID) -> bool:
         ''' Delete a herd unit object from the database
         
         Args:
-             herd_unit: either a herd unit object, a database id, or a universally unique identifier
+             herd_unit_id: either a herd unit object, a database id, or a universally unique identifier
         '''
         return self._delete_herd_unit(herd_unit = herd_unit)
 
@@ -631,7 +631,7 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        cursor.row_factory = class_row(model_id)
+        cursor.row_factory = class_row(Model)
         if isinstance(model_id, int):
             cursor.execute('''
                 SELECT * FROM projectmanagement.models
@@ -639,7 +639,7 @@ class Database:
             ''', (model_id,))
         elif isinstance(model_id, UUID):
             cursor.execute('''
-                SELECT * FROM projectmanagemnet.models
+                SELECT * FROM projectmanagement.models
                 WHERE uuid = %s
             ''', (model_id,))
         else: 
@@ -666,19 +666,19 @@ class Database:
         if isinstance(model_id, Model):
             cursor.execute('''
                 UPDATE projectmanagement.models
-                SET name = %s, updated = CURRENT_DATE
-                WHERE herd_unit_id = %s;
+                SET name = %s, modified = CURRENT_DATE
+                WHERE model_id = %s;
             ''', (model_id.name, model_id.model_id))
         elif isinstance(model_id, int):
             cursor.execute('''
                 UPDATE projectmanagement.models
-                SET name = %s, updated = CURRENT_DATE
-                WHERE herd_unit_id = %s;
+                SET name = %s, modified = CURRENT_DATE
+                WHERE model_id = %s;
             ''', (name, model_id))
         elif isinstance(model_id, UUID):
             cursor.execute('''
                 UPDATE projectmanagement.models
-                SET name = %s, updated = CURRENT_DATE
+                SET name = %s, modified = CURRENT_DATE
                 WHERE uuid = %s;
             ''', (name, model_id))
         else:
@@ -693,13 +693,47 @@ class Database:
             name: the new name for the model
         '''
         return self._update_model(model_id = model_id, name = name)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _delete_model(cursor: psycopg.Cursor[Model], model_id: Model | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(model_id, Model):
+            cursor.execute('''
+                DELETE FROM projectmanagement.models
+                WHERE model_id = %s;
+            ''', (model_id.model_id,))
+        elif isinstance(model_id, int):
+            cursor.execute('''
+                DELETE FROM projectmanagement.models
+                WHERE model_id = %s;
+            ''', (model_id,))
+        elif isinstance(model_id, UUID):
+            cursor.execute('''
+                DELETE FROM projectmanagement.models
+                WHERE uuid = %s
+            ''', (model_id))
+        else: 
+            raise TypeError('model_id MUST be an integer, UUID or Model type')
+        return True if cursor.rowcount > 0 else False
+
+    def delete_model(self, model_id: Model | int | UUID) -> bool:
+        ''' Delete a model object from the database
+        
+        Args:
+             model_id: either a model object, a database id, or a universally unique identifier
+        '''
+        return self._delete_model(model_id = model_id)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     # Project Management - Surveys
 
     @connect
-    def _create_survey(cursor: psycopg.Cursor[Survey], survey_year: int, name: str, additional_info: int) -> Survey | None:
+    def _create_survey(cursor: psycopg.Cursor[Survey], survey_year: int, name: str, additional_info: str) -> Survey | None:
         ''' Internal helper function, do not call directly
         
         '''
