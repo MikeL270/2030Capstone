@@ -156,7 +156,7 @@ class Survey(CgOBJ):
 
 class User(UserMixin, CgOBJ):
     def __init__(self, user_id: int, username: str, external_auth_id: str, external_auth_provider: str, status: str,
-                 created: datetime.date, modified: datetime.date, locale: str, uuid: UUID, roles: tuple[str] | None = None):
+                 created: datetime.date, modified: datetime.date, last_login: datetime,  locale: str, uuid: UUID, roles: tuple[str] | None = None):
         self.id = str(user_id) # this is this way to make Flask-Login happy
         self.username = username
         self.external_auth_id = external_auth_id
@@ -164,6 +164,7 @@ class User(UserMixin, CgOBJ):
         self.status = status
         self.created = created
         self.modified = modified
+        self.last_login = last_login
         self.locale = locale
         self.uuid = uuid
         self.roles = roles
@@ -173,6 +174,18 @@ class User(UserMixin, CgOBJ):
     
     def has_role(self, role_name: str):
         return role_name in self.roles
+
+    def serialize(self):
+        return {
+            'username': self.username,
+            'status': self.status,
+            'created': self.created,
+            'modified': self.modified,
+            'last_login': self.last_login,
+            'locale': self.locale,
+            'uuid': self.uuid,
+            'roles': self.roles
+        }
     
 @dataclass
 class Role(CgOBJ):
@@ -189,6 +202,25 @@ class Role(CgOBJ):
             'modified': self.modified,
             'uuid': self.uuid
         }
+    
+@dataclass
+class Organization(CgOBJ):
+    organization_id: int
+    name: str
+    created: datetime.date
+    modified: datetime.date
+    logo_url: str | None
+    uuid: UUID
+
+    def serialize(self):
+        return {
+            'name': self.name,
+            'created': self.created,
+            'modified': self.modified,
+            'logo_url': self.logo_url,
+            'uuid': self.uuid
+        }
+
 
 #---------------------------------------------------------------------------------------------------------------------------#
 

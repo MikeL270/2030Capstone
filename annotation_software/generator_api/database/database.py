@@ -6,7 +6,7 @@
 
 import os 
 from uuid import UUID
-from cropgenerator.generatorobjects import Project, Schema, Label, HerdUnit, Model, Survey, User, Role
+from cropgenerator.generatorobjects import Project, Schema, Label, HerdUnit, Model, Survey, User, Role, Organization
 import psycopg
 from psycopg_pool import ConnectionPool
 from psycopg.rows import class_row, scalar_row
@@ -77,10 +77,292 @@ class Database:
         return self._bootstrap()
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Project Management - Organizations
+    @connect
+    def _create_organization(cursor: psycopg.Cursor[Organization], name: str, logo_url: str | None = None) -> Organization | None:
+        ''' Internal helper function, do not call directly
+        
+        ''' 
+        cursor.row_factory = class_row(Organization)
+        cursor.execute('''
+            INSERT INTO usermanagement.organizations (name, logo_url)
+            VALUES (%s, %s)
+            RETURNING *;
+        ''', (name, logo_url))
+        org = cursor.fetchone()
+        return org if isinstance(org, Organization) else None
+    
+    def create_organizaztion(self, name: str, logo_url: str | None = None) -> Organization | None:
+        return self._create_organization(name = name, logo_url = logo_url)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_organization(cursor: psycopg.Cursor[Organization], organization_id: int | UUID) -> Organization | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Organization)
+        if isinstance(organization_id, Organization):
+            cursor.execute('''
+                SELECT * 
+                FROM usermanagement.organizations
+                WHERE organization_id = %s;
+            ''', (organization_id.organization_id,))
+        elif isinstance(organization_id, int):
+            cursor.execute('''
+                SELECT * 
+                FROM usermanagement.organizations
+                WHERE organization_id = %s;
+            ''', (organization_id,))
+        elif isinstance(organization_id, UUID):
+            cursor.execute('''
+                SELECT *
+                FROM usermanagement.organizations
+                WHERE uuid = %s
+            ''', (organization_id,))
+        else:
+            raise TypeError('organization_id MUST be an integer or a UUID')
+        org = cursor.fetchone()
+        return org if isinstance(org, Organization) else None
+    
+    def get_organization(self, organization_id: int | UUID) -> Organization | None:
+        return self._get_organization(organization_id = organization_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _update_organization(cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID,
+                             name: str | None = None, logo_url: str | None = None) -> bool:
+        if isinstance(organization_id, Organization):
+            cursor.execute('''
+                UPDATE usermanagement.organizations
+                SET name = %s, logo_url = %s, modified = CURRENT_DATE
+                WHERE organization_id = %s
+            ''', (organization_id.name, organization_id.logo_url, organization_id.organization_id))
+        elif isinstance(organization_id, int):
+            cursor.execute('''
+                UPDATE usermanagement.organizations
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['name', 'logo_url']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE organization_id = %s;
+            ''', (organization_id,))
+        elif isinstance(organization_id, UUID):
+            cursor.execute('''
+                UPDATE usermanagement.organizations
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['name', 'logo_url']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (organization_id,))
+        else:
+            raise TypeError('organization_id MUST be an integer, UUID or Organization type')
+        return True if cursor.rowcount > 0 else False
+    
+    def update_organization(self,  organization_id: Organization | int | UUID,
+                             name: str | None = None, logo_url: str | None = None) -> bool:
+        return self._update_organization(organization_id = organization_id, name = name, logo_url = logo_url)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _delete_organization(cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID) -> bool:
+        if isinstance(organization_id, Organization):
+            cursor.execute('''
+                DELETE FROM usermanagement.organizations
+                WHERE organization_id = %s
+            ''', (organization_id.organization_id,))
+        elif isinstance(organization_id, int):
+            cursor.execute('''
+                DELETE FROM usermanagement.organizations
+                WHERE organization_id = %s
+            ''', (organization_id,))
+        elif isinstance(organization_id, UUID):
+            cursor.execute('''
+                DELETE FROM usermanagement.organizations
+                WHERE uuid = %s
+            ''', (organization_id,))
+        else:
+            raise TypeError('organization_id MUST be an integer, UUID or User type')
+        return True if cursor.rowcount > 0 else False
+    
+    def delete_organization(self, organization_id: Organization | int | UUID) -> bool:
+        return self._delete_organization(organization_id = organization_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Project Management - Roles
+    @connect
+    def _create_role(cursor: psycopg.Cursor[Role], role: str) -> Role | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Role)
+        cursor.execute('''
+            INSERT INTO usermanagement.roles (role)
+            VALUES (%s);
+        ''', (role,))
+        role = cursor.fetchone()
+        return role if isinstance(role, Role) else None
+    
+    def create_role(self, role: str) -> Role | None:
+        ''' Insert a new role object into the database
+
+        Args:
+            role: The human readable role version
+        '''
+        return self._create_role(role = role)
+        
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # User Management - Users
+
+    @connect
+    def _create_user(cursor: psycopg.Cursor[User], username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
+        ''' Internal helper function, do not call directly
+        
+        '''  
+        cursor.row_factory = class_row(User)
+        cursor.execute('''
+            INSERT INTO usermanagement.users (username, external_auth_id, external_auth_provider, locale)
+            VALUES (%s, %s, %s, %s)
+            RETURNING *;
+        ''', (username, external_auth_id, external_auth_provider, locale))
+        user = cursor.fetchone()
+        return user if isinstance(user, User) else None
+    
+    def create_user(self, username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
+        ''' Insert a new user object into the database
+        
+        Args:
+            username: the human readable identifier
+            external_auth_id: unique key used to verify the user with an identity provider
+            external_auth_provider: name of the identity service provider
+            locale: the user's locale (ex: en_us)
+        '''
+        return self._create_user(username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, locale = locale)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_user(cursor: psycopg.Cursor[User], user_id: int | UUID) -> User | None:
+        ''' Internal helper function, do not call directly
+        
+        '''  
+        cursor.row_factory = class_row(User)
+        cursor.execute('''
+            SELECT *
+            FROM usermanagement.users
+            WHERE user_id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        if isinstance(user, User):
+            cursor.row_factory = scalar_row # cannot be role objects here, as Flask_Login expects a list of strings
+            roles = cursor.execute('''
+                SELECT role
+                FROM usermanagement.roles"
+                JOIN usermanagement.users_roles On roles.role_id = user_roles.role_id
+                WHERE user_roles.user_id = %s             
+            ''', (int(user.id))) 
+            roles = cursor.fetchall()
+            user.Roles = roles
+            return user
+        else:
+            return None
+        
+    def get_user(self, user_id: int | UUID) -> User | None:
+        ''' Query the database for a user
+        
+        Args:
+            user_id: The user's unique database id 
+        '''
+        return self._get_user(user_id = user_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _update_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID, username: str | None = None, 
+                     external_auth_id: str | None = None, external_auth_provider: str | None = None,
+                     status: str | None = None, locale: str | None = None) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(user_id, User):
+            cursor.execute('''
+                UPDATE usermanagement.users
+                SET username = %s, external_auth_id = %s, external_auth_provider = %s, status = %s, locale = %s
+                WHERE user_id = %s;
+            ''', (user_id.username, user_id.external_auth_id, user_id.external_auth_provider, user_id.status, user_id.locale, user_id.user_id))
+        elif isinstance(user_id, int):
+            cursor.execute('''
+                UPDATE usermanagement.users
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE user_id = %s;
+            ''', (user_id,))
+        elif isinstance(user_id, UUID):
+            cursor.execute('''
+                UPDATE usermanagement.users
+                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
+                WHERE uuid = %s;
+            ''', (user_id,))
+        else:
+            raise TypeError('user_id MUST be an integer, UUID or User type, username, external_auth_id, external_auth_provider, status, locale must all be either string or none')
+        return True if cursor.rowcount > 0 else False
+    
+    def update_user(self, user_id: User | int | UUID, username: str | None = None, 
+                     external_auth_id: str | None = None, external_auth_provider: str | None = None,
+                     status: str | None = None, locale: str | None = None) -> bool:
+        ''' Augment a user in the database by providing a modified User object or a valid id and a new username, and or external_auth_id, and or external_auth_provider, and or status, and or locale
+        
+        Args:
+            user_id: either a User object, a database id, or a universally unique identifier 
+            username: the user's human readable name
+            external_auth_id: the identifier key provided by an oauth2 provider
+            external_auth_provider: The oauth2 provider
+        '''
+        return self._update_user(user_id = user_id, username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, status = status, locale = locale)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _delete_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        if isinstance(user_id, User):
+            cursor.execute('''
+                DELETE FROM usermanagement.users
+                WHERE user_id = %s;
+            ''', (int(user_id.id),))
+        elif isinstance(user_id, int):
+            cursor.execute('''
+                DELETE FROM usermanagement.users
+                WHERE user_id = %s;
+            ''', (user_id,))
+        elif isinstance(user_id, UUID):
+            cursor.execute('''
+                DELETE FROM usermanagement.users
+                WHERE uuid = %s;
+            ''', (user_id,))
+        else:
+            raise TypeError('user_id MUST be an integer, UUID or User type')
+        return True if cursor.rowcount > 0 else False
+
+    def delete_user(self, user_id: User | int | UUID) -> bool:
+        ''' Delete a user object from the database
+        
+        Args:
+             user_id: either a user object, a database id, or a universally unique identifier
+        '''
+        return self._delete_user(user_id = user_id)
+        
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     # Project Management - Projects
     @connect
-    def _create_project(cursor: psycopg.Cursor[Project], name: str) -> Project | None:
+    def _create_project(cursor: psycopg.Cursor[Project], user: User, name: str) -> Project | None:
         ''' Internal helper function, do not call directly
         
         '''   
@@ -93,15 +375,22 @@ class Database:
     
         project = cursor.fetchone()
 
-        return project if isinstance(project, Project) else None
+        if isinstance(project, Project):
+            cursor.execute('''
+                INSERT INTO projectmanagement.projects_users (project_id, user_id)
+                VALUES (%s, %s); 
+            ''', (project.project_id, int(user.id)))
+            return project 
+        else:
+            return None
     
-    def create_project(self, name:str) -> Project | None:
+    def create_project(self, user: User, name:str) -> Project | None:
         ''' Insert a new project object into the database
 
         Args:
             name: The name of the project you want to create
         '''
-        return self._create_project(name=name)
+        return self._create_project(user = user, name = name)
        
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# 
 
@@ -860,172 +1149,6 @@ class Database:
              survey_id: either a survey object, a database id, or a universally unique identifier
         '''
         return self._delete_survey(survey_id = survey_id)
-
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-    # User Management
-
-    @connect
-    def _create_user(cursor: psycopg.Cursor[User], username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
-        ''' Internal helper function, do not call directly
-        
-        '''  
-        cursor.row_factory = class_row(User)
-        cursor.execute('''
-            INSERT INTO usermanagement.users (username, external_auth_id, external_auth_provider, locale)
-            VALUES (%s, %s, %s, %s)
-            RETURNING *;
-        ''', (username, external_auth_id, external_auth_provider, locale))
-        user = cursor.fetchone()
-        return user if isinstance(user, User) else None
-    
-    def create_user(self, username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
-        ''' Insert a new user object into the database
-        
-        Args:
-            username: the human readable identifier
-            external_auth_id: unique key used to verify the user with an identity provider
-            external_auth_provider: name of the identity service provider
-            locale: the user's locale (ex: en_us)
-        '''
-        self._create_user(username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, locale = locale)
-
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-    @connect
-    def _get_user(cursor: psycopg.Cursor[User], user_id: int | UUID) -> User | None:
-        ''' Internal helper function, do not call directly
-        
-        '''  
-        cursor.row_factory = class_row(User)
-        cursor.execute('''
-            SELECT "UserId", "Username", "ExternalAuthId", "ExternalAuthProvider", "Status", "Created", "Updated", "Locale", "UUID"
-            FROM "usermanagement"."Users" 
-            WHERE "UserId" = %s
-        ''', (user_id,))
-        user = cursor.fetchone()
-        cursor.row_factory = scalar_row
-        roles = cursor.execute('''
-            SELECT "Role"
-            FROM "usermanagement"."Roles" 
-            JOIN "usermanagement"."UserRoles" On "Roles"."RoleId" = "UserRoles"."RoleId";              
-        ''')
-        roles = cursor.fetchall()
-        user.Roles = roles
-        return user if isinstance(user, User) else None
-
-    def get_user(self, user_id: int | UUID) -> User | None:
-        ''' Query the database for a user
-        
-        Args:
-            user_id: The user's unique database id 
-        '''
-        return self._get_user(user_id = user_id)
-    
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-    @connect 
-    def _update_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID, username: str | None = None, 
-                     external_auth_id: str | None = None, external_auth_provider: str | None = None,
-                     status: str | None = None, locale: str | None = None) -> bool:
-        ''' Internal helper function, do not call directly
-        
-        '''
-        if isinstance(user_id, User):
-            cursor.execute('''
-                UPDATE usermanagement.users
-                SET username = %s, external_auth_id = %s, external_auth_provider = %s, status = %s, locale = %s
-                WHERE user_id = %s;
-            ''', (user_id.username, user_id.external_auth_id, user_id.external_auth_provider, user_id.status, user_id.locale, user_id.user_id))
-        elif isinstance(user_id, int):
-            cursor.execute('''
-                UPDATE usermanagement.users
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE user_id = %s;
-            ''', (user_id,))
-        elif isinstance(user_id, UUID):
-            cursor.execute('''
-                UPDATE usermanagement.users
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (user_id,))
-        else:
-            raise TypeError('user_id MUST be an integer, UUID or User type, username, external_auth_id, external_auth_provider, status, locale must all be either string or none')
-        return True if cursor.rowcount > 0 else False
-    
-    def update_user(self, user_id: User | int | UUID, username: str | None = None, 
-                     external_auth_id: str | None = None, external_auth_provider: str | None = None,
-                     status: str | None = None, locale: str | None = None) -> bool:
-        ''' Augment a user in the database by providing a modified User object or a valid id and a new username, and or external_auth_id, and or external_auth_provider, and or status, and or locale
-        
-        Args:
-            user_id: either a User object, a database id, or a universally unique identifier 
-            username: the user's human readable name
-            external_auth_id: the identifier key provided by an oauth2 provider
-            external_auth_provider: The oauth2 provider
-        '''
-        return self._update_user(user_id = user_id, username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, status = status, locale = locale)
-    
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-    @connect
-    def _delete_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID) -> bool:
-        ''' Internal helper function, do not call directly
-        
-        '''
-        if isinstance(user_id, User):
-            cursor.execute('''
-                DELETE FROM usermanagement.users
-                WHERE user_id = %s;
-            ''', (int(user_id.id),))
-        elif isinstance(user_id, int):
-            cursor.execute('''
-                DELETE FROM usermanagement.users
-                WHERE user_id = %s;
-            ''', (user_id,))
-        elif isinstance(user_id, UUID):
-            cursor.execute('''
-                DELETE FROM usermanagement.users
-                WHERE uuid = %s;
-            ''', (user_id,))
-        else:
-            raise TypeError('user_id MUST be an integer, UUID or User type')
-        return True if cursor.rowcount > 0 else False
-
-    def delete_user(self, user_id: User | int | UUID) -> bool:
-        ''' Delete a user object from the database
-        
-        Args:
-             user_id: either a user object, a database id, or a universally unique identifier
-        '''
-        return self._delete_user(user_id = user_id)
-        
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-    @connect
-    def _create_role(cursor: psycopg.Cursor[Role], role: str) -> Role | None:
-        ''' Internal helper function, do not call directly
-        
-        '''
-        cursor.row_factory = class_row(Role)
-        cursor.execute('''
-            INSERT INTO usermanagement.roles (role)
-            VALUES (%s);
-        ''', (role,))
-        role = cursor.fetchone()
-        return role if isinstance(role, Role) else None
-    
-    def create_role(self, role: str) -> Role | None:
-        ''' Insert a new role object into the database
-
-        Args:
-            role: The human readable role version
-        '''
-        return self._create_role(role = role)
-    
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-    
 
 
 # class Database(ABC): # Abstract class for all database types

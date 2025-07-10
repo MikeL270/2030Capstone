@@ -98,7 +98,7 @@ CREATE TABLE usermanagement.users (
   user_id serial PRIMARY KEY,
   username varchar(20) NOT NULL,
   external_auth_id varchar(255),
-  external_auith_provider varchar(50),
+  external_auth_provider varchar(50),
   status varchar(20) NOT NULL DEFAULT 'active',
   created date NOT NULL DEFAULT CURRENT_DATE,
   modified date NOT NULL DEFAULT CURRENT_DATE,
