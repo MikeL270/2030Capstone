@@ -43,7 +43,7 @@ herd_unit = os.environ.get('HERD_UNIT')
 #save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
 #os.makedirs(save_folder, exist_ok=True) # type: ignore
 use_s3 = True
-
+ 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Flask Instantiation
 
@@ -56,9 +56,9 @@ app.config['SESSION_COOKIE_SECURE'] = False
 CORS(app, resources={
     r'/api/*': {
         'origins': [
-            'http://192.168.0.3:5173', # Development
-            #'http://192.168.0.3:6900', # Production
-            'http://localhost:5173',
+            'http://testing.lancecomputer.com:5173', # Development
+            'https://pronghorn-census.arcc.uwyo.edu', # Production
+            'http://testing.lancecomputer.com:6900'
         ],
         'supports_credentials': True     
     }

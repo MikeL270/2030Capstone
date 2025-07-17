@@ -43,6 +43,8 @@ export default defineComponent({
             this.loading = true;
             const responseData = await createBatch(batch_params);
             const batch_id = Object.keys(responseData)[0];
+            if (Object.keys(this.batches).length > 2) this.delete_batch(+Object.keys(this.batches)[0]); 
+            console.log(Object.keys(this.batches).length);
             this.batches[+batch_id] = Object.values(responseData)[0] as Batch;
             this.image_ids = Object.values(this.batches[+batch_id])
         },
@@ -53,6 +55,7 @@ export default defineComponent({
             this.loading = false;
         },
         async delete_batch(batch_id: number) {
+            console.log('deleteing batch');
             await deleteBatch(batch_id);
             delete this.batches[batch_id];
         },

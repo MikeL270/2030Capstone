@@ -16,5 +16,9 @@ export default defineConfig({
   },
   build: {
     target: 'esnext'
+  },
+  server: {
+    allowedHosts: ["testing.lancecomputer.com",]
+    
   }
 })
