@@ -169,10 +169,10 @@ class User(UserMixin, CgOBJ):
         self.uuid = uuid
         self.roles = roles
     
-    def get_id(self) -> int:
+    def get_id(self) -> str:
         return self.id
     
-    def has_role(self, role_name: str):
+    def has_role(self, role_name: str) -> bool:
         return role_name in self.roles
 
     def serialize(self):

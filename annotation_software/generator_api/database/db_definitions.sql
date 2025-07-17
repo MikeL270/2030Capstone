@@ -109,7 +109,7 @@ CREATE TABLE usermanagement.users (
 
 CREATE TABLE usermanagement.roles (
   role_id serial PRIMARY KEY,
-  role varchar(25) NOT NULL,
+  role varchar(25) UNIQUE NOT NULL,
   created date NOT NULL DEFAULT CURRENT_DATE,
   modified date NOT NULL DEFAULT CURRENT_DATE,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
@@ -117,8 +117,8 @@ CREATE TABLE usermanagement.roles (
 
 CREATE TABLE usermanagement.organizations (
   organization_id serial PRIMARY KEY,
-  name varchar(50),
-  logo_url varchar(200),
+  name varchar(50) UNIQUE NOT NULL,
+  logo_url varchar(1000),
   created date NOT NULL DEFAULT CURRENT_DATE,
   modified date NOT NULL DEFAULT CURRENT_DATE,
   uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid()
@@ -163,7 +163,7 @@ CREATE TABLE projectmanagement.labels (
   schema_id integer NOT NULL DEFAULT 0,
   label smallint NOT NULL,
   name varchar(50) NOT NULL,
-  image_link varchar(200),
+  image_link varchar(1000),
   created date NOT NULL DEFAULT CURRENT_DATE,
   modified date NOT NULL DEFAULT CURRENT_DATE,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
@@ -279,6 +279,12 @@ CREATE INDEX ON usermanagement.roles (created);
 
 CREATE INDEX ON usermanagement.roles (uuid);
 
+CREATE INDEX ON usermanagement.organizations (name);
+
+CREATE INDEX ON usermanagement.organizations (uuid);
+
+CREATE INDEX ON usermanagement.organizations (created);
+
 CREATE INDEX ON projectmanagement.projects (name);
 
 CREATE INDEX ON projectmanagement.projects (created);
@@ -357,9 +363,9 @@ ALTER TABLE usermanagement.organizations_projects ADD FOREIGN KEY (project_id) R
 
 ALTER TABLE usermanagement.organizations_projects ADD FOREIGN KEY (organization_id) REFERENCES usermanagement.organizations (organization_id);
 
-ALTER TABLE usermanagement.organizations_users ADD FOREIGN KEY (user_id) REFERENCES usermanagement.users (user_id);
+ALTER TABLE usermanagement.organizations_users ADD FOREIGN KEY (user_id) REFERENCES usermanagement.users (user_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE usermanagement.organizations_users ADD FOREIGN KEY (organization_id) REFERENCES usermanagement.organizations (organization_id);
+ALTER TABLE usermanagement.organizations_users ADD FOREIGN KEY (organization_id) REFERENCES usermanagement.organizations (organization_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE projectmanagement.projects_users ADD FOREIGN KEY (user_id) REFERENCES usermanagement.users (user_id) ON DELETE CASCADE ON UPDATE CASCADE;
 

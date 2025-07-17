@@ -1,13 +1,14 @@
 # Psycopg3 database abstraction layer for crop generator_api
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: July 9, 2025
+# Updated: July 17, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import os 
 from uuid import UUID
 from cropgenerator.generatorobjects import Project, Schema, Label, HerdUnit, Model, Survey, User, Role, Organization
 import psycopg
+import psycopg.sql as sql
 from psycopg_pool import ConnectionPool
 from psycopg.rows import class_row, scalar_row
 from functools import wraps
@@ -49,18 +50,13 @@ class Database:
                 self.create_pool()
             with self._pool.connection() as conn:
                 with conn.cursor() as cursor:    
-                    try:
-                        response = fn(cursor, *args, **kwargs)
-                        return response
-                    except Exception as e:
-                        print(f'Psycopg had an uhoh: {e}')
-                        self.close_pool()
+                    return fn(self, cursor, *args, **kwargs)
         return wrapper
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _bootstrap(cursor: psycopg.cursor) -> bool:
+    def _bootstrap(self, cursor: psycopg.cursor) -> bool:
             try:
                 with open(os.path.join(os.path.dirname(__file__), 'db_definitions.sql')) as script:
                     cursor.execute(script.read())
@@ -80,126 +76,150 @@ class Database:
 
     # Project Management - Organizations
     @connect
-    def _create_organization(cursor: psycopg.Cursor[Organization], name: str, logo_url: str | None = None) -> Organization | None:
+    def _create_organization(self, cursor: psycopg.Cursor[Organization], name: str, logo_url: str | None = None) -> Organization | None:
         ''' Internal helper function, do not call directly
         
         ''' 
         cursor.row_factory = class_row(Organization)
-        cursor.execute('''
-            INSERT INTO usermanagement.organizations (name, logo_url)
-            VALUES (%s, %s)
-            RETURNING *;
-        ''', (name, logo_url))
-        org = cursor.fetchone()
+        try:
+            cursor.execute(sql.SQL('''
+                INSERT INTO usermanagement.organizations (name, logo_url) VALUES (%s, %s) RETURNING *;
+            '''), (name, logo_url))
+            org = cursor.fetchone()
+        except psycopg.errors.UniqueViolation as e:
+            return False
+         
         return org if isinstance(org, Organization) else None
     
     def create_organizaztion(self, name: str, logo_url: str | None = None) -> Organization | None:
+       
         return self._create_organization(name = name, logo_url = logo_url)
+        
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_organization(cursor: psycopg.Cursor[Organization], organization_id: int | UUID) -> Organization | None:
+    def _get_organization(self, cursor: psycopg.Cursor[Organization], organization_ids: int | str | UUID | list[int | str | UUID]) -> Organization | None:
         ''' Internal helper function, do not call directly
         
         '''
         cursor.row_factory = class_row(Organization)
-        if isinstance(organization_id, Organization):
-            cursor.execute('''
-                SELECT * 
-                FROM usermanagement.organizations
-                WHERE organization_id = %s;
-            ''', (organization_id.organization_id,))
-        elif isinstance(organization_id, int):
-            cursor.execute('''
-                SELECT * 
-                FROM usermanagement.organizations
-                WHERE organization_id = %s;
-            ''', (organization_id,))
-        elif isinstance(organization_id, UUID):
-            cursor.execute('''
-                SELECT *
-                FROM usermanagement.organizations
-                WHERE uuid = %s
-            ''', (organization_id,))
-        else:
-            raise TypeError('organization_id MUST be an integer or a UUID')
-        org = cursor.fetchone()
-        return org if isinstance(org, Organization) else None
+        query = sql.SQL('SELECT * FROM usermanagement.organizations WHERE {id_field} = %s')
+        match organization_ids:
+            case list() if all(isinstance(org_id, int) for org_id in organization_ids):
+                cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), organization_ids)
+            case list() if all(isinstance(org_id, UUID) for org_id in organization_ids):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), organization_ids)
+            case list() if all(isinstance(org_id, str) for org_id in organization_ids):
+                cursor.executemany(query.format(id_field = sql.Identifier('name')), organization_ids)
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('organization_id')), (organization_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (organization_ids,))
+            case str():
+                cursor.execute(query.format(id_field = sql.Identifier('name')), (organization_ids))
+            case _:
+                raise TypeError('organization_id must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
+        organizations = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
+        return organizations if isinstance(organizations, list) and all(isinstance(org, Organization) for org in organizations) else organizations if isinstance(organizations, Organization) else None
     
-    def get_organization(self, organization_id: int | UUID) -> Organization | None:
-        return self._get_organization(organization_id = organization_id)
+    def get_organization(self, organization_ids: int | UUID) -> Organization | None:
+        ''' Request an organization, or organizations object(S) from the database
+
+        Args:
+            organization_ids: an integer, uuid, or role name, or a list consisting entirely of one of those 3 types
+        '''
+        return self._get_organization(organization_ids = organization_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _update_organization(cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID,
+    def _update_organization(self, cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID,
                              name: str | None = None, logo_url: str | None = None) -> bool:
-        if isinstance(organization_id, Organization):
-            cursor.execute('''
-                UPDATE usermanagement.organizations
-                SET name = %s, logo_url = %s, modified = CURRENT_DATE
-                WHERE organization_id = %s
-            ''', (organization_id.name, organization_id.logo_url, organization_id.organization_id))
-        elif isinstance(organization_id, int):
-            cursor.execute('''
-                UPDATE usermanagement.organizations
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['name', 'logo_url']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE organization_id = %s;
-            ''', (organization_id,))
-        elif isinstance(organization_id, UUID):
-            cursor.execute('''
-                UPDATE usermanagement.organizations
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['name', 'logo_url']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (organization_id,))
-        else:
-            raise TypeError('organization_id MUST be an integer, UUID or Organization type')
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL(''' UPDATE usermanagement.organizations SET {augmented_field}, modified = CURRENT_DATE
+                            WHERE {id_field} = %s; ''')
+        kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['name', 'logo_url']) and value is not None])
+        match organization_id:
+            case Organization():
+                cursor.execute(query.format(
+                    augmented_field = sql.SQL(f"name = '{organization_id.name}', logo_url = '{organization_id.logo_url}'"),
+                    id_field = sql.Identifier('organization_id')
+                ), (organization_id.organization_id,))
+            case int():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('organization_id')
+                ), (organization_id,))
+            case UUID():
+                cursor.execute(query.format(
+                    kw_augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('uuid')
+                ), (organization_id,))
+            case _:
+                raise TypeError('organization_id must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
         return True if cursor.rowcount > 0 else False
     
     def update_organization(self,  organization_id: Organization | int | UUID,
                              name: str | None = None, logo_url: str | None = None) -> bool:
+        ''' Augment an organization in the database by providing either a modified Organization object or a valid id and a new name and or a new logo_url
+        
+        Args:
+            organization_id: either an Organization object, a database id, or a universally unique identifier 
+            name: the new name for the organization
+            logo_url: a url for the organization's logo image
+        '''
         return self._update_organization(organization_id = organization_id, name = name, logo_url = logo_url)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
-    def _delete_organization(cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID) -> bool:
-        if isinstance(organization_id, Organization):
-            cursor.execute('''
-                DELETE FROM usermanagement.organizations
-                WHERE organization_id = %s
-            ''', (organization_id.organization_id,))
-        elif isinstance(organization_id, int):
-            cursor.execute('''
-                DELETE FROM usermanagement.organizations
-                WHERE organization_id = %s
-            ''', (organization_id,))
-        elif isinstance(organization_id, UUID):
-            cursor.execute('''
-                DELETE FROM usermanagement.organizations
-                WHERE uuid = %s
-            ''', (organization_id,))
-        else:
-            raise TypeError('organization_id MUST be an integer, UUID or User type')
+    def _delete_organization(self, cursor: psycopg.Cursor[Organization], organization_ids: Organization | int | UUID | str | list[int | UUID | str]) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL(' DELETE FROM usermanagement.organizations WHERE {id_field} = %s ')
+        match organization_ids:
+            case list() if isinstance(organization_ids[0], Organization):
+                cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [org.organization_id for org in organization_ids])
+            case list() if isinstance(organization_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), organization_ids)
+            case list() if isinstance(organization_ids[0], UUID):
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), organization_ids)
+            case list() if isinstance(organization_ids[0], str):
+                cursor.executemany(query.format(id_field = sql.Identifier(' name ')), organization_ids)
+            case Organization():
+                cursor.execute(query.format(id_field = sql.Identifier('organization_id')), (organization_ids.organization_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('organization_id')), (organization_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (organization_ids,))
+            case str():
+                cursor.execute(query.format(id_field = sql.Identifier('name')), (organization_ids))
+            case _:
+                raise TypeError('organization_id must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
         return True if cursor.rowcount > 0 else False
-    
-    def delete_organization(self, organization_id: Organization | int | UUID) -> bool:
-        return self._delete_organization(organization_id = organization_id)
+       
+    def delete_organization(self, organization_ids: Organization | int | UUID) -> bool:
+        ''' Delete an organization object from the database
+        
+        Args:
+             organization_id: either an Organization object, a database id, or a universally unique identifier
+        '''
+        return self._delete_organization(organization_ids = organization_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     # Project Management - Roles
     @connect
-    def _create_role(cursor: psycopg.Cursor[Role], role: str) -> Role | None:
+    def _create_role(self, cursor: psycopg.Cursor[Role], role: str) -> Role | None:
         ''' Internal helper function, do not call directly
         
         '''
         cursor.row_factory = class_row(Role)
-        cursor.execute('''
-            INSERT INTO usermanagement.roles (role)
-            VALUES (%s);
-        ''', (role,))
+        cursor.execute(sql.SQL(' INSERT INTO usermanagement.roles (role) VALUES (%s) RETURNING *; '), (role,))
         role = cursor.fetchone()
         return role if isinstance(role, Role) else None
     
@@ -213,27 +233,119 @@ class Database:
         
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-    @connect 
+    @connect
+    def _get_role(self, cursor: psycopg.Cursor[Role], role_ids: int | UUID | str | list[int | UUID | str]) -> Role | list[Role] | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Role)
+        query = sql.SQL(' SELECT * FROM usermanagement.roles WHERE {id_field} = %s ')
+        match role_ids:
+            case list() if isinstance(role_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('role_id')), role_ids)
+            case list() if isinstance(role_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), role_ids)
+            case list() if isinstance(role_ids[0], str):
+                cursor.executemany(query.format(id_field = sql.Identifier('name')), role_ids)
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (role_ids,))
+            case str():
+                cursor.execute(query.format(id_field = sql.Identifier('name')), (role_ids,))
+            case _:
+                raise TypeError('role_id must be a Role, int, uuid, string, or a list consisting of ONE of the three')
+        roles = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
+        return roles if isinstance(roles, list) and all(isinstance(role, Role) for role in roles) else roles if isinstance(roles, Role) else None
+
+    def get_role(self, role_ids: int | UUID) -> Role | None:
+        ''' Request a role, or roles object(s) from the database
+
+        Args:
+            role_ids: an integer, uuid, or role name, or a list consisting entirely of one of those 3 types
+        '''
+        return self._get_role(role_ids = role_ids)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    
+    @connect
+    def _update_role(self, cursor: psycopg.Cursor[Role], role_id: Role | int | UUID | str, role: str | None = None) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL(''' UPDATE usermanagement.roles SET role = %s, modified = CURRENT_DATE
+                            WHERE {id_field} = %s; ''')
+        match role_id:
+            case Role():
+                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_id.role, role_id.role_id))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role, role_id))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (role, role_id))
+            case str():
+                cursor.execute(query.format(id_field = sql.Identifier('role')), (role, role_id))
+            case _:
+                raise TypeError('role_id must be a Role, int, uuid, string, or a list consisting of ONE of the three')
+        return True if cursor.rowcount > 0 else False
+    
+    def update_role(self, role_id: Role | int | UUID, role: str | None = None) -> Role:
+        return self._update_role(role_id = role_id, role = role)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _delete_role(self, cursor: psycopg.Cursor[Role], role_ids: Role | int | UUID | str | list[int | UUID | str]) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL(' DELETE FROM usermanagement.roles WHERE {id_field} = %s; ') 
+        match role_ids:
+            case list() if isinstance(role_ids[0], Role):
+                cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [role.role_id for role in role_ids])
+            case list() if isinstance(role_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('role_id')), role_ids)
+            case list() if isinstance(role_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), role_ids)
+            case list() if isinstance(role_ids[0], str):
+                cursor.executemany(query.format(id_field = sql.Identifier('role')), role_ids)
+            case Role():
+                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_ids.role_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (role_ids,))
+            case str():
+                cursor.execute(query.format(id_field = sql.Composable('role')), (role_ids,))
+            case _:
+                raise TypeError('role_id must be a Role, int, uuid, string, or a list consisting of ONE of the three')
+        return True if cursor.rowcount > 0 else False
+    
+    def delete_role(self, role_ids: Role | int | UUID) -> bool:
+        ''' Delete a role object from the database
+        
+        Args:
+             role_id: either a Role object, a database id, or a universally unique identifier
+        
+        '''
+        return self._delete_role(role_ids = role_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     # User Management - Users
 
     @connect
-    def _create_user(cursor: psycopg.Cursor[User], username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
+    def _create_user(self, cursor: psycopg.Cursor[User], username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
         ''' Internal helper function, do not call directly
         
         '''  
         cursor.row_factory = class_row(User)
-        cursor.execute('''
-            INSERT INTO usermanagement.users (username, external_auth_id, external_auth_provider, locale)
-            VALUES (%s, %s, %s, %s)
-            RETURNING *;
-        ''', (username, external_auth_id, external_auth_provider, locale))
-        user = cursor.fetchone()
+        cursor.execute(sql.SQL(''' INSERT INTO usermanagement.users (username, external_auth_id, external_auth_provider, locale)
+                                   VALUES (%s, %s, %s, %s) RETURNING *; '''), (username, external_auth_id, external_auth_provider, locale))
+        user = cursor.fetchone()    
         return user if isinstance(user, User) else None
     
-    def create_user(self, username: str, external_auth_id: str, external_auth_provider, locale: str) -> User | None:
+    def create_user(self, username: str, external_auth_id: str, external_auth_provider, locale: str, 
+                     roles: list[ Role | str | int | UUID] | None = None, organizations: list[Organization | int | UUID] | None = None) -> User | None:
         ''' Insert a new user object into the database
         
         Args:
@@ -241,49 +353,61 @@ class Database:
             external_auth_id: unique key used to verify the user with an identity provider
             external_auth_provider: name of the identity service provider
             locale: the user's locale (ex: en_us)
+            roles: a list of either role objects, names, ids, or uuids
+            organizations: a list of eith organization objects, names, ids, or uuids
         '''
-        return self._create_user(username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, locale = locale)
+        user = self._create_user(username = username, external_auth_id = external_auth_id, external_auth_provider = external_auth_provider, locale = locale)
+        if isinstance(user, User):
+            if roles:
+                self._add_roles_user(user, roles)
+                role_objs = self._get_user_roles(user)
+                user.roles = [role.role for role in role_objs] if role_objs else None
+            if organizations:
+                self._relate_user_organizations(int(user.id), organizations)
+        return user
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_user(cursor: psycopg.Cursor[User], user_id: int | UUID) -> User | None:
+    def _get_user(self, cursor: psycopg.Cursor[User], user_ids: int | UUID | list[int | UUID]) -> User | None:
         ''' Internal helper function, do not call directly
         
         '''  
         cursor.row_factory = class_row(User)
-        cursor.execute('''
-            SELECT *
-            FROM usermanagement.users
-            WHERE user_id = %s
-        ''', (user_id,))
-        user = cursor.fetchone()
-        if isinstance(user, User):
-            cursor.row_factory = scalar_row # cannot be role objects here, as Flask_Login expects a list of strings
-            roles = cursor.execute('''
-                SELECT role
-                FROM usermanagement.roles"
-                JOIN usermanagement.users_roles On roles.role_id = user_roles.role_id
-                WHERE user_roles.user_id = %s             
-            ''', (int(user.id))) 
-            roles = cursor.fetchall()
-            user.Roles = roles
-            return user
-        else:
+        query = sql.SQL("SELECT * FROM usermanagement.users WHERE {id_field} = %s")
+        match user_ids:
+            case list() if all(isinstance(user_id, int) for user_id in user_ids):
+                cursor.executemany(query.format(id_field = sql.Identifier("user_id")), user_ids)
+            case list() if all(isinstance(user_id, UUID) for user_id in user_ids):
+                cursor.executemany(query.format(id_field = sql.Identifier("uuid")), user_ids)
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier("user_id")), (user_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier("uuid")), (user_ids,))
+        try:
+            users = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone() 
+        except psycopg.errors.ProgrammingError as e:
             return None
+        return users if isinstance(users, list) and all(isinstance(user, User) for user in users) else users if isinstance(users, User) else None
         
-    def get_user(self, user_id: int | UUID) -> User | None:
+    def get_user(self, user_ids: int | UUID) -> User | None:
         ''' Query the database for a user
         
         Args:
             user_id: The user's unique database id 
         '''
-        return self._get_user(user_id = user_id)
+        user = self._get_user(user_ids = user_ids)
+        if isinstance(user, User):
+            roles = self._get_user_roles(user)
+            user.roles = [role.role for role in roles] if roles else None
+            return user
+        else:
+            return None
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
-    def _update_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID, username: str | None = None, 
+    def _update_user(self, cursor: psycopg.Cursor[User], user_id: User | int | UUID, username: str | None = None, 
                      external_auth_id: str | None = None, external_auth_provider: str | None = None,
                      status: str | None = None, locale: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
@@ -327,7 +451,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_user(cursor: psycopg.Cursor[User], user_id: User | int | UUID) -> bool:
+    def _delete_user(self, cursor: psycopg.Cursor[User], user_id: User | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -362,7 +486,7 @@ class Database:
     
     # Project Management - Projects
     @connect
-    def _create_project(cursor: psycopg.Cursor[Project], user: User, name: str) -> Project | None:
+    def _create_project(self, cursor: psycopg.Cursor[Project], name: str, users: list[User, int, UUID] | None = None) -> Project | None:
         ''' Internal helper function, do not call directly
         
         '''   
@@ -375,14 +499,8 @@ class Database:
     
         project = cursor.fetchone()
 
-        if isinstance(project, Project):
-            cursor.execute('''
-                INSERT INTO projectmanagement.projects_users (project_id, user_id)
-                VALUES (%s, %s); 
-            ''', (project.project_id, int(user.id)))
-            return project 
-        else:
-            return None
+        if users:
+            cursor.row_factor = class_row(User)
     
     def create_project(self, user: User, name:str) -> Project | None:
         ''' Insert a new project object into the database
@@ -395,7 +513,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# 
 
     @connect
-    def _get_project(cursor: psycopg.Cursor[Project], project_id: int | UUID) -> Project | None:
+    def _get_project(self, cursor: psycopg.Cursor[Project], project_id: int | UUID) -> Project | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -426,7 +544,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _update_project(cursor: psycopg.Cursor[Project], project_id: Project | int | UUID, name: str | None = None) -> bool:
+    def _update_project(self, cursor: psycopg.Cursor[Project], project_id: Project | int | UUID, name: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -464,7 +582,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _delete_project(cursor: psycopg.Cursor[Project], project_id: Project | int | UUID) -> bool:
+    def _delete_project(self, cursor: psycopg.Cursor[Project], project_id: Project | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -500,7 +618,7 @@ class Database:
     # Project Management - Schemas
 
     @connect
-    def _create_schema(cursor: psycopg.Cursor[Schema], name: str) -> Schema | None:
+    def _create_schema(self, cursor: psycopg.Cursor[Schema], name: str) -> Schema | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -524,7 +642,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect 
-    def _get_schema(cursor: psycopg.Cursor[Schema], schema_id: int | UUID) -> Schema | None:
+    def _get_schema(self, cursor: psycopg.Cursor[Schema], schema_id: int | UUID) -> Schema | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -555,7 +673,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _update_schema(cursor: psycopg.Cursor[Schema], schema_id: Schema | int | UUID, name: str | None = None) -> bool:
+    def _update_schema(self, cursor: psycopg.Cursor[Schema], schema_id: Schema | int | UUID, name: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -592,7 +710,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _delete_schema(cursor: psycopg.Cursor[Schema], schema: Schema | int | UUID) -> bool:
+    def _delete_schema(self, cursor: psycopg.Cursor[Schema], schema: Schema | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -627,7 +745,7 @@ class Database:
 
     # Project Management - labels
     @connect 
-    def _create_label(cursor: psycopg.Cursor[Label], name: str, label: int, image_link: str | None = None) -> Label | None:
+    def _create_label(self, cursor: psycopg.Cursor[Label], name: str, label: int, image_link: str | None = None) -> Label | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -653,7 +771,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_label(cursor: psycopg.Cursor[Label], label_id: int | UUID) -> Label | None:
+    def _get_label(self, cursor: psycopg.Cursor[Label], label_id: int | UUID) -> Label | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -684,7 +802,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _update_label(cursor: psycopg.Cursor[Label], label_id: Label | int | UUID, name: str | None = None, 
+    def _update_label(self, cursor: psycopg.Cursor[Label], label_id: Label | int | UUID, name: str | None = None, 
                       label: int | None = None, image_link: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
@@ -726,7 +844,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_label(cursor: psycopg.Cursor[Label], label_id: Label | int | UUID) -> bool:
+    def _delete_label(self, cursor: psycopg.Cursor[Label], label_id: Label | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -763,7 +881,7 @@ class Database:
     # Project Management - Herd Units
 
     @connect
-    def _create_herd_unit(cursor: psycopg.Cursor[HerdUnit], name: str) -> HerdUnit | None:
+    def _create_herd_unit(self, cursor: psycopg.Cursor[HerdUnit], name: str) -> HerdUnit | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -787,7 +905,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit_id: int | UUID) -> HerdUnit | None:
+    def _get_herd_unit(self, cursor: psycopg.Cursor[HerdUnit], herd_unit_id: int | UUID) -> HerdUnit | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -818,7 +936,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
-    def _update_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit_id: HerdUnit | int | UUID, name: str | None = None) -> bool:
+    def _update_herd_unit(self, cursor: psycopg.Cursor[HerdUnit], herd_unit_id: HerdUnit | int | UUID, name: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -856,7 +974,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_herd_unit(cursor: psycopg.Cursor[HerdUnit], herd_unit_id: HerdUnit | int | UUID) -> bool:
+    def _delete_herd_unit(self, cursor: psycopg.Cursor[HerdUnit], herd_unit_id: HerdUnit | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -892,7 +1010,7 @@ class Database:
     # Project Management - Models
     
     @connect
-    def _create_model(cursor: psycopg.Cursor[Model], name: str) -> Model | None:
+    def _create_model(self, cursor: psycopg.Cursor[Model], name: str) -> Model | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -916,7 +1034,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
-    def _get_model(cursor: psycopg.Cursor[Model], model_id: int | UUID) -> Model | None:
+    def _get_model(self, cursor: psycopg.Cursor[Model], model_id: int | UUID) -> Model | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -947,7 +1065,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _update_model(cursor: psycopg.Cursor[Model], model_id: Model | int | UUID, name: str | None = None) -> bool:
+    def _update_model(self, cursor: psycopg.Cursor[Model], model_id: Model | int | UUID, name: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -986,7 +1104,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_model(cursor: psycopg.Cursor[Model], model_id: Model | int | UUID) -> bool:
+    def _delete_model(self, cursor: psycopg.Cursor[Model], model_id: Model | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -1022,7 +1140,7 @@ class Database:
     # Project Management - Surveys
 
     @connect
-    def _create_survey(cursor: psycopg.Cursor[Survey], survey_year: int, name: str, additional_info: str) -> Survey | None:
+    def _create_survey(self, cursor: psycopg.Cursor[Survey], survey_year: int, name: str, additional_info: str) -> Survey | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -1048,7 +1166,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_survey(cursor: psycopg.Cursor[Survey], survey_id: int | UUID) -> Survey | None:
+    def _get_survey(self, cursor: psycopg.Cursor[Survey], survey_id: int | UUID) -> Survey | None:
         ''' Internal helper function, do not call directly
         
         '''
@@ -1079,7 +1197,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _update_survey(cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID, survey_year: int | None = None, name: str | None = None, additional_info: str | None = None) -> bool:
+    def _update_survey(self, cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID, survey_year: int | None = None, name: str | None = None, additional_info: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -1119,7 +1237,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
-    def _delete_survey(cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID) -> bool:
+    def _delete_survey(self, cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -1150,6 +1268,114 @@ class Database:
         '''
         return self._delete_survey(survey_id = survey_id)
 
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Relationship Management - usermanagement - users <-> roles
+
+    @connect
+    def _add_roles_user(self, cursor: psycopg.Cursor, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL('''INSERT INTO usermanagement.users_roles (user_id, role_id) VALUES (%s, %s)''')
+        roles_objs = role_ids if isinstance(role_ids[0], Role) else self._get_role(role_ids)
+        match user_id:
+            case User():
+                cursor.executemany(query, [(int(user_id.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user_id.id), roles_objs.role_id))
+            case int():
+                cursor.executemany(query, [(int(user_id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
+            case UUID():
+                user = self.get_user(user_id)
+                cursor.executemany(query, [(int(user.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user.id), roles_objs.role_id))
+            case _:
+                raise TypeError('user_id must be a User object, int, or uuidm, and role_ids must be a Role object, int, UUID, str, or a list consisting entirely of ONE of the four ')
+        return True if cursor.rowcount > 0 else False
+
+    def add_roles_user(self, user_id: User | int | UUID, role_ids: list[Role | int | UUID ] | Role | int | UUID) -> bool:
+        ''' Associate a user with one or more roles
+        '''
+        return self._relate_user_roles(user_id = user_id, role_ids = role_ids)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_user_roles(self, cursor: psycopg.Cursor[Role], user_id: User| int | UUID) -> list[Role] | Role | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        cursor.row_factory = class_row(Role)
+        query = sql.SQL(''' SELECT roles.role_id, role, created, modified, uuid FROM usermanagement.roles AS roles JOIN usermanagement.users_roles AS users_roles 
+                            ON users_roles.role_id = roles.role_id WHERE users_roles.user_id = %s''')
+        match user_id:
+            case User():
+                cursor.execute(query, (int(user_id.id),))
+            case int():
+                cursor.execute(query, (user_id,))
+            case _:
+                user = self._get_user(user_id)
+                cursor.execute(query, (int(user.id),))
+        roles = cursor.fetchall()
+        return roles if isinstance(roles, list) and all(isinstance(role, Role) for role in roles) else roles[0] if len(roles) == 1 and isinstance(roles[0],Role) else None
+
+    def get_user_roles(self, user_id: User| int | UUID) -> list[Role] | Role | None:
+        ''' Request all roles associated with a user 
+
+        Args:
+            user_id: The user's unique database id 
+        '''
+        return self._get_user_roles(user_id = user_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _remove_roles_user(self, cursor: psycopg.Cursor, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL(' DELETE FROM usermanagement.users_roles WHERE user_id = %s AND role_id = %s; ')
+        roles_objs = role_ids if isinstance(role_ids[0], Role) else self._get_role(role_ids)
+        match user_id:
+            case User():
+                cursor.executemany(query, [(int(user_id.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user_id.id), roles_objs.role_id))
+            case int():
+                cursor.executemany(query, [(user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
+            case UUID():
+                user = self._get_user(user_id)
+                cursor.executemany(query, [(int(user.id), role.id) for role in roles_objs])
+                
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Relationship Management - usermanagement - users <-> organizations
+
+    @connect
+    def _relate_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL("INSERT INTO usermanagement.organizations_users (user_id, organization_id) VALUES (%s, %s)")
+       
+        match orgs:
+            case list() if all(isinstance(org, Organization) for org in orgs):
+                org_objs = orgs
+            case _:
+                org_objs = self.get_organization(orgs)
+        match user_id:
+            case User():
+                cursor.executemany(query, [(int(user_id.id), org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (int(user_id.id), org_objs.organization_id))
+            case int():
+                cursor.executemany(query, [(user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id, org_objs.organization_id))
+            case UUID():
+                user = self.get_user(user_id)
+                cursor.executemany(query, [(int(user_id.id), org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (int(user.id), org_objs.organization_id))
+        return True if cursor.rowcount > 0 else False
+    
+    def relate_user_organizations(self,  user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
+        '''
+        
+        '''
+        return self._relate_user_organizations(user_id = user_id, orgs = orgs)
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 # class Database(ABC): # Abstract class for all database types
 #     _conn: Any

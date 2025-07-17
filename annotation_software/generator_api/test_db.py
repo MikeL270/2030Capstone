@@ -9,7 +9,6 @@ from database import Database
 import cropgenerator.generatorobjects as gen_objs
 import os
 from dotenv import load_dotenv 
-import uuid
 
 #---------------------------------------------------------------------------------------------------------------------------#
 load_dotenv()
@@ -48,7 +47,6 @@ class TestDatabase(unittest.TestCase):
 
         # create an organization object
         org = self.db.create_organizaztion('Uwyo', 'images.com/image')
-
         self.assertIsInstance(org, gen_objs.Organization)
 
         # request an (the) organization from the database by its id
@@ -59,7 +57,7 @@ class TestDatabase(unittest.TestCase):
         org_2 = self.db.get_organization(org.uuid)
         self.assertIsInstance(org_2, gen_objs.Organization)
 
-        # Ensure all 3 organization objects are identical (if A = B, & B = C, then A = C)
+        # ensure all 3 organization objects are identical (if A = B, & B = C, then A = C)
         self.assertEqual(org_1, org_2)
         self.assertEqual(org_2, org)
 
@@ -69,11 +67,15 @@ class TestDatabase(unittest.TestCase):
         # precipitate changes from db
         org = self.db.get_organization(org.organization_id)
         
+        # modify organization -- change name
+        org.name = 'other org'
+        self.assertTrue(self.db.update_organization(org)) # update can take a modified object, basically the reverse of providing an id with parameters
+
         # verify org is no longer identical to the other two
         self.assertNotEqual(org_1, org)
 
         # delete the organization
-        self.assertTrue(self.db.delete_organization(org.organization_id))
+        self.assertTrue(self.db.delete_organization(org))
 
         # attempt to request the organization from the database to verify its deletion
         org_3 = self.db.get_organization(org.organization_id)
@@ -82,14 +84,105 @@ class TestDatabase(unittest.TestCase):
         # cleanup memory (not needed expressly in python, but I want you to keep this concept in mind - ML)
         del org, org_1, org_2, org_3
 
+    def test_role_crud(self):
+        print('testing role lifecycle...')
+
+        # create a role object 
+        role = self.db.create_role('Annotator')
+        self.assertIsInstance(role, gen_objs.Role)
+
+        # request an (the) role from the database by its id
+        role_1 = self.db.get_role(role.role_id)
+        self.assertIsInstance(role_1, gen_objs.Role)
+
+        # request an (the) role formt he database by its uuid
+        role_2 = self.db.get_role(role.uuid)
+        self.assertIsInstance(role_2, gen_objs.Role)
+
+        # enusre all 3 roles are identical (if A = B, & B = C, Then A = C)
+        self.assertEqual(role_1, role_2)
+        self.assertEqual(role_2, role)
+
+        # modify role -- change name
+        self.assertTrue(self.db.update_role(role.role_id, role='Tester'))
+
+        # precipitate changes from db
+        role = self.db.get_role(role.role_id)
+
+        # verify role is no longer identical to the other two
+        self.assertNotEqual(role_1, role)
+
+        # delete the role 
+        self.assertTrue(self.db.delete_role(role))
+
+        # attempt to request the role from the database to verify its deletion
+        role_3 = self.db.get_organization(role.role_id)
+        self.assertNotIsInstance(role_3, gen_objs.Role)
+
+        # cleanup memory (not needed expressly in python, but I want you to keep this concept in mind - ML)
+        del role, role_1, role_2, role_3
+
+    def test_user_crud(self): 
+        print('testing user lifecycle...')
+
+        # create an organization that our user will belong to
+        org = self.db.create_organizaztion(name='Uwyo', logo_url='images.com/uwyo-logo.webp')
+
+        # create two roles that our user will belong to
+        role_1 = self.db.create_role('Annotator')
+        role_2 = self.db.create_role('Administrator')
+
+        # create a user object 
+        user = self.db.create_user(
+            username = 'mlance', 
+            external_auth_id = '12345678', 
+            external_auth_provider = 'manual-token', 
+            locale = 'en-us', 
+            roles = [role_1, role_2], # could be a list of role objects, or of ids, or uuids that correspond to role objects in the databasea
+            organizations = [org] # could be a list of organization objects, or of ids, or uuids that correspond to organization objects
+            
+        )
+        self.assertIsInstance(user, gen_objs.User)
+
+        # request a (the) user from the database by its id
+        user_1 = self.db.get_user(int(user.id)) # pay attention to the typecasting, as flask-login requires a user id to be stored as a string, but we primarily use integer ids - ML
+        
+        # request a (the) user from the database by its uuid
+        user_2 = self.db.get_user(user.uuid)
+
+        # ensure all 3 users are identical (if A = B, & B = C, Then A = C)
+        self.assertEqual(user_1, user_2)
+        self.assertEqual(user_2, user)
+
+        # modif user -- change user name
+        self.assertTrue(self.db.update_user(int(user.id), username='Tuser')) # Be sure to use kwargs as users have several valid paramaters that can be changed
+
+        # precipate changes from db
+        user = self.db.get_user(int(user.id))
+
+        # verify user is no longer identical to the other two
+        self.assertNotEqual(user_1.username, user.username)
+
+        # delete the user 
+        self.assertTrue(self.db.delete_user(user)) # note that the user object itself IS a valid parameter 
+
+        # attempt to request the user from the database to verify its deletion
+        user_3 = self.db.get_user(int(user.id)) # even though the delete method was called for the database, the user object IS still in memory
+        self.assertNotIsInstance(user_3, gen_objs.User)
+
+        # delete roles and organizations
+        self.db.delete_role(role_1)
+        self.db.delete_role(role_2)
+        self.db.delete_organization(org)
+
+        # cleanup memory (not needed expressly in python, but I want you to keep this concept in mind - ML)
+        del user, user_1, user_2, user_3, role_1, role_2, org
+
     def tearDown(self):
         self.db.close_pool()
 
 if __name__ == "__main__":
     unittest.main()
-
-
-
 
     # def test_project_crud(self):
     #     print('testing project lifecycle...')
