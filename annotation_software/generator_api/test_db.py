@@ -1,7 +1,7 @@
 # Database testing script
 # Author: Michael B. Lance, Mohammed A. Alshemary
 # Created: June 30, 2025
-# Updated: July 10, 2025
+# Updated: July 22, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import unittest
@@ -119,9 +119,6 @@ class TestDatabase(unittest.TestCase):
         role_3 = self.db.get_organization(role.role_id)
         self.assertNotIsInstance(role_3, gen_objs.Role)
 
-        # cleanup memory (not needed expressly in python, but I want you to keep this concept in mind - ML)
-        del role, role_1, role_2, role_3
-
     def test_user_crud(self): 
         print('testing user lifecycle...')
 
@@ -139,8 +136,7 @@ class TestDatabase(unittest.TestCase):
             external_auth_provider = 'manual-token', 
             locale = 'en-us', 
             roles = [role_1, role_2], # could be a list of role objects, or of ids, or uuids that correspond to role objects in the databasea
-            organizations = [org] # could be a list of organization objects, or of ids, or uuids that correspond to organization objects
-            
+            organizations = [org] # could be a list of organization objects, or of ids, or uuids that correspond to organization objects 
         )
         self.assertIsInstance(user, gen_objs.User)
 
@@ -175,8 +171,63 @@ class TestDatabase(unittest.TestCase):
         self.db.delete_role(role_2)
         self.db.delete_organization(org)
 
-        # cleanup memory (not needed expressly in python, but I want you to keep this concept in mind - ML)
-        del user, user_1, user_2, user_3, role_1, role_2, org
+    def test_project_crud(self):
+        print('testing project lifecycle...')
+
+        org = self.db.create_organizaztion(name='Uwyo', logo_url='images.com/uwyo-logo.webp')
+
+        # create two roles that our user will belong to
+        role = self.db.create_role('Annotator')
+
+        # create a user object 
+        user = self.db.create_user(
+            username = 'mlance', 
+            external_auth_id = '12345678', 
+            external_auth_provider = 'manual-token', 
+            locale = 'en-us', 
+            roles = [role], 
+            organizations = [org] 
+        )
+
+        project = self.db.create_project(users = user, name ='test_project_og')
+        self.assertIsInstance(project, gen_objs.Project)
+
+        # check the users associated with the project
+        proj_user = self.db.get_project_users(project)
+
+        # check that the right user was associated with the project
+        self.assertEqual(proj_user, user)
+
+        # get project by id
+        project_1 = self.db.get_project(project.project_id)
+        self.assertIsInstance(project_1, gen_objs.Project)
+
+        # get project by uuid
+        project_2 = self.db.get_project(project.uuid)
+        self.assertIsInstance(project_2, gen_objs.Project)
+
+        # Ensure all 3 projects are identical
+        self.assertEqual(project_1, project_2)
+        self.assertEqual(project_2, project)
+
+        # modify project
+        self.assertTrue(self.db.update_project(project.project_id, 'New_Name'))
+
+        # retrieve modified project to verify change
+        project_check = self.db.get_project(project.project_id)
+        self.assertEqual(project_check.name, 'New_Name')
+
+        # delete project
+        self.assertTrue(self.db.delete_project(project))
+    
+        # attempt to retrive project to verify deletion
+        deleted_project = self.db.get_project(project.project_id)
+        self.assertNotIsInstance(deleted_project, gen_objs.Project)
+
+        # cleanup user, role, and org
+        self.db.delete_user(user)
+        self.db.delete_role(role)
+        self.db.delete_organization(org) 
 
     def tearDown(self):
         self.db.close_pool()
@@ -184,39 +235,7 @@ class TestDatabase(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
-    # def test_project_crud(self):
-    #     print('testing project lifecycle...')
-
-    #     user = self.db.create_user('tuser', '4623ghjk234g6uihklg4123jkl56', 'none', 'en-us')
-
-    #     project = self.db.create_project(user = user, name ='test_project_og')
-    #     self.assertIsInstance(project, gen_objs.Project)
-
-    #     # get project by id
-    #     project_1 = self.db.get_project(project.project_id)
-    #     self.assertIsInstance(project_1, gen_objs.Project)
-
-    #     # get project by uuid
-    #     project_2 = self.db.get_project(project.uuid)
-    #     self.assertIsInstance(project_2, gen_objs.Project)
-
-    #     # Ensure all 3 projects are identical
-    #     self.assertEqual(project_1, project_2)
-    #     self.assertEqual(project_2, project)
-
-    #     # modify project
-    #     self.assertTrue(self.db.update_project(project.project_id, 'New_Name'))
-
-    #     # retrieve modified project to verify change
-    #     project_check = self.db.get_project(project.project_id)
-    #     self.assertEqual(project_check.name, 'New_Name')
-
-    #     # delete project
-    #     self.assertTrue(self.db.delete_project(project))
     
-    #     # attempt to retrive project to verify deletion
-    #     deleted_project = self.db.get_project(project.project_id)
-    #     self.assertNotIsInstance(deleted_project, gen_objs.Project)
 
     # def test_schema_crud(self):
     #     print('testing scehma lifecycle...')

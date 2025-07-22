@@ -27,8 +27,8 @@ services:
     command: >
       /bin/bash -c "source /venv/api_env/bin/activate && python /app/cg_api.py"
     networks: 
-      - pronghorn_app_network 
-  valkey:
+      - dev_pronghorn_app_network
+  dev-valkey:
     container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
     mem_limit: 256M
@@ -40,7 +40,7 @@ services:
       - "6379:6379"
     command: valkey-server --requirepass ${VALKEY_PASS}
     networks: 
-      - pronghorn_app_network 
+      - dev_pronghorn_app_network
   web-app-dev:
     build:
       context: .
@@ -52,7 +52,7 @@ services:
       - "5173:5173"
     command: npm run dev -- --host 0.0.0.0
     networks: 
-      - pronghorn_app_network
+      - dev_pronghorn_app_network
 
   # Postgres database, uncomment if not using external database host
   # db:
@@ -73,5 +73,5 @@ services:
 
 
 networks: 
-  pronghorn_app_network:
+  dev_pronghorn_app_network:
     driver: bridge

@@ -199,7 +199,7 @@ class Database:
             case str():
                 cursor.execute(query.format(id_field = sql.Identifier('name')), (organization_ids))
             case _:
-                raise TypeError('organization_id must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
+                raise TypeError('organization_ids must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
         return True if cursor.rowcount > 0 else False
        
     def delete_organization(self, organization_ids: Organization | int | UUID) -> bool:
@@ -361,9 +361,9 @@ class Database:
             if roles:
                 self._add_roles_user(user, roles)
                 role_objs = self._get_user_roles(user)
-                user.roles = [role.role for role in role_objs] if role_objs else None
+                user.roles = [role.role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
             if organizations:
-                self._relate_user_organizations(int(user.id), organizations)
+                self._add_user_organizations(int(user.id), organizations)
         return user
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -413,26 +413,27 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(user_id, User):
-            cursor.execute('''
-                UPDATE usermanagement.users
-                SET username = %s, external_auth_id = %s, external_auth_provider = %s, status = %s, locale = %s
-                WHERE user_id = %s;
-            ''', (user_id.username, user_id.external_auth_id, user_id.external_auth_provider, user_id.status, user_id.locale, user_id.user_id))
-        elif isinstance(user_id, int):
-            cursor.execute('''
-                UPDATE usermanagement.users
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE user_id = %s;
-            ''', (user_id,))
-        elif isinstance(user_id, UUID):
-            cursor.execute('''
-                UPDATE usermanagement.users
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (user_id,))
-        else:
-            raise TypeError('user_id MUST be an integer, UUID or User type, username, external_auth_id, external_auth_provider, status, locale must all be either string or none')
+        query = sql.SQL(''' UPDATE usermanagement.users SET {augmented_field}, modified = CURRENT_DATE
+                            WHERE {id_field} = %s; ''')
+        kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None])
+        match user_id:
+            case User():
+                cursor.execute(query.format(
+                    augmented_field = sql.SQL(f"username = '{user_id.username}', external_auth_id = '{user_id.external_auth_id}', external_auth_provider = '{user_id.external_auth_provider}', status = '{user_id.status}', locale = '{user_id.locale}'"),
+                    id_field = sql.Identifier('user_id')
+                ), (int(user_id.id),))
+            case int():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('user_id')
+                ), (user_id,))
+            case UUID():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('uuid')
+                ), (user_id,))
+            case _:
+                raise TypeError('user_id must be a User, int, uuid, or a list consisting of ONE of the two')
         return True if cursor.rowcount > 0 else False
     
     def update_user(self, user_id: User | int | UUID, username: str | None = None, 
@@ -451,64 +452,65 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_user(self, cursor: psycopg.Cursor[User], user_id: User | int | UUID) -> bool:
+    def _delete_user(self, cursor: psycopg.Cursor[User], user_ids: User | int | UUID |list[User | int | UUID]) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(user_id, User):
-            cursor.execute('''
-                DELETE FROM usermanagement.users
-                WHERE user_id = %s;
-            ''', (int(user_id.id),))
-        elif isinstance(user_id, int):
-            cursor.execute('''
-                DELETE FROM usermanagement.users
-                WHERE user_id = %s;
-            ''', (user_id,))
-        elif isinstance(user_id, UUID):
-            cursor.execute('''
-                DELETE FROM usermanagement.users
-                WHERE uuid = %s;
-            ''', (user_id,))
-        else:
-            raise TypeError('user_id MUST be an integer, UUID or User type')
+        query = sql.SQL(' DELETE FROM usermanagement.users WHERE {id_field} = %s')
+        match user_ids:
+            case list() if isinstance(user_ids[0], User):
+                cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [int(user.id) for user in user_ids])
+            case list() if isinstance(user_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('user_id')), user_ids)
+            case list() if isinstance(user_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), user_ids)
+            case User():
+                cursor.execute(query.format(id_field = sql.Identifier('user_id')), (int(user_ids.id),))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (user_ids,))
+            case _:
+                raise TypeError('user_ids must be a User, int, uuid, , or a list consisting of ONE of the two')
         return True if cursor.rowcount > 0 else False
 
-    def delete_user(self, user_id: User | int | UUID) -> bool:
+    def delete_user(self, user_ids: User | int | UUID) -> bool:
         ''' Delete a user object from the database
         
         Args:
-             user_id: either a user object, a database id, or a universally unique identifier
+             user_ids: either a user object, a database id, or a universally unique identifier or a list consisting of ONE of the two
         '''
-        return self._delete_user(user_id = user_id)
+        return self._delete_user(user_ids = user_ids)
         
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
+    # @connect
+    # def _login_user(self, cursor.psycopg.Cursor, user_)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
     # Project Management - Projects
     @connect
-    def _create_project(self, cursor: psycopg.Cursor[Project], name: str, users: list[User, int, UUID] | None = None) -> Project | None:
+    def _create_project(self, cursor: psycopg.Cursor[Project], name: str, ) -> Project | None:
         ''' Internal helper function, do not call directly
         
         '''   
         cursor.row_factory = class_row(Project)        
-        cursor.execute('''
-            INSERT INTO projectmanagement.projects (name)
-            VALUES (%s)
-            RETURNING *;
-        ''', (name,))
+        cursor.execute(sql.SQL(' INSERT INTO projectmanagement.projects (name)VALUES (%s) RETURNING *; '), (name,))
     
         project = cursor.fetchone()
 
-        if users:
-            cursor.row_factor = class_row(User)
+        return project if isinstance(project, Project) else None
     
-    def create_project(self, user: User, name:str) -> Project | None:
+    def create_project(self, name:str, users: list[User, int, UUID] | None = None) -> Project | None:
         ''' Insert a new project object into the database
 
         Args:
             name: The name of the project you want to create
         '''
-        return self._create_project(user = user, name = name)
+        project = self._create_project(name = name)
+        self._add_user_project(project_id = project, user_ids = users)
+        return project
        
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# 
 
@@ -1270,15 +1272,15 @@ class Database:
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-    # Relationship Management - usermanagement - users <-> roles
+    # Relationship Management - usermanagement <-> usermanagement: users <-> roles
 
     @connect
     def _add_roles_user(self, cursor: psycopg.Cursor, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        query = sql.SQL('''INSERT INTO usermanagement.users_roles (user_id, role_id) VALUES (%s, %s)''')
-        roles_objs = role_ids if isinstance(role_ids[0], Role) else self._get_role(role_ids)
+        query = sql.SQL('''INSERT INTO usermanagement.users_roles (user_id, role_id) VALUES (%s, %s); ''')
+        roles_objs = role_ids if isinstance(role_ids, Role) or (isinstance(role_ids, list) and isinstance(role_ids[0], Role)) else self._get_role(role_ids)
         match user_id:
             case User():
                 cursor.executemany(query, [(int(user_id.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user_id.id), roles_objs.role_id))
@@ -1292,7 +1294,11 @@ class Database:
         return True if cursor.rowcount > 0 else False
 
     def add_roles_user(self, user_id: User | int | UUID, role_ids: list[Role | int | UUID ] | Role | int | UUID) -> bool:
-        ''' Associate a user with one or more roles
+        ''' Grant a user a role
+
+        Args:
+            user_id: either a User object, a database id, or a universally unique identifier 
+            role_ids: either a Role object, a database id, or a universally unique identifier or a list consisting of ONE of the three
         '''
         return self._relate_user_roles(user_id = user_id, role_ids = role_ids)
     
@@ -1304,8 +1310,9 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Role)
-        query = sql.SQL(''' SELECT roles.role_id, role, created, modified, uuid FROM usermanagement.roles AS roles JOIN usermanagement.users_roles AS users_roles 
-                            ON users_roles.role_id = roles.role_id WHERE users_roles.user_id = %s''')
+        query = sql.SQL(''' 
+            SELECT roles.role_id, role, created, modified, uuid FROM usermanagement.roles AS roles JOIN usermanagement.users_roles AS users_roles 
+            ON users_roles.role_id = roles.role_id WHERE users_roles.user_id = %s; ''')
         match user_id:
             case User():
                 cursor.execute(query, (int(user_id.id),))
@@ -1315,7 +1322,7 @@ class Database:
                 user = self._get_user(user_id)
                 cursor.execute(query, (int(user.id),))
         roles = cursor.fetchall()
-        return roles if isinstance(roles, list) and all(isinstance(role, Role) for role in roles) else roles[0] if len(roles) == 1 and isinstance(roles[0],Role) else None
+        return roles[0] if len(roles) == 1 and isinstance(roles[0], Role) else roles if all(isinstance(role, Role) for role in roles) else None
 
     def get_user_roles(self, user_id: User| int | UUID) -> list[Role] | Role | None:
         ''' Request all roles associated with a user 
@@ -1339,17 +1346,23 @@ class Database:
                 cursor.executemany(query, [(int(user_id.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user_id.id), roles_objs.role_id))
             case int():
                 cursor.executemany(query, [(user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
-            case UUID():
+            case _:
                 user = self._get_user(user_id)
-                cursor.executemany(query, [(int(user.id), role.id) for role in roles_objs])
+                cursor.executemany(query, [(int(user.id), role.id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user.id), roles_objs.role_id))
+        return True if cursor.rowcount > 0 else False
                 
+    def remove_roles_user(self, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
+        ''' Remove a user from a role 
+        
+        '''
+        self._remove_roles_user(user_id = user_id, role_ids = role_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-    # Relationship Management - usermanagement - users <-> organizations
+    # Relationship Management - usermanagement <-> usermanagement: users <-> organizations
 
     @connect
-    def _relate_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
+    def _add_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -1365,16 +1378,212 @@ class Database:
                 cursor.executemany(query, [(int(user_id.id), org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (int(user_id.id), org_objs.organization_id))
             case int():
                 cursor.executemany(query, [(user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id, org_objs.organization_id))
-            case UUID():
+            case _:
                 user = self.get_user(user_id)
                 cursor.executemany(query, [(int(user_id.id), org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (int(user.id), org_objs.organization_id))
         return True if cursor.rowcount > 0 else False
     
-    def relate_user_organizations(self,  user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
+    def add_user_organizations(self, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
         '''
         
         '''
-        return self._relate_user_organizations(user_id = user_id, orgs = orgs)
+        return self._add_user_organizations(user_id = user_id, orgs = orgs)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_organization_users(self, cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID ) -> list[User] | User | None:
+        ''' Internal helper function, do not call directly
+        
+        ''' 
+        cursor.row_factory = class_row(User)
+        query = sql.SQL(''' 
+            SELECT users.user_id, username, external_auth_id, external_auth_provider, status, created, 
+            modified, last_login, locale, uuid FROM usermanagement.users AS users JOIN usermanagement.organizations_users 
+            as orgs_users ON orgs_users.user_id = users.user_id WHERE orgs_users.organization_id = %s; ''')
+        match organization_id:
+            case Organization():
+                cursor.execute(query, (organization_id.organization_id,))
+            case int():
+                cursor.execute(query, (organization_id,))
+            case _:
+                org = self._get_organization(organization_id)
+                cursor.execute(query, (org.organization_id))
+        users = cursor.fetchall()
+        return users[0] if len(users) == 1 and isinstance(users[0], User) else users if all(isinstance(user, User) for user in users) else None
+    
+    def get_organization_users(self, organization_id: Organization | int | UUID ) -> list[User] | User | None:
+        '''
+        
+        '''
+        return self._get_organization_users(organization_id = organization_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID, organization_ids: Organization | int | UUID | str | list[Organization | int | UUID | str]) -> list[Organization] | Organization | None:
+        '''
+        
+        '''
+        query = sql.SQL('''
+            SELECT organizations.organization_id, name, created, modified, logo_url, uuid FROM usermanagement.organizations 
+            AS organizations JOIN usermanagement.organization_users as org_users on org_users.organization_id = organizations.organization_id
+            WHERE org_users.user_id = %s; ''')
+        match user_id:
+            case User():
+                cursor.execute(query, (int(user_id.id),))
+            case int():
+                cursor.execute(query, (user_id,))
+            case _:
+                user = self._get_user(user_id)
+                cursor.execute(query, (int(user.id)))
+        orgs = cursor.fetchall()
+        return orgs[0] if len(orgs) == 1 and isinstance(orgs[0], Organization) else orgs if all(isinstance(org, Organization) for org in orgs) else None
+    
+    def get_user_organizations(self, user_id: User | int | UUID, organization_ids: Organization | int | UUID | str | list[Organization | int | UUID | str]) -> list[Organization] | Organization | None:
+        '''
+        
+        '''
+        return self._get_user_organizations(user_id = user_id, organization_ids = organization_ids)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _remove_organization_users(self, cursor: psycopg.Cursor, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL(' DELETE FROM usermanagement.organizations_users where organization_id = %s AND user_id = %s ')
+        users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
+        match organization_id:
+            case Organization():
+                cursor.executemany(query, [(organization_id.organization_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id.organization_id, int(users_objs.id)))
+            case int():
+                cursor.executemany(query, [(organization_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id, int(users_objs.id)))
+            case _:
+                org = self._get_organization(organization_id)
+                cursor.executemany(query, [(org.organization_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (org.organization_id, int(users_objs.id)))
+        return True if cursor.rowcount > 0 else False 
+
+    def remove_organization_users(self, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+        '''
+        
+        '''
+        self._remove_organization_users(organization_id = organization_id, user_ids = user_ids)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    # Relationship Management - projectmanagemnt <-> usermanagement: projects <-> users
+
+    @connect
+    def _add_user_project(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
+        '''
+        
+        '''
+        query = sql.SQL(''' INSERT INTO projectmanagement.projects_users (project_id, user_id) VALUES (%s, %s); ''')
+        user_objs = user_ids if isinstance(user_ids, User) or (isinstance(user_ids, list) and isinstance(user_ids[0])) else self._get_user(user_ids)
+        match project_id:
+            case Project():
+                cursor.execute(query, [(project_id.project_id, int(user.id)) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id.project_id, int(user_objs.id)))
+            case int():
+                cursor.execute(query, [(project_id, int(user.id)) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id, int(user_objs.id)))
+            case _:
+                project = self._get_project(project_id)
+                cursor.execute(query, [(project.project_id, int(user.id)) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project.project_id, int(user_objs.id)))
+        return True if cursor.rowcount > 0 else None
+    
+    def add_user_project(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
+        '''
+        
+        '''
+        self._add_user_project(project_id = project_id, user_ids = user_ids)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _get_project_users(self, cursor: psycopg.Cursor[User], project_id: Project | int | UUID) -> list[User] | User | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(User)
+        query = sql.SQL('''
+            SELECT users.user_id, username, external_auth_id, external_auth_provider, status, created, 
+            modified, last_login, locale, uuid FROM usermanagement.users AS users JOIN projectmanagement.projects_users
+            as projects_users ON projects_users.user_id = users.user_id WHERE projects_users.project_id = %s; ''')
+        match project_id:
+            case Project():
+                cursor.execute(query, (project_id.project_id,))
+            case int():
+                cursor.execute(query, (project_id,))
+            case _:
+                project = self._get_project(project_id)
+                cursor.execute(query, (project.project_id))
+        users = cursor.fetchall()
+        return users[0] if len(users) == 1 and isinstance(users[0], User) else users if all(isinstance(user, User) for user in users) else None
+    
+    def get_project_users(self, project_id: Project | int | UUID) -> list[User] | User | None:
+        '''
+        
+        '''
+        return self._get_project_users(project_id = project_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_user_projects(self, cursor: psycopg.Cursor, user_id: User | int | UUID) -> list[Project] | Project | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(Project)
+        query = sql.SQL(''' 
+            SELECT project_id, name, created, modified, uuid FROM projectmanagement.projects as projects JOIN 
+            projectmanagement.projects_users as projects_users ON project_users.project_id projects.project_id
+            WHERE projects_users.user_id = %s; ''')
+        match user_id:
+            case User():
+                cursor.execute(query, (int(user_id.id),))
+            case int():
+                cursor.execute(query, (int(user_id),))
+            case _:
+                user = self._get_user(user_id)
+                cursor.execute(query, (int(user.id),))
+        projects = cursor.fetcahll()
+        return projects[0] if len(projects) == 1 and isinstance(projects[0], Project) else projects if all(isinstance(project, Project) for project in projects) else None
+
+    def get_user_projects(self, user_id: User | int | UUID) -> list[Project] | Project | None:
+        '''
+        
+        '''
+        self._get_user_projects(user_id = user_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _remove_project_users(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+        '''
+        
+        '''
+        query = sql.SQL(' DELETE FROM projectmanagement.projects_users where project_id = %s AND user_id = %s ')
+        users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
+        match project_id:
+            case Project():
+                cursor.executemany(query, [(project_id.project_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id.project_id, int(users_objs.id)))
+            case int():
+                cursor.executemany(query, [(project_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id, int(users_objs.id)))
+            case _:
+                project = self._get_project(project_id)
+                cursor.executemany(query, [(project.project_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (project.project_id, int(users_objs.id)))
+        return True if cursor.rowcount > 0 else False 
+
+    def remove_project_users(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+        '''
+        
+        '''
+        self._remove_project_users(project_id = project_id, user_ids = user_ids)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 # class Database(ABC): # Abstract class for all database types
