@@ -1,18 +1,19 @@
 # Psycopg3 database abstraction layer for crop generator_api
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: July 17, 2025
+# Updated: August 2, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import os 
 from uuid import UUID
-from cropgenerator.generatorobjects import Project, Schema, Label, HerdUnit, Model, Survey, User, Role, Organization
+from cropgenerator.generatorobjects import *
 import psycopg
 import psycopg.sql as sql
 from psycopg_pool import ConnectionPool
 from psycopg.rows import class_row, scalar_row
 from functools import wraps
 from typing import Callable, Any
+import datetime
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -81,15 +82,9 @@ class Database:
         
         ''' 
         cursor.row_factory = class_row(Organization)
-        try:
-            cursor.execute(sql.SQL('''
-                INSERT INTO usermanagement.organizations (name, logo_url) VALUES (%s, %s) RETURNING *;
-            '''), (name, logo_url))
-            org = cursor.fetchone()
-        except psycopg.errors.UniqueViolation as e:
-            return False
-         
-        return org if isinstance(org, Organization) else None
+        cursor.execute(sql.SQL('INSERT INTO usermanagement.organizations (name, logo_url) VALUES (%s, %s) RETURNING *; '), (name, logo_url))
+        org = cursor.fetchone()
+        return org
     
     def create_organizaztion(self, name: str, logo_url: str | None = None) -> Organization | None:
        
@@ -99,31 +94,27 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_organization(self, cursor: psycopg.Cursor[Organization], organization_ids: int | str | UUID | list[int | str | UUID]) -> Organization | None:
+    def _get_organization(self, cursor: psycopg.Cursor[Organization], organization_ids: int | UUID | list[int | UUID]) -> list[Organization] | Organization | None:
         ''' Internal helper function, do not call directly
         
         '''
         cursor.row_factory = class_row(Organization)
-        query = sql.SQL('SELECT * FROM usermanagement.organizations WHERE {id_field} = %s')
+        query = sql.SQL('SELECT * FROM usermanagement.organizations WHERE {id_field} = %s; ')
         match organization_ids:
-            case list() if all(isinstance(org_id, int) for org_id in organization_ids):
+            case list() if isinstance(organization_ids[0], int):
                 cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), organization_ids)
-            case list() if all(isinstance(org_id, UUID) for org_id in organization_ids):
+            case list() if isinstance(organization_ids[0], UUID):
                 cursor.executemany(query.format(id_field = sql.Identifier('uuid')), organization_ids)
-            case list() if all(isinstance(org_id, str) for org_id in organization_ids):
-                cursor.executemany(query.format(id_field = sql.Identifier('name')), organization_ids)
             case int():
                 cursor.execute(query.format(id_field = sql.Identifier('organization_id')), (organization_ids,))
             case UUID():
                 cursor.execute(query.format(id_field = sql.Identifier('uuid')), (organization_ids,))
-            case str():
-                cursor.execute(query.format(id_field = sql.Identifier('name')), (organization_ids))
             case _:
-                raise TypeError('organization_id must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
-        organizations = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
-        return organizations if isinstance(organizations, list) and all(isinstance(org, Organization) for org in organizations) else organizations if isinstance(organizations, Organization) else None
-    
-    def get_organization(self, organization_ids: int | UUID) -> Organization | None:
+                raise TypeError('organization_ids must be an int, or uuid or a list')
+        organizations = cursor.fetchall()
+        return organizations if organizations and cursor.rowcount > 1 else organizations[0] if organizations else None
+
+    def get_organization(self, organization_ids: int | UUID) -> list[Organization] | Organization | None:
         ''' Request an organization, or organizations object(S) from the database
 
         Args:
@@ -139,7 +130,7 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        query = sql.SQL(''' UPDATE usermanagement.organizations SET {augmented_field}, modified = CURRENT_DATE
+        query = sql.SQL(''' UPDATE usermanagement.organizations SET {augmented_field}, modified = CURRENT_TIMESTAMP
                             WHERE {id_field} = %s; ''')
         kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['name', 'logo_url']) and value is not None])
         match organization_id:
@@ -159,7 +150,7 @@ class Database:
                     id_field = sql.Identifier('uuid')
                 ), (organization_id,))
             case _:
-                raise TypeError('organization_id must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
+                raise TypeError('organization_id must be an Organization, int, uuid, string')
         return True if cursor.rowcount > 0 else False
     
     def update_organization(self,  organization_id: Organization | int | UUID,
@@ -176,7 +167,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
-    def _delete_organization(self, cursor: psycopg.Cursor[Organization], organization_ids: Organization | int | UUID | str | list[int | UUID | str]) -> bool:
+    def _delete_organization(self, cursor: psycopg.Cursor[Organization], organization_ids: Organization | int | UUID | list[int | UUID]) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
@@ -188,21 +179,17 @@ class Database:
                 cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), organization_ids)
             case list() if isinstance(organization_ids[0], UUID):
                 cursor.execute(query.format(id_field = sql.Identifier('uuid')), organization_ids)
-            case list() if isinstance(organization_ids[0], str):
-                cursor.executemany(query.format(id_field = sql.Identifier(' name ')), organization_ids)
             case Organization():
                 cursor.execute(query.format(id_field = sql.Identifier('organization_id')), (organization_ids.organization_id,))
             case int():
                 cursor.execute(query.format(id_field = sql.Identifier('organization_id')), (organization_ids,))
             case UUID():
                 cursor.execute(query.format(id_field = sql.Identifier('uuid')), (organization_ids,))
-            case str():
-                cursor.execute(query.format(id_field = sql.Identifier('name')), (organization_ids))
             case _:
                 raise TypeError('organization_ids must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
         return True if cursor.rowcount > 0 else False
        
-    def delete_organization(self, organization_ids: Organization | int | UUID) -> bool:
+    def delete_organization(self, organization_ids: Organization | int | UUID | list[int | UUID]) -> bool:
         ''' Delete an organization object from the database
         
         Args:
@@ -211,25 +198,25 @@ class Database:
         return self._delete_organization(organization_ids = organization_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
     # Project Management - Roles
+
     @connect
-    def _create_role(self, cursor: psycopg.Cursor[Role], role: str) -> Role | None:
+    def _create_role(self, cursor: psycopg.Cursor[Role], name: str) -> Role | None:
         ''' Internal helper function, do not call directly
         
         '''
         cursor.row_factory = class_row(Role)
-        cursor.execute(sql.SQL(' INSERT INTO usermanagement.roles (role) VALUES (%s) RETURNING *; '), (role,))
+        cursor.execute(sql.SQL(' INSERT INTO usermanagement.roles (name) VALUES (%s) RETURNING *; '), (name,))
         role = cursor.fetchone()
-        return role if isinstance(role, Role) else None
+        return role
     
-    def create_role(self, role: str) -> Role | None:
+    def create_role(self, name: str) -> Role | None:
         ''' Insert a new role object into the database
 
         Args:
             role: The human readable role version
         '''
-        return self._create_role(role = role)
+        return self._create_role(name = name)
         
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -239,7 +226,7 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Role)
-        query = sql.SQL(' SELECT * FROM usermanagement.roles WHERE {id_field} = %s ')
+        query = sql.SQL(' SELECT * FROM usermanagement.roles WHERE {id_field} = %s; ')
         match role_ids:
             case list() if isinstance(role_ids[0], int):
                 cursor.executemany(query.format(id_field = sql.Identifier('role_id')), role_ids)
@@ -255,8 +242,8 @@ class Database:
                 cursor.execute(query.format(id_field = sql.Identifier('name')), (role_ids,))
             case _:
                 raise TypeError('role_id must be a Role, int, uuid, string, or a list consisting of ONE of the three')
-        roles = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
-        return roles if isinstance(roles, list) and all(isinstance(role, Role) for role in roles) else roles if isinstance(roles, Role) else None
+        roles = cursor.fetchall() 
+        return roles if cursor.rowcount > 1 else roles[0] 
 
     def get_role(self, role_ids: int | UUID) -> Role | None:
         ''' Request a role, or roles object(s) from the database
@@ -269,27 +256,27 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _update_role(self, cursor: psycopg.Cursor[Role], role_id: Role | int | UUID | str, role: str | None = None) -> bool:
+    def _update_role(self, cursor: psycopg.Cursor[Role], role_id: Role | int | UUID | str, name: str | None = None) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        query = sql.SQL(''' UPDATE usermanagement.roles SET role = %s, modified = CURRENT_DATE
+        query = sql.SQL(''' UPDATE usermanagement.roles SET name = %s, modified = CURRENT_TIMESTAMP
                             WHERE {id_field} = %s; ''')
         match role_id:
             case Role():
-                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_id.role, role_id.role_id))
+                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_id.name, role_id.role_id))
             case int():
-                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role, role_id))
+                cursor.execute(query.format(id_field = sql.Identifier('role_id')), (name, role_id))
             case UUID():
-                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (role, role_id))
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (name, role_id))
             case str():
-                cursor.execute(query.format(id_field = sql.Identifier('role')), (role, role_id))
+                cursor.execute(query.format(id_field = sql.Identifier('name')), (name, role_id))
             case _:
                 raise TypeError('role_id must be a Role, int, uuid, string, or a list consisting of ONE of the three')
         return True if cursor.rowcount > 0 else False
     
-    def update_role(self, role_id: Role | int | UUID, role: str | None = None) -> Role:
-        return self._update_role(role_id = role_id, role = role)
+    def update_role(self, role_id: Role | int | UUID, name: str | None = None) -> Role:
+        return self._update_role(role_id = role_id, name = name)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -330,7 +317,6 @@ class Database:
         return self._delete_role(role_ids = role_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
     # User Management - Users
 
     @connect
@@ -361,49 +347,80 @@ class Database:
             if roles:
                 self._add_roles_user(user, roles)
                 role_objs = self._get_user_roles(user)
-                user.roles = [role.role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
+                user.roles = [role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
             if organizations:
-                self._add_user_organizations(int(user.id), organizations)
+                self._add_user_organizations(user.user_id, organizations)
         return user
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_user(self, cursor: psycopg.Cursor[User], user_ids: int | UUID | list[int | UUID]) -> User | None:
+    def _get_user(self, cursor: psycopg.Cursor[User], user_ids: int | UUID | str | list[int | UUID | str]) -> User | None:
         ''' Internal helper function, do not call directly
         
         '''  
         cursor.row_factory = class_row(User)
         query = sql.SQL("SELECT * FROM usermanagement.users WHERE {id_field} = %s")
         match user_ids:
-            case list() if all(isinstance(user_id, int) for user_id in user_ids):
-                cursor.executemany(query.format(id_field = sql.Identifier("user_id")), user_ids)
-            case list() if all(isinstance(user_id, UUID) for user_id in user_ids):
-                cursor.executemany(query.format(id_field = sql.Identifier("uuid")), user_ids)
+            case list() if isinstance(user_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('user_id')), user_ids)
+            case list() if isinstance(user_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), user_ids)
+            case list() if isinstance(user_ids[0], str):
+                cursor.executemany(query.format(id_field = sql.Identifier('external_auth_id')), user_ids)
             case int():
-                cursor.execute(query.format(id_field = sql.Identifier("user_id")), (user_ids,))
+                cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_ids,))
             case UUID():
-                cursor.execute(query.format(id_field = sql.Identifier("uuid")), (user_ids,))
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (user_ids,))
+            case str():
+                cursor.execute(query.format(id_field = sql.Identifier('external_auth_id')), (user_ids,))
         try:
             users = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone() 
         except psycopg.errors.ProgrammingError as e:
             return None
         return users if isinstance(users, list) and all(isinstance(user, User) for user in users) else users if isinstance(users, User) else None
         
-    def get_user(self, user_ids: int | UUID) -> User | None:
+    def get_user(self, user_ids: int | UUID | str | list[int | UUID | str]) -> User | None:
         ''' Query the database for a user
         
         Args:
             user_id: The user's unique database id 
         '''
+        print('get_user was called')
         user = self._get_user(user_ids = user_ids)
         if isinstance(user, User):
-            roles = self._get_user_roles(user)
-            user.roles = [role.role for role in roles] if roles else None
+            role_objs = self._get_user_roles(user)
+            user.roles = [role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
             return user
         else:
             return None
     
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _login_user(self, cursor: psycopg.Cursor[datetime.datetime], user_id: User | int | UUID) -> datetime.datetime | None:
+        ''' Internal helper function, do not call directly
+        
+        '''
+        query = sql.SQL(' UPDATE usermanagement.users SET last_login = CURRENT_TIMESTAMP WHERE {id_field} = %s RETURNING last_login')
+        match user_id:
+            case User():
+                cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_id.user_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.identifier('user_id')), (user_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (user_id,))
+            case _:
+                raise TypeError('user_id must be a User, int, uuid, or a list consisting of ONE of the two')
+        last_login: datetime.datetime = cursor.fetchone()[0]
+        return last_login if isinstance(last_login, datetime.datetime) else None
+    
+    def login_user(self, user_id: User | int | UUID) -> datetime.datetime | None:
+        ''' Set a user's last login 
+        
+        '''
+        return self._login_user(user_id = user_id)
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
@@ -413,15 +430,14 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        query = sql.SQL(''' UPDATE usermanagement.users SET {augmented_field}, modified = CURRENT_DATE
-                            WHERE {id_field} = %s; ''')
+        query = sql.SQL(' UPDATE usermanagement.users SET {augmented_field}, modified = CURRENT_TIMESTAMP WHERE {id_field} = %s; ')
         kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['username', 'external_auth_id', 'external_auth_provider', 'status', 'locale']) and value is not None])
         match user_id:
             case User():
                 cursor.execute(query.format(
                     augmented_field = sql.SQL(f"username = '{user_id.username}', external_auth_id = '{user_id.external_auth_id}', external_auth_provider = '{user_id.external_auth_provider}', status = '{user_id.status}', locale = '{user_id.locale}'"),
                     id_field = sql.Identifier('user_id')
-                ), (int(user_id.id),))
+                ), (user_id.user_id,))
             case int():
                 cursor.execute(query.format(
                     augmented_field = kw_augmented_field,
@@ -459,13 +475,13 @@ class Database:
         query = sql.SQL(' DELETE FROM usermanagement.users WHERE {id_field} = %s')
         match user_ids:
             case list() if isinstance(user_ids[0], User):
-                cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [int(user.id) for user in user_ids])
+                cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [user.user_id for user in user_ids])
             case list() if isinstance(user_ids[0], int):
                 cursor.executemany(query.format(id_field = sql.Identifier('user_id')), user_ids)
             case list() if isinstance(user_ids[0], UUID):
                 cursor.executemany(query.format(id_field = sql.Identifier('uuid')), user_ids)
             case User():
-                cursor.execute(query.format(id_field = sql.Identifier('user_id')), (int(user_ids.id),))
+                cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_ids.user_id,))
             case int():
                 cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_ids,))
             case UUID():
@@ -483,11 +499,6 @@ class Database:
         return self._delete_user(user_ids = user_ids)
         
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    
-    # @connect
-    # def _login_user(self, cursor.psycopg.Cursor, user_)
-
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     # Project Management - Projects
     @connect
@@ -496,21 +507,18 @@ class Database:
         
         '''   
         cursor.row_factory = class_row(Project)        
-        cursor.execute(sql.SQL(' INSERT INTO projectmanagement.projects (name)VALUES (%s) RETURNING *; '), (name,))
-    
+        cursor.execute(sql.SQL(' INSERT INTO projectmanagement.projects (name) VALUES (%s) RETURNING *; '), (name,))
         project = cursor.fetchone()
-
         return project if isinstance(project, Project) else None
     
-    def create_project(self, name:str, users: list[User, int, UUID] | None = None) -> Project | None:
+    def create_project(self, name:str) -> Project | None:
         ''' Insert a new project object into the database
 
         Args:
             name: The name of the project you want to create
         '''
-        project = self._create_project(name = name)
-        self._add_user_project(project_id = project, user_ids = users)
-        return project
+        return self._create_project(name = name)
+        
        
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# 
 
@@ -520,21 +528,17 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Project)
-        if isinstance(project_id, int): 
-            cursor.execute('''
-                SELECT * FROM projectmanagement.projects 
-                WHERE project_id = %s;
-            ''', (project_id,))
-        elif isinstance(project_id, UUID):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.projects
-                WHERE uuid = %s;
-            ''', (project_id,))
-        else:
-            raise TypeError('project_id MUST be an integer or a UUID')
+        query = sql.SQL(' SELECT * FROM projectmanagement.projects WHERE {id_field} = %s ')
+        match project_id:
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('project_id')), (project_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (project_id,))
+            case _:
+                raise TypeError('project_id MUST be an integer or a UUID')
         project = cursor.fetchone()
         return project if isinstance(project, Project) else None
-
+        
     def get_project(self, project_id: int | UUID) -> Project | None:
         ''' Query the database for a project 
         
@@ -542,7 +546,7 @@ class Database:
             project_id: either the project's internal database id or its universally unique identifier
         '''
         return self._get_project(project_id=project_id)
-    
+        
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
@@ -550,26 +554,16 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(project_id, Project):
-            cursor.execute('''
-                UPDATE projectmanagement.projects
-                SET name = %s, modified = CURRENT_DATE
-                WHERE project_id = %s;
-            ''', (project_id.name, project_id.project_id))
-        elif isinstance(project_id, int) and isinstance(name, str):
-            cursor.execute('''
-                UPDATE projectmanagement.projects
-                SET name =%s, modified = CURRENT_DATE
-                WHERE project_id = %s;
-            ''', (name, project_id))
-        elif isinstance(project_id, UUID) and isinstance(name, str):
-            cursor.execute('''
-                UPDATE projectmanagement.projects
-                SET name = %s, modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (name, project_id))
-        else: 
-            raise TypeError('project_id MUST be an integer, UUID or Project type, and name must be a string')
+        query = sql.SQL(' UPDATE projectmanagement.projects SET name = %s, modified = CURRENT_TIMESTAMP WHERE {id_field} = %s; ')
+        match project_id:
+            case Project():
+                cursor.execute(query.format(id_field = sql.Identifier('project_id')), (project_id.name, project_id.project_id))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('project_id')), (name, project_id))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (name, project_id))
+            case _:
+                 raise TypeError('project_id MUST be an integer, UUID or Project type, and name must be a string')
         return True if cursor.rowcount > 0 else False
 
     def update_project(self, project_id: Project | int | UUID, name: str=None) -> bool:
@@ -581,6 +575,7 @@ class Database:
         '''
         return self._update_project(project_id=project_id, name=name)
 
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
@@ -588,23 +583,16 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(project_id, Project):
-            cursor.execute('''
-                DELETE FROM projectmanagement.projects
-                WHERE project_id = %s;
-            ''', (project_id.project_id,))
-        elif isinstance(project_id, int):
-            cursor.execute('''
-                DELETE FROM projectmanagement.projects
-                WHERE project_id = %s;
-            ''', (project_id,))
-        elif isinstance(project_id, UUID):
-            cursor.execute('''
-                DELETE FROM projectmanagement.projects
-                WHERE uuid = %s;
-            ''', (project_id,))
-        else: 
-            raise TypeError('project_id MUST be an integer, UUID or Project type')
+        query = sql.SQL(' DELETE FROM projectmanagement.projects WHERE {id_field} = %s; ')
+        match project_id:
+            case Project():
+                cursor.execute(query.format(id_field = sql.Identifier('project_id')), (project_id.project_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('project_id')), (project_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (project_id,))
+            case _:
+                raise TypeError('project_id MUST be an integer, UUID or Project type')
         return True if cursor.rowcount > 0 else False    
 
     def delete_project(self, project_id: Project | int | UUID) -> bool:
@@ -616,7 +604,6 @@ class Database:
         return self._delete_project(project_id = project_id)
         
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    
     # Project Management - Schemas
 
     @connect
@@ -625,11 +612,7 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Schema)
-        cursor.execute('''
-            INSERT INTO projectmanagement.schemas (name)
-            VALUES (%s)
-            RETURNING *;
-        ''', (name,))
+        cursor.execute(sql.SQL(' INSERT INTO projectmanagement.schemas (name) VALUES (%s) RETURNING *; '), (name,))
         schema = cursor.fetchone()
         return schema if isinstance(schema, Schema) else None
 
@@ -649,18 +632,14 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Schema)
-        if isinstance(schema_id, int):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.schemas
-                WHERE schema_id = %s;
-            ''', (schema_id,))
-        elif isinstance(schema_id, UUID):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.schemas
-                WHERE uuid = %s;
-            ''', (schema_id,))
-        else:
-            raise TypeError("schema_id MUST be an integer or a UUID")
+        query = sql.SQL('  SELECT * FROM projectmanagement.schemas WHERE {id_field} = %s ')
+        match schema_id:
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('schema_id')), (schema_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (schema_id,))
+            case _:
+                raise TypeError('schema_id MUST be an integer or a UUID')
         schema = cursor.fetchone()
         return schema if isinstance(schema, Schema) else None
 
@@ -679,26 +658,16 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(schema_id, Schema):
-            cursor.execute('''
-                UPDATE projectmanagement.schemas
-                SET name = %s, modified = CURRENT_DATE
-                WHERE schema_id = %s;
-            ''', (schema_id.name, schema_id.schema_id))
-        elif isinstance(schema_id, int) and isinstance(name, str):
-            cursor.execute('''
-                UPDATE projectmanagement.schemas
-                SET name = %s, modified = CURRENT_DATE
-                WHERE schema_id = %s;
-            ''', (name, schema_id))
-        elif isinstance(schema_id, UUID) and isinstance(name, str):
-            cursor.execute('''
-                UPDATE projectmanagement.schemas
-                SET name = %s, modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (name, schema_id))
-        else:
-            raise TypeError('schema MUST be an integer, UUID or Schema type, and name must be a string')
+        query = sql.SQL(' UPDATE projectmanagement.schemas SET name =%s, modified = CURRENT_TIMESTAMP WHERE {id_field} = %s; ')
+        match schema_id:
+            case Schema():
+                cursor.execute(query.format(id_field = sql.Identifier('shcema_id')), (schema_id.name, schema_id.schema_id))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('schema_id')), (name, schema_id))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (name, schema_id))
+            case _:
+                raise TypeError('schema_id MUST be an integer, UUID or Project type, and name must be a string')
         return True if cursor.rowcount > 0 else False
 
     def update_schema(self, schema_id: Schema | int | UUID, name: str):
@@ -712,36 +681,29 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     @connect
-    def _delete_schema(self, cursor: psycopg.Cursor[Schema], schema: Schema | int | UUID) -> bool:
+    def _delete_schema(self, cursor: psycopg.Cursor[Schema], schema_id: Schema | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(schema, Schema):
-            cursor.execute('''
-                DELETE FROM projectmanagement.schemas
-                WHERE schema_id = %s
-            ''', (schema.schema_id,))
-        elif isinstance(schema, int):
-            cursor.execute('''
-                DELETE FROM projectmanagement.schemaas
-                WHERE schema_id = %s;
-            ''', (schema,))
-        elif isinstance(schema, UUID):
-            cursor.execute('''
-                DELETE FROM projectmanagement.schemas
-                WHERE uuid = %s;
-            ''', (schema,))
-        else:
-            raise TypeError('schema MUST be an integer or a UUID')
-        return True if cursor.rowcount > 0 else False
+        query = sql.SQL(' DELETE FROM projectmanagement.schemas WHERE {id_field} = %s; ')
+        match schema_id:
+            case Schema():
+                cursor.execute(query.format(id_field = sql.Identifier('schema_id')), (schema_id.schema_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('schema_id')), (schema_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (schema_id,))
+            case _:
+                raise TypeError('schema_id MUST be an integer, UUID or Project type')
+        return True if cursor.rowcount > 0 else False 
     
-    def delete_schema(self, schema: Schema | int | UUID):
+    def delete_schema(self, schema_id: Schema | int | UUID):
         ''' Delete a scehma object from the database
         
         Args:
             schema: A schema object
         '''
-        return self._delete_schema(schema=schema)
+        return self._delete_schema(schema_id=schema_id)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -752,13 +714,9 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Label)
-        cursor.execute('''
-            INSERT INTO projectmanagement.labels (name, label, image_link)
-            VALUES (%s, %s, %s)
-            RETURNING *;
-        ''', (name, label, image_link))
-        label = cursor.fetchone()
-        return label if isinstance(label, Label) else None
+        cursor.execute(sql.SQL(' INSERT INTO projectmanagement.labels (name, label, image_link) VALUES (%s, %s, %s) RETURNING *; '), (name, label, image_link))
+        lbl = cursor.fetchone()
+        return  lbl if isinstance(lbl, Label) else None 
     
     def create_label(self, name: str, label: int, image_link: str) -> Label | None:
         ''' Insert a new label object into the database
@@ -778,23 +736,19 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Label)
-        if isinstance(label_id, int):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.labels
-                WHERE label_id = %s;
-            ''', (label_id,))
-        elif isinstance(label_id, UUID):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.labels
-                WHERE uuid = %s;
-            ''', (label_id,))
-        else: 
-            raise TypeError('label_id must be an integer or a UUID')
+        query = sql.SQL(' SELECT * FROM projectmanagement.labels WHERE {id_field} = %s; ')
+        match label_id:
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('label_id')), (label_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (label_id,))
+            case _:
+                raise TypeError('label_id MUST be an integer or a UUID')
         label = cursor.fetchone()
         return label if isinstance(label, Label) else None
     
     def get_label(self, label_id: int | UUID):
-        ''' Query the database for a label 
+        ''' Query the database for a label  
         
         Args:
             label_id: either the label's internal database id or its universally unique identifier
@@ -809,26 +763,27 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(label_id, Label):
-            cursor.execute('''
-                UPDATE projectmanagement.labels
-                SET name = %s, label = %s, image_link = %s, modified = CURRENT_DATE
-                WHERE schema_id = %s;
-            ''', (label_id.name, label_id.label, label_id.image_link))
-        elif isinstance(label_id, int):
-            cursor.execute('''
-                UPDATE projectmanagement.labels
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['label', 'name', 'image_link']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE label_id = %s;
-            ''', (label_id,))
-        elif isinstance(label_id, UUID):
-            cursor.execute('''
-                UPDATE projectmanagement.labels
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['label', 'name', 'image_link']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (label_id,))
-        else:
-            raise TypeError('label_id MUST be an integer, UUID or Label type, label must be an int, name must be a string, and image_link must be a string (or all 3 null)')
+        query = sql.SQL(''' UPDATE projectmanagement.labels SET {augmented_field}, modified = CURRENT_TIMESTAMP  
+                            WHERE {id_field} = %s; ''')
+        kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['name', 'label,' 'image_link']) and value is not None])
+        match label_id:
+            case Label():
+                cursor.execute(query.format(
+                    augmented_field = sql.SQL(f"label = '{label_id.label}', name = '{label_id.name}', image_link = '{label_id.image_link}'"),
+                    id_field = sql.Identifier('label_id')
+                ), (label_id.label_id))
+            case int():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('label_id')
+                ), (label_id,))
+            case UUID():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('uuid')
+                ), (label_id,))
+            case _:
+                raise TypeError('label_id must be a Label, int, or UUID')
         return True if cursor.rowcount > 0 else False
             
     def update_label(self, label_id: Label | int | UUID, name: str | None = None, 
@@ -846,40 +801,38 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_label(self, cursor: psycopg.Cursor[Label], label_id: Label | int | UUID) -> bool:
+    def _delete_label(self, cursor: psycopg.Cursor[Label], label_ids: Label | int | UUID | list[int | UUID | str]) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(label_id, Label):
-            cursor.execute('''
-                DELETE FROM projectmanagement.labels
-                WHERE label_id = %s;
-            ''', (label_id.label_id,))
-        elif isinstance(label_id, int):
-            cursor.execute(''' 
-                DELETE FROM projectmanagement.labels
-                WHERE label_id = %s;
-            ''', (label_id,))
-        elif isinstance(label_id, UUID):
-            cursor.execute('''
-                DELETE FROM projectmanagement.labels
-                WHERE uuid = %s;
-            ''', (label_id,))
-        else:
-            raise TypeError('label must be a label, an integer, or a uuid')
-        return True if cursor.rowcount > 0 else False 
+        query = sql.SQL(' DELETE FROM projectmanagement.labels WHERE {id_field} = %s; ')
+        match label_ids:
+            case list() if isinstance(label_ids[0], Label):
+                cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [label.label_id for label in label_ids])
+            case list() if isinstance(label_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('label_id')), label_ids)
+            case list() if isinstance(label_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), label_ids)
+            case Label():
+                cursor.execute(query.format(id_field = sql.Identifier('label_id')), (label_ids.label_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('label_id')), (label_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (label_ids,))
+            case _:
+                raise TypeError('label_id must be a Label, int, uuid, string')
+        return True if cursor.rowcount > 0 else False
     
-    def delete_label(self, label_id: Label | int | UUID) -> bool:
+    def delete_label(self, label_ids: Label | int | UUID) -> bool:
         ''' Delete a label object from the database
         
         Args:
              label: either a label object, a database id, or a universally unique identifier 
         '''
 
-        return self._delete_label(label_id = label_id)
+        return self._delete_label(label_ids = label_ids)
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
     # Project Management - Herd Units
 
     @connect
@@ -888,11 +841,7 @@ class Database:
         
         '''
         cursor.row_factory = class_row(HerdUnit)
-        cursor.execute('''
-            INSERT INTO projectmanagement.herd_units (name)
-            VALUES (%s)
-            RETURNING *;
-        ''', (name,))
+        cursor.execute(sql.SQL(' INSERT INTO projectmanagement.herd_units (name) VALUES (%s) RETURNING *; '), (name,))
         herd_unit = cursor.fetchone()
         return herd_unit if isinstance(herd_unit, HerdUnit) else None
     
@@ -912,18 +861,14 @@ class Database:
         
         '''
         cursor.row_factory = class_row(HerdUnit)
-        if isinstance(herd_unit_id, int):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.herd_units
-                WHERE herd_unit_id = %s;
-            ''', (herd_unit_id,))
-        elif isinstance(herd_unit_id, UUID):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.herd_units
-                WHERE uuid = %s;
-            ''', (herd_unit_id,))
-        else:
-            raise TypeError('herd_unit_id MUST be an integer or a UUID')
+        query = sql.SQL(' SELECT * FROM projectmanagement.herd_units WHERE {id_field} = %s; ')
+        match herd_unit_id:
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('herd_unit_id')), (herd_unit_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (herd_unit_id,))
+            case _:
+                raise TypeError('herd_unit_id MUST be an integer or a UUID')
         herd_unit = cursor.fetchone()
         return herd_unit if isinstance(herd_unit, HerdUnit) else None
     
@@ -942,26 +887,17 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(herd_unit_id, HerdUnit):
-            cursor.execute('''
-                UPDATE projectmanagement.herd_units
-                SET name = %s, modified = CURRENT_DATE
-                WHERE herd_unit_id = %s;
-            ''', (herd_unit_id.name, herd_unit_id.herd_unit_id))
-        elif isinstance(herd_unit_id, int):
-            cursor.execute('''
-                UPDATE projectmanagement.herd_units
-                SET name = %s, modified = CURRENT_DATE
-                WHERE herd_unit_id = %s;
-            ''', (name, herd_unit_id))
-        elif isinstance(herd_unit_id, UUID):
-            cursor.execute('''
-                UPDATE projectmanagement.herd_units
-                SET name = %s, modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (name, herd_unit_id))
-        else:
-            raise TypeError('herd_unit MUST be an integer, UUID or Herd_Unit type, and name must be a string')
+        query = sql.SQL(''' UPDATE projectmanagement.herd_units SET name = %s, modified = CURRENT_TIMESTAMP
+                            WHERE {id_field} = %s; ''')
+        match herd_unit_id:
+            case HerdUnit():
+                cursor.execute(query.format(id_field = sql.Identifier('herd_unit_id')), (herd_unit_id.name, herd_unit_id.herd_unit_id))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('herd_unit_id')), (name, herd_unit_id))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (name, herd_unit_id))
+            case _:
+                raise TypeError('herd_unit MUST be an integer, UUID or Herd_Unit type, and name must be a string')
         return True if cursor.rowcount > 0 else False
 
     def update_herd_unit(self, herd_unit_id: HerdUnit | int | UUID, name: str | None = None) -> bool:
@@ -976,36 +912,35 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_herd_unit(self, cursor: psycopg.Cursor[HerdUnit], herd_unit_id: HerdUnit | int | UUID) -> bool:
+    def _delete_herd_unit(self, cursor: psycopg.Cursor[HerdUnit], herd_unit_ids: HerdUnit | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(herd_unit_id, HerdUnit):
-            cursor.execute('''
-                DELETE FROM projectmanagement.herd_units
-                WHERE herd_unit_id = %s;
-            ''', (herd_unit_id.herd_unit_id,))
-        elif isinstance(herd_unit_id, int):
-            cursor.execute('''
-                DELETE FROM projectmanagement.herd_units
-                WHERE herd_unit_id = %s;
-            ''', (herd_unit_id,))
-        elif isinstance(herd_unit_id, UUID):
-            cursor.execute('''
-                DELETE FROM projectmanagement.herd_units
-                WHERE uuid = %s;
-            ''', (herd_unit_id,))
-        else:
-            raise TypeError('herd_unit_id MUST be an integer, UUID or HerdUnit type')
+        query = sql.SQL(' DELETE FROM projectmanagement.herd_units WHERE {id_field} = %s; ')
+        match herd_unit_ids:
+            case list() if isinstance(herd_unit_ids[0], HerdUnit):
+                cursor.executemany(query.format(id_field = sql.Identifier('herd_unit_id')), [herd_unit.herd_unit_id for herd_unit in herd_unit_ids])
+            case list() if isinstance(herd_unit_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('herd_unit_id')), herd_unit_ids)
+            case list() if isinstance(herd_unit_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), herd_unit_ids)
+            case HerdUnit():
+                cursor.execute(query.format(id_field = sql.Identifier('herd_unit_id')), (herd_unit_ids.herd_unit_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('herd_unit_id')), (herd_unit_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (herd_unit_ids,))
+            case _:
+                raise TypeError('herd_unit_id must be a Label, int, uuid, string')
         return True if cursor.rowcount > 0 else False
 
-    def delete_herd_unit(self, herd_unit_id: HerdUnit | int | UUID) -> bool:
+    def delete_herd_unit(self, herd_unit_ids: HerdUnit | int | UUID) -> bool:
         ''' Delete a herd unit object from the database
         
         Args:
              herd_unit_id: either a herd unit object, a database id, or a universally unique identifier
         '''
-        return self._delete_herd_unit(herd_unit_id = herd_unit_id)
+        return self._delete_herd_unit(herd_unit_ids = herd_unit_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1017,11 +952,7 @@ class Database:
         
         '''
         cursor.row_factory=class_row(Model)
-        cursor.execute('''
-            INSERT into projectmanagement.models (name)
-            VALUES (%s)
-            RETURNING *;
-        ''', (name,))
+        cursor.execute(' INSERT into projectmanagement.models (name) VALUES (%s)  RETURNING *; ', (name,))
         model = cursor.fetchone()
         return model if isinstance(model, Model) else None
 
@@ -1041,20 +972,16 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Model)
-        if isinstance(model_id, int):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.models
-                WHERE model_id = %s;
-            ''', (model_id,))
-        elif isinstance(model_id, UUID):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.models
-                WHERE uuid = %s
-            ''', (model_id,))
-        else: 
-            raise TypeError('model_id MUST be an integer or a UUID')
+        query = sql.SQL(' SELECT * FROM projectmanagement.models WHERE {id_field} = %s; ')
+        match model_id:
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('model_id')), (model_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (model_id,))
+            case _:
+                raise TypeError('model_id MUST be an integer or a UUID')
         model = cursor.fetchone()
-        return model if isinstance(model, Model) else None
+        return model if isinstance(model, Model) else None    
     
     def get_model(self, model_id: int | UUID):
         ''' Query the database for a model
@@ -1071,27 +998,17 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        cursor.row_factory = class_row(Model)
-        if isinstance(model_id, Model):
-            cursor.execute('''
-                UPDATE projectmanagement.models
-                SET name = %s, modified = CURRENT_DATE
-                WHERE model_id = %s;
-            ''', (model_id.name, model_id.model_id))
-        elif isinstance(model_id, int):
-            cursor.execute('''
-                UPDATE projectmanagement.models
-                SET name = %s, modified = CURRENT_DATE
-                WHERE model_id = %s;
-            ''', (name, model_id))
-        elif isinstance(model_id, UUID):
-            cursor.execute('''
-                UPDATE projectmanagement.models
-                SET name = %s, modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (name, model_id))
-        else:
-            raise TypeError('model MUST be an integer, UUID or Model type, and name must be a string')
+        query = sql.SQL(''' UPDATE projectmanagement.models SET name = %s, modified = CURRENT_TIMESTAMP 
+                            WHERE {id_field} = %s; ''')
+        match model_id:
+            case Model():
+                cursor.execute(query.format(id_field = sql.Identifier('model_id')), (model_id.name, model_id.model_id))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('model_id')), (name, model_id))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (name, model_id))
+            case _:
+                raise TypeError('model_id MUST be an integer, UUID or Herd_Unit type, and name must be a string')
         return True if cursor.rowcount > 0 else False
     
     def update_model(self, model_id: Model | int | UUID, name: str | None = None) -> bool:
@@ -1106,39 +1023,38 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _delete_model(self, cursor: psycopg.Cursor[Model], model_id: Model | int | UUID) -> bool:
+    def _delete_model(self, cursor: psycopg.Cursor[Model], model_ids: Model | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(model_id, Model):
-            cursor.execute('''
-                DELETE FROM projectmanagement.models
-                WHERE model_id = %s;
-            ''', (model_id.model_id,))
-        elif isinstance(model_id, int):
-            cursor.execute('''
-                DELETE FROM projectmanagement.models
-                WHERE model_id = %s;
-            ''', (model_id,))
-        elif isinstance(model_id, UUID):
-            cursor.execute('''
-                DELETE FROM projectmanagement.models
-                WHERE uuid = %s
-            ''', (model_id))
-        else: 
-            raise TypeError('model_id MUST be an integer, UUID or Model type')
+        query = sql.SQL(' DELETE FROM projectmanagement.models WHERE {id_field} = %s; ')
+        match model_ids:
+            case list() if isinstance(model_ids[0], HerdUnit):
+                cursor.executemany(query.format(id_field = sql.Identifier('model_id')), [model.model_id for model in herd_unit_ids])
+            case list() if isinstance(model_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('model_id')), model_ids)
+            case list() if isinstance(model_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), model_ids)
+            case Model():
+                cursor.execute(query.format(id_field = sql.Identifier('model_id')), (model_ids.model_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('model_id')), (model_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (model_ids,))
+            case _:
+                raise TypeError('model_id must be a Label, int, or uuid')
         return True if cursor.rowcount > 0 else False
 
-    def delete_model(self, model_id: Model | int | UUID) -> bool:
+
+    def delete_model(self, model_ids: Model | int | UUID) -> bool:
         ''' Delete a model object from the database
         
         Args:
              model_id: either a model object, a database id, or a universally unique identifier
         '''
-        return self._delete_model(model_id = model_id)
+        return self._delete_model(model_ids = model_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
     # Project Management - Surveys
 
     @connect
@@ -1147,11 +1063,7 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Survey)
-        cursor.execute('''
-            INSERT into projectmanagement.surveys (survey_year, name, additional_info)
-            VALUES (%s, %s, %s)
-            RETURNING *;
-        ''', (survey_year, name, additional_info))
+        cursor.execute(sql.SQL(' INSERT into projectmanagement.surveys (survey_year, name, additional_info) VALUES (%s, %s, %s) RETURNING *; '), (survey_year, name, additional_info))
         survey = cursor.fetchone()
         return survey if isinstance(survey, Survey) else None
     
@@ -1173,18 +1085,14 @@ class Database:
         
         '''
         cursor.row_factory = class_row(Survey)
-        if isinstance(survey_id, int):
-            cursor.execute('''
-                SELECT * from projectmanagement.surveys 
-                WHERE survey_id = %s;
-            ''', (survey_id,))
-        elif isinstance(survey_id, UUID):
-            cursor.execute('''
-                SELECT * FROM projectmanagement.surveys
-                WHERE uuid = %s;
-            ''', (survey_id,))
-        else:
-            raise TypeError('survey_id MUST be an integer or a UUID')
+        query = sql.SQL(' SELECT * FROM projectmanagement.surveys WHERE {id_field} = %s; ')
+        match survey_id:
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('survey_id')), (survey_id,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (survey_id,))
+            case _:
+                raise TypeError('survey_id MUST be an integer or a UUID')
         survey = cursor.fetchone()
         return survey if isinstance(survey, Survey) else None
 
@@ -1203,27 +1111,29 @@ class Database:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(survey_id, Survey):
-            cursor.execute('''
-                UPDATE projectmanagement.surveys
-                SET survey_year = %s, name = %s, additional_info = %s
-                WHERE survey_id = %s;
-            ''', (survey_year, name, additional_info, survey_id.survey_id))
-        elif isinstance(survey_id, int):
-            cursor.execute('''
-                UPDATE projectmanagement.surveys
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE survey_id = %s;
-            ''', (survey_id,))
-        elif isinstance(survey_id, UUID):
-            cursor.execute('''
-                UPDATE projectmanagement.surveys
-                SET ''' + ', '.join([f"{key} = '{value}'" for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info']) and value is not None]) + ''', modified = CURRENT_DATE
-                WHERE uuid = %s;
-            ''', (survey_id,))
-        else:
-            raise TypeError('survey_id MUST be an integer, UUID or Survey type, survey_year must be an int, name must be a string, and additional info must be a string (or all 3 null)')
+        query = sql.SQL(''' UPDATE projectmanagement.surveys SET {augmented_field}, modified = CURRENT_TIMESTAMP
+                            WHERE {id_field} = %s; ''')
+        kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info',]) and value is not None])
+        match survey_id:
+            case Survey():
+                cursor.execute(query.format(
+                    augmented_field = sql.SQL(f"survey_year = '{survey_id.survey_year}', name = '{survey_id.name}', additional_info = '{survey_id.additional_info}'"),
+                    id_field = sql.Identifier('survey_id')
+                ), (survey_id.survey_id))
+            case int():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('survey_id')
+                ), (survey_id,))
+            case UUID():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('uuid')
+                ), (survey_id,))
+            case _:
+                raise TypeError('survey_id must be a Label, int, uuid, string')
         return True if cursor.rowcount > 0 else False
+        
 
     def update_survey(self, survey_id: Survey | int | UUID, survey_year: int | None = None, name: str | None = None, additional_info: str | None = None):
         ''' Augment a survey in the database by providing a modified Survey object or a valid id and a new name, and or survey_year, and or additional_info
@@ -1239,39 +1149,126 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect 
-    def _delete_survey(self, cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID) -> bool:
+    def _delete_survey(self, cursor: psycopg.Cursor[Survey], survey_ids: Survey | int | UUID) -> bool:
         ''' Internal helper function, do not call directly
         
         '''
-        if isinstance(survey_id, Survey):
-            cursor.execute('''
-                DELETE FROM projectmanagement.surveys
-                WHERE survey_id = %s
-            ''', (survey_id.survey_id,))
-        elif isinstance(survey_id, int):
-            cursor.execute('''
-                DELETE FROM projectmanagement.surveys
-                WHERTE survey_id = %s
-            ''', (survey_id,))
-        elif isinstance(survey_id, UUID):
-            cursor.execute('''
-                DELETE FROM projectmanagement.surveys
-                WHERE uuid = %s
-            ''', (survey_id,))
-        else:
-            raise TypeError('survey_id MUST be an integer, UUID or Survey type')
+        query = sql.SQL(' DELETE FROM projectmanagement.surveys WHERE {id_field} = %s; ')
+        match survey_ids:
+            case list() if isinstance(survey_ids[0], Survey):
+                cursor.executemany(query.format(id_field = sql.Identifier('survey_id')), [survey.survey_id for survey in survey_ids])
+            case list() if isinstance(survey_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('survey_id')), survey_ids)
+            case list() if isinstance(survey_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), survey_ids)
+            case Survey():
+                cursor.execute(query.format(id_field = sql.Identifier('survey_id')), (survey_ids.survey_id,))
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('survey_id')), (survey_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (survey_ids,))
+            case _:
+                raise TypeError('survey_id must be a Survey, int, uuid')
         return True if cursor.rowcount > 0 else False
     
-    def delete_survey(self, survey_id: Survey | int | UUID) -> bool:
+    def delete_survey(self, survey_ids: Survey | int | UUID) -> bool:
         ''' Delete a survey object from the database
         
         Args:
              survey_id: either a survey object, a database id, or a universally unique identifier
         '''
-        return self._delete_survey(survey_id = survey_id)
+        return self._delete_survey(survey_ids = survey_ids)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Core - Images
+
+    @connect
+    def _create_image(self, cursor: psycopg.Cursor, name: str, herd_unit_id: int | UUID, image_length: int, image_width: int) -> Image | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(Image)
+        herd_unit_id = herd_unit_id if isinstance(herd_unit_id, int) else self._get_herd_unit(herd_unit_id).herd_unit_id
+        cursor.execute(sql.SQL(' INSERT INTO core.images (herd_unit_id, name, image_length_px, image_width_px) VALUES (%s, %s, %s, %s) RETURNING *; '), (herd_unit_id, name, image_length, image_width))
+        image = cursor.fetchone()
+        return image if isinstance(image, Image) else None 
+
+    def create_image(self, name: str, herd_unit_id: int | UUID, image_length: int, image_width: int) -> Image | None:
+        '''
+        
+        '''
+        return self._create_image(name = name, herd_unit_id = herd_unit_id, image_length = image_length, image_width = image_width)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
+    @connect
+    def _get_image(self, cursor: psycopg.Cursor, image_ids: int | UUID | list[int | UUID]) -> list[Image] | Image | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(Image)
+        query = sql.SQL(' SELECT * FROM core.images WHERE {id_field} = %s; ')
+        match image_ids:
+            case list() if isinstance(image_ids[0], int):
+                cursor.executemany(query.format(id_field = sql.Identifier('image_id')), image_ids)
+            case list() if isinstance(image_ids[0], UUID):
+                cursor.executemany(query.format(id_field = sql.Identifier('uuid')), image_ids)
+            case int():
+                cursor.execute(query.format(id_field = sql.Identifier('image_id')), (image_ids,))
+            case UUID():
+                cursor.execute(query.format(id_field = sql.Identifier('uuid')), (image_ids,))
+            case _:
+                raise TypeError('image_ids must be an int, or uuid or a list')
+        images = cursor.fetchall()
+        return images if isinstance(images, list) and all(isinstance(image, Image) for image in images) else images if isinstance(images, Image) else None
+    
+    def get_image(self, image_ids: int | UUID | list[int | UUID]) -> list[Image] | Image | None:
+        '''
+        
+        '''
+        return self._get_image(image_ids = image_ids)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect 
+    def _update_image(self, cursor: psycopg.Cursor, image_id: Image | int | UUID) -> bool:
+        '''
+        
+        '''
+        query = sql.SQL(''' UPDATE core.images SET {augmented_field}, modified = CURRENT_TIMESTAMP
+                            WHERE {id_field} = %s; ''')
+        kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value).format(sql.Identifier(key)) for key, value, in locals().items() if key in set(['name', 'image_length_px', 'image_width_px', 'herd_unit_id']) and value is not None)])
+        match image_id:
+            case Image():
+                cursor.execute(query.format(
+                    augmented_field = sql.SQL(f"name = '{image_id.name}', herd_unit_id = '{image_id.herd_unit_id}', image_length_px = '{image_id.image_length_px}', image_width_px = '{image_id.image_width_px}'"),
+                    id_field = sql.Identifier('image_id')
+                ), (image_id.image_id))
+            case int():
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('image_id')
+                ), (image_id,))
+            case UUID():   
+                cursor.execute(query.format(
+                    augmented_field = kw_augmented_field,
+                    id_field = sql.Identifier('uuid')
+                ), (image_id))
+            case _:
+                raise TypeError('image_id must be an Image, int, or UUID')
+        return True if cursor.rowcount > 0 else False
+    
+    def update_image(self, image_id: Image | int | UUID) -> bool:
+        '''
+        
+        '''
+        return self._update_image(image_id = image_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Relationship Management - usermanagement <-> usermanagement: users <-> roles
 
     @connect
@@ -1283,12 +1280,12 @@ class Database:
         roles_objs = role_ids if isinstance(role_ids, Role) or (isinstance(role_ids, list) and isinstance(role_ids[0], Role)) else self._get_role(role_ids)
         match user_id:
             case User():
-                cursor.executemany(query, [(int(user_id.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user_id.id), roles_objs.role_id))
+                cursor.executemany(query, [(user_id.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, roles_objs.role_id))
             case int():
                 cursor.executemany(query, [(int(user_id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
             case UUID():
                 user = self.get_user(user_id)
-                cursor.executemany(query, [(int(user.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user.id), roles_objs.role_id))
+                cursor.executemany(query, [(user.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user.user_id, roles_objs.role_id))
             case _:
                 raise TypeError('user_id must be a User object, int, or uuidm, and role_ids must be a Role object, int, UUID, str, or a list consisting entirely of ONE of the four ')
         return True if cursor.rowcount > 0 else False
@@ -1311,16 +1308,16 @@ class Database:
         '''
         cursor.row_factory = class_row(Role)
         query = sql.SQL(''' 
-            SELECT roles.role_id, role, created, modified, uuid FROM usermanagement.roles AS roles JOIN usermanagement.users_roles AS users_roles 
+            SELECT roles.role_id, name, created, modified, uuid FROM usermanagement.roles AS roles JOIN usermanagement.users_roles AS users_roles 
             ON users_roles.role_id = roles.role_id WHERE users_roles.user_id = %s; ''')
         match user_id:
             case User():
-                cursor.execute(query, (int(user_id.id),))
+                cursor.execute(query, (user_id.user_id,))
             case int():
                 cursor.execute(query, (user_id,))
             case _:
                 user = self._get_user(user_id)
-                cursor.execute(query, (int(user.id),))
+                cursor.execute(query, (user_id.user_id,))
         roles = cursor.fetchall()
         return roles[0] if len(roles) == 1 and isinstance(roles[0], Role) else roles if all(isinstance(role, Role) for role in roles) else None
 
@@ -1343,12 +1340,12 @@ class Database:
         roles_objs = role_ids if isinstance(role_ids[0], Role) else self._get_role(role_ids)
         match user_id:
             case User():
-                cursor.executemany(query, [(int(user_id.id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user_id.id), roles_objs.role_id))
+                cursor.executemany(query, [(user_id.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, roles_objs.role_id))
             case int():
                 cursor.executemany(query, [(user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
             case _:
                 user = self._get_user(user_id)
-                cursor.executemany(query, [(int(user.id), role.id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (int(user.id), roles_objs.role_id))
+                cursor.executemany(query, [(user_id.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, roles_objs.role_id))
         return True if cursor.rowcount > 0 else False
                 
     def remove_roles_user(self, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
@@ -1358,7 +1355,6 @@ class Database:
         self._remove_roles_user(user_id = user_id, role_ids = role_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
     # Relationship Management - usermanagement <-> usermanagement: users <-> organizations
 
     @connect
@@ -1375,12 +1371,12 @@ class Database:
                 org_objs = self.get_organization(orgs)
         match user_id:
             case User():
-                cursor.executemany(query, [(int(user_id.id), org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (int(user_id.id), org_objs.organization_id))
+                cursor.executemany(query, [(user_id.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id.user_id, org_objs.organization_id))
             case int():
                 cursor.executemany(query, [(user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id, org_objs.organization_id))
             case _:
                 user = self.get_user(user_id)
-                cursor.executemany(query, [(int(user_id.id), org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (int(user.id), org_objs.organization_id))
+                cursor.executemany(query, [(user_id.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id.user_id, org_objs.organization_id))
         return True if cursor.rowcount > 0 else False
     
     def add_user_organizations(self, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
@@ -1421,7 +1417,7 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID, organization_ids: Organization | int | UUID | str | list[Organization | int | UUID | str]) -> list[Organization] | Organization | None:
+    def _get_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID) -> list[Organization] | Organization | None:
         '''
         
         '''
@@ -1431,20 +1427,20 @@ class Database:
             WHERE org_users.user_id = %s; ''')
         match user_id:
             case User():
-                cursor.execute(query, (int(user_id.id),))
+                cursor.execute(query, (user_id.user_id,))
             case int():
                 cursor.execute(query, (user_id,))
             case _:
                 user = self._get_user(user_id)
-                cursor.execute(query, (int(user.id)))
+                cursor.execute(query, (user_id.user_id))
         orgs = cursor.fetchall()
         return orgs[0] if len(orgs) == 1 and isinstance(orgs[0], Organization) else orgs if all(isinstance(org, Organization) for org in orgs) else None
     
-    def get_user_organizations(self, user_id: User | int | UUID, organization_ids: Organization | int | UUID | str | list[Organization | int | UUID | str]) -> list[Organization] | Organization | None:
+    def get_user_organizations(self, user_id: User | int | UUID) -> list[Organization] | Organization | None:
         '''
         
         '''
-        return self._get_user_organizations(user_id = user_id, organization_ids = organization_ids)
+        return self._get_user_organizations(user_id = user_id)
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1457,12 +1453,12 @@ class Database:
         users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
         match organization_id:
             case Organization():
-                cursor.executemany(query, [(organization_id.organization_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id.organization_id, int(users_objs.id)))
+                cursor.executemany(query, [(organization_id.organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id.organization_id, users_objs.user_id))
             case int():
-                cursor.executemany(query, [(organization_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id, int(users_objs.id)))
+                cursor.executemany(query, [(organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id, users_objs.user_id))
             case _:
                 org = self._get_organization(organization_id)
-                cursor.executemany(query, [(org.organization_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (org.organization_id, int(users_objs.id)))
+                cursor.executemany(query, [(org.organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (org.organization_id, users_objs.user_id))
         return True if cursor.rowcount > 0 else False 
 
     def remove_organization_users(self, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
@@ -1472,8 +1468,7 @@ class Database:
         self._remove_organization_users(organization_id = organization_id, user_ids = user_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-    # Relationship Management - projectmanagemnt <-> usermanagement: projects <-> users
+    # Relationship Management - projectmanagement <-> usermanagement: projects <-> users
 
     @connect
     def _add_user_project(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
@@ -1481,22 +1476,22 @@ class Database:
         
         '''
         query = sql.SQL(''' INSERT INTO projectmanagement.projects_users (project_id, user_id) VALUES (%s, %s); ''')
-        user_objs = user_ids if isinstance(user_ids, User) or (isinstance(user_ids, list) and isinstance(user_ids[0])) else self._get_user(user_ids)
+        user_objs = user_ids if isinstance(user_ids, User) or (isinstance(user_ids, list) and isinstance(user_ids[0], User)) else self._get_user(user_ids)
         match project_id:
             case Project():
-                cursor.execute(query, [(project_id.project_id, int(user.id)) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id.project_id, int(user_objs.id)))
+                cursor.executemany(query, [(project_id.project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id.project_id, user_objs.user_id))
             case int():
-                cursor.execute(query, [(project_id, int(user.id)) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id, int(user_objs.id)))
+                cursor.executemany(query, [(project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id, user_objs.user_id))
             case _:
                 project = self._get_project(project_id)
-                cursor.execute(query, [(project.project_id, int(user.id)) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project.project_id, int(user_objs.id)))
+                cursor.execute(query, [(project.project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project.project_id, user_objs.user_id))
         return True if cursor.rowcount > 0 else None
     
     def add_user_project(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
         '''
         
         '''
-        self._add_user_project(project_id = project_id, user_ids = user_ids)
+        return self._add_user_project(project_id = project_id, user_ids = user_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1517,7 +1512,7 @@ class Database:
                 cursor.execute(query, (project_id,))
             case _:
                 project = self._get_project(project_id)
-                cursor.execute(query, (project.project_id))
+                cursor.execute(query, (project.project_id,))
         users = cursor.fetchall()
         return users[0] if len(users) == 1 and isinstance(users[0], User) else users if all(isinstance(user, User) for user in users) else None
     
@@ -1530,31 +1525,31 @@ class Database:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     @connect
-    def _get_user_projects(self, cursor: psycopg.Cursor, user_id: User | int | UUID) -> list[Project] | Project | None:
+    def _get_user_projects(self, cursor: psycopg.Cursor, user_id: User | int | UUID) -> list[Project] | None:
         '''
         
         '''
         cursor.row_factory = class_row(Project)
         query = sql.SQL(''' 
-            SELECT project_id, name, created, modified, uuid FROM projectmanagement.projects as projects JOIN 
-            projectmanagement.projects_users as projects_users ON project_users.project_id projects.project_id
+            SELECT projects.project_id, name, created, modified, uuid FROM projectmanagement.projects as projects JOIN 
+            projectmanagement.projects_users AS projects_users ON projects_users.project_id = projects.project_id
             WHERE projects_users.user_id = %s; ''')
         match user_id:
             case User():
-                cursor.execute(query, (int(user_id.id),))
+                cursor.execute(query, (user_id.user_id,))
             case int():
-                cursor.execute(query, (int(user_id),))
+                cursor.execute(query, (user_id,))
             case _:
                 user = self._get_user(user_id)
-                cursor.execute(query, (int(user.id),))
-        projects = cursor.fetcahll()
-        return projects[0] if len(projects) == 1 and isinstance(projects[0], Project) else projects if all(isinstance(project, Project) for project in projects) else None
+                cursor.execute(query, (user.user_id,))
+        projects = cursor.fetchall()
+        return projects 
 
-    def get_user_projects(self, user_id: User | int | UUID) -> list[Project] | Project | None:
+    def get_user_projects(self, user_id: User | int | UUID) -> list[Project] | None:
         '''
         
         '''
-        self._get_user_projects(user_id = user_id)
+        return self._get_user_projects(user_id = user_id)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1567,12 +1562,12 @@ class Database:
         users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
         match project_id:
             case Project():
-                cursor.executemany(query, [(project_id.project_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id.project_id, int(users_objs.id)))
+                cursor.executemany(query, [(project_id.project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id.project_id, users_objs.user_id))
             case int():
-                cursor.executemany(query, [(project_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id, int(users_objs.id)))
+                cursor.executemany(query, [(project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id, users_objs.user_id))
             case _:
                 project = self._get_project(project_id)
-                cursor.executemany(query, [(project.project_id, int(user.id)) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (project.project_id, int(users_objs.id)))
+                cursor.executemany(query, [(project.project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (project.project_id, users_objs.user_id))
         return True if cursor.rowcount > 0 else False 
 
     def remove_project_users(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
@@ -1581,9 +1576,199 @@ class Database:
         '''
         self._remove_project_users(project_id = project_id, user_ids = user_ids)
     
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    
+     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Relationship Management - projectmanagement <-> projectmanagement: projects <-> schemas
 
+    @connect
+    def _add_schema_project(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, schema_ids: Schema | int | UUID | list[int | UUID]) -> bool:
+        '''
+        
+        '''
+        query = sql.SQL(''' INSERT INTO projectmanagement.projects_schemas (project_id, schema_id) VALUES (%s, %s); ''')
+        schema_objs = schema_ids if isinstance(schema_ids, Schema) or (isinstance(schema_ids, list) and isinstance(schema_ids[0], Schema)) else self._get_schema()
+        match project_id:
+            case Project():
+                cursor.executemany(query, [(project_id.project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project_id.project_id, schema_objs.schema_id))
+            case int():
+                cursor.executemany(query, [(project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project_id, schema_objs.schema_id))
+            case _:
+                project = self._get_project(project_id)
+                cursor.execute(query, [(project.project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project.project_id, schema_objs.user_id))
+        return True if cursor.rowcount > 0 else None
+
+    def add_schema_project(self, project_id: Project | int | UUID, schema_ids: Schema | int | UUID | list[int | UUID]) -> bool:
+        '''
+        
+        '''
+        return self._add_schema_project(project_id = project_id, schema_ids = schema_ids)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+    @connect
+    def _get_project_schemas(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[Schema] | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(Schema)
+        query = sql.SQL('''
+            SELECT schemas.schema_id, name, created, modified, uuid FROM projectmanagement.schemas AS schemas 
+            JOIN projectmanagement.projects_schemas AS projects_schemas ON projects_schemas.schema_id = schemas.schema_id 
+            WHERE projects_schemas.project_id =  %s; ''')
+        match project_id:
+            case Project():
+                cursor.execute(query, (project_id.project_id))
+            case int():
+                cursor.execute(query, (project_id,))
+            case _:
+                project = self._get_project(project_id)
+                cursor.execute(query, (project.project_id,))
+        schemas = cursor.fetchall()
+        return schemas
+    
+    def get_project_schemas(self, project_id: Project | int | UUID) -> list[Schema] | None:
+        '''
+        
+        '''
+        return self._get_project_schemas(project_id = project_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Relationship Management - projectmanagement <-> projectmanagement: projects <-> herdunits
+    
+    @connect 
+    def _get_project_herd_units(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[HerdUnit] | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(HerdUnit)
+        query = sql.SQL('''
+            SELECT herd_units.herd_unit_id, name, created, modified, uuid FROM projectmanagement.herd_units as herd_units JOIN
+            projectmanagement.projects_herd_units AS projects_herd_units ON projects_herd_units.herd_unit_id = herd_units.herd_unit_id
+            WHERE projects_herd_units.project_id = %s; ''')
+        match project_id:
+            case Project():
+                cursor.execute(query, (project_id.project_id,))
+            case int():
+                cursor.execute(query, (project_id,))
+            case _:
+                project = self._get_project(project_id)
+                cursor.execute(query, (project.project_id,))
+        herd_units = cursor.fetchall()
+        return herd_units
+
+    def get_project_herd_units(self, project_id: Project | int | UUID) -> list[HerdUnit] | None:
+        '''
+        
+        '''
+        return self._get_project_herd_units(project_id = project_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Relationship Management - projectmanagement <-> projectmanagement: projects <-> surveys
+
+    @connect 
+    def _get_project_surveys(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[Survey] | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(Survey)
+        query = sql.SQL('''
+            SELECT surveys.survey_id, survey_year, name, additional_info, created, modified, uuid from projectmanagement.surveys AS surveys
+            JOIN projectmanagement.projects_surveys AS projects_surveys ON projects_surveys.survey_id = surveys.survey_id 
+            WHERE projects_surveys.project_id = %s; ''')
+        match project_id:
+            case Project():
+                cursor.execute(query, (project_id.project_id,))
+            case int():
+                cursor.execute(query, (project_id,))
+            case _:
+                project = self._get_project(project_id)
+                cursor.execute(query, (project.project_id,))
+        surveys = cursor.fetchall()
+        return surveys
+                
+    def get_projects_surveys(self, project_id: Project | int | UUID) -> list[Survey] | None:
+        '''
+        
+        '''
+        return self._get_project_surveys(project_id = project_id)
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Relationship Management - projectmanagement <-> projectmanagement: projects <-> models
+    
+    @connect
+    def _get_project_models(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[Model] | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(Model)
+        query = sql.SQL(''' SELECT models.model_id, name, created, modified, uuid FROM projectmanagement.models AS models
+                            JOIN projectmanagement.projects_models AS projects_models ON projects_models.model_id = models.model_id
+                            WHERE projects_models.project_id = %s; ''')
+        match project_id:
+            case Project():
+                cursor.execute(query, (project_id.project_id,))
+            case int():
+                cursor.execute(query, (project_id,))
+            case _:
+                project = self._get_project(project_id)
+                cursor.execute(query, (project.project_id,))
+        models = cursor.fetchall()
+        return models
+    
+    def get_project_models(self, project_id: Project | int | UUID) -> list[Model] | None:
+        '''
+        
+        '''
+        return self._get_project_models(project_id = project_id)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Relationship Management - projectmanagement <-> projectmanagement: schemas <-> labels
+
+    @connect
+    def _get_schema_labels(self, cursor: psycopg.Cursor, schema_id: Schema | int | UUID) -> list[Label] | None:
+        '''
+        
+        '''
+        cursor.row_factory = class_row(Label)
+        query = sql.SQL(' SELECT * FROM projectmanagement.labels WHERE schema_id = %s; ')
+        match schema_id:
+            case Schema():
+                cursor.execute(query (schema_id.schema_id,))
+            case int():
+                cursor.execute(query, (schema_id,))
+            case _:
+                schema = self._get_schema(schema_id)
+                cursor.execute(query, (schema.schema_id,))
+        labels = cursor.fetchall() 
+        return labels 
+
+    def get_schema_labels(self, schema_id: Project | int | UUID) -> list[Label] | None:
+        '''
+        
+        '''
+        return self._get_schema_labels(schema_id = schema_id)
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Access Control - User Can Access
+
+    @connect
+    def _check_user_can_access_project(self, cursor: psycopg.Cursor, user_id: User |int | UUID, project_id: Project | int | UUID) -> bool:
+        '''
+        
+        '''
+        query = sql.SQL(' SELECT EXISTS (SELECT * FROM projectmanagement.projects_users WHERE user_id = %s AND project_id = %s); ')
+        user = self._get_user(user_id) if not isinstance(user_id, User) else user_id
+        project = self._get_project(project_id) if not isinstance(project_id, Project) else project_id
+        if not user or not project:
+            return False # A user cannot access a project that does not exist
+        cursor.execute(query, (user.user_id, project.project_id))
+        response = cursor.fetchone()
+        return response[0]
+    
+    def check_user_can_access_project(self, user_id: User |int | UUID, project_id: Project | int | UUID) -> bool:
+        '''
+        
+        '''
+        return self._check_user_in_project(user_id = user_id, project_id = project_id)
+            
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 # class Database(ABC): # Abstract class for all database types
@@ -1920,7 +2105,7 @@ class Database:
 #     def insert_manual_crops(self, train_json_path: str, model_id: int):
 #         prefix = len('high-altitude-pronghorn-survey-')
 #         suffix = len('_crop_xx')
-#         current_date = datetime.date.today().strftime('%Y-%m-%d')
+#         CURRENT_TIMESTAMP = datetime.date.today().strftime('%Y-%m-%d')
 
 #         with open(train_json_path) as f:
 #             train_json = json.load(f)
@@ -1937,7 +2122,7 @@ class Database:
 #                 Values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 #                 ON CONFLICT(CropName) DO NOTHING
 #             '''
-#             self.query(query, (image_id, model_id, os.path.splitext(image_info['file_name'])[0][prefix:], 1, 0, 0, 0, 0, current_date, str(uuid4()),))
+#             self.query(query, (image_id, model_id, os.path.splitext(image_info['file_name'])[0][prefix:], 1, 0, 0, 0, 0, CURRENT_TIMESTAMP, str(uuid4()),))
 # #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #     def populate_images(self, images: dict['str', Image], model_id: int, 
 #                                    herd_id: int, insert_images: bool, insert_predictions: bool):  
@@ -2098,7 +2283,7 @@ class Database:
 #         signal.signal(signal.SIGINT, self.interrupt_handler)
 # #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #     def upload_crops(self, crops: dict[str, Union[Crop, list[Prediction]]]) -> int:
-#         current_date = datetime.now()
+#         CURRENT_TIMESTAMP = datetime.now()
 #         for crop_id in crops:
 #             num_crops = 0
 #             model_id = crops[crop_id]['predictions'][0].model.id
@@ -2110,7 +2295,7 @@ class Database:
 #                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 #             '''
 
-#             self.query(query, (model_id, crop.image_id, crop.name, 0, points[0], points[1], points[2], points[3], current_date, str(uuid4()))) 
+#             self.query(query, (model_id, crop.image_id, crop.name, 0, points[0], points[1], points[2], points[3], CURRENT_TIMESTAMP, str(uuid4()))) 
 #             num_crops += 1
 
 #             for pred in predictions:

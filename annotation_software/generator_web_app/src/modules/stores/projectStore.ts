@@ -1,0 +1,144 @@
+// Project state store 
+// Author: Michael B. Lance
+// Created: August 6, 2025
+// Updated: August 6, 2025
+//---------------------------------------------------------------------------------------------------------------------------//
+
+import { defineStore } from "pinia";
+import { useUserStore } from "./userStore";
+import { getProjects, getProjectSchemas, getProjectHerdUnits, getProjectModels, getProjectSurveys, getSchemaLabels } from "../apiV1Methods";
+import  { Project, Schema, Label, HerdUnit, Model, Survey } from "../../types/generatorobjects"; 
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export const useProjectStore = defineStore('projectStore', {
+    state: () => ({
+        projects: undefined as Project[] | undefined,
+        project_idx: undefined as number | undefined,
+        schemas: undefined as Schema[] | undefined,
+        schema_idx: undefined as number | undefined,
+        labels: undefined as Label[] | undefined,
+        label_idx: undefined as number | undefined,
+        models: undefined as Model[] | undefined,
+        model_idx: undefined as number | undefined,
+        herd_units: undefined as HerdUnit[] | undefined,
+        herd_unit_idx: undefined as number | undefined,
+        surveys: undefined as Survey[] | undefined,
+        survey_idx: undefined as number | undefined
+    }),
+    getters: {
+        CurrentProject: (state) => (state.projects && state.project_idx != undefined) ? state.projects[state.project_idx] : undefined,
+        CurrentSchema: (state) => (state.schemas && state.schema_idx!= undefined) ? state.schemas[state.schema_idx] : undefined,
+        CurrentLabel: (state) => (state.labels && state.label_idx != undefined) ? state.labels[state.label_idx] : undefined,
+        CurrentModel: (state) => (state.models && state.model_idx != undefined) ? state.models[state.model_idx] : undefined,
+		CurrentHerdUnit: (state) => (state.herd_units && state.herd_unit_idx != undefined) ? state.herd_units[state.herd_unit_idx] : undefined,
+		CurrentSurvey: (state) => (state.surveys && state.survey_idx != undefined) ? state.surveys[state.survey_idx] : undefined,
+    },
+    actions: {
+        async get_projects() {
+            this.projects = await getProjects() as Project[];
+        },
+        set_current_project(project: Project | undefined) {
+            if (this.projects && project != undefined) {
+                const idx = this.projects.indexOf(project);
+                if (this.project_idx == idx) {
+                    this.project_idx = undefined;
+                    return;
+                }
+                this.project_idx = idx;
+            }
+        },
+        get_project_by_id(id: string) {
+            if (this.projects) return this.projects.find(project => project.uuid === id) as Project;
+        },
+        async get_schemas() {
+            if (this.CurrentProject) this.schemas = await getProjectSchemas(this.CurrentProject.uuid) as Schema[];
+        },
+        set_current_schema(schema: Schema | undefined) {
+            if (this.schemas && schema != undefined) { 
+                const idx = this.schemas.indexOf(schema);
+                if (this.schema_idx == idx) {
+                    this.schema_idx = undefined;
+                    return;
+                }
+                this.schema_idx = idx;
+            }
+        },
+        get_schema_by_id(id: string) {
+            if (this.schemas) return this.schemas.find(schema => schema.uuid === id) as Schema;
+        },
+        async get_labels() {
+            if (this.CurrentProject && this.CurrentSchema) this.labels = await getSchemaLabels(this.CurrentProject.uuid, this.CurrentSchema.uuid) as Label[];
+        },
+        set_current_label(label: Label | undefined) {
+            if (this.labels && label != undefined) {
+				const idx = this.labels.indexOf(label);
+				if (this.label_idx == idx) {
+					this.label_idx = undefined;
+					return;
+				}
+				this.label_idx = idx;
+			}
+        },
+        get_label_by_id(id: string) {
+            if (this.labels) return this.labels.find(label => label.uuid === id) as Label;
+        },
+        async get_models() {
+            if (this.CurrentProject) this.models = await getProjectModels(this.CurrentProject.uuid) as Model[];
+        },
+        set_current_model(model: Model | undefined) {
+            if (this.models && model != undefined) {
+                const idx = this.models.indexOf(model);
+                if (this.model_idx == idx) {
+                    this.model_idx = undefined;
+                    return;
+                }
+                this.model_idx = idx;
+            }
+        },
+        async get_herd_units() {
+            if (this.CurrentProject) this.herd_units = await getProjectHerdUnits(this.CurrentProject.uuid) as HerdUnit[];
+        },
+        set_current_herd_unit(herdunit: HerdUnit | undefined) {
+            if (this.herd_units && herdunit != undefined) {
+                const idx = this.herd_units.indexOf(herdunit);
+                if (this.herd_unit_idx == idx) {
+                    this.herd_unit_idx = undefined;
+                    return;
+                }
+                this.herd_unit_idx = idx;
+            }
+        },
+        async get_surveys() {
+            if (this.CurrentProject) this.surveys = await getProjectSurveys(this.CurrentProject.uuid) as Survey[];
+        },
+        set_current_survey(survey: Survey | undefined) {
+            if (this.surveys && survey != undefined) {
+                const idx = this.surveys.indexOf(survey);
+                if (this.survey_idx == idx) {
+                    this.survey_idx = undefined;
+					return;
+                }
+                this.survey_idx = idx;
+            }
+        },
+		async get_project_children() {
+			await this.get_herd_units();
+			await this.get_models();
+			await this.get_surveys();
+			await this.get_schemas();
+		},
+        clear_state() {
+			this.schemas = undefined;
+			this.schema_idx = undefined;
+			this.labels = undefined;
+			this.label_idx = undefined;
+			this.models = undefined;
+			this.model_idx = undefined;
+			this.herd_units = undefined;
+			this.herd_unit_idx = undefined;
+			this.surveys = undefined;
+			this.survey_idx = undefined;
+        }
+    }
+})

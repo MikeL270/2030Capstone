@@ -1,9 +1,18 @@
-<script setup lang="ts">
-import { ref } from 'vue'
-import { Icon } from '@iconify/vue'
-import { RouterLink} from 'vue-router'
+<script lang="ts">
+import { defineComponent } from 'vue';
+import { ref } from 'vue';
+import { Icon } from '@iconify/vue';
+import { RouterLink} from 'vue-router';
+import { useUserStore } from '@/modules/stores/userStore';;
 
-const menu_toggled = ref(false)
+export default defineComponent({
+    name: 'Menu',
+    setup() {
+        const menu_toggled = ref(false);
+        const user_store = (useUserStore());
+        return { menu_toggled, user_store}
+    }
+})
 </script>
 
 <template>
@@ -13,27 +22,26 @@ const menu_toggled = ref(false)
                 <Icon icon="ic:round-dashboard" width="36" height="36" ></Icon>
                 <p v-if="menu_toggled"> Dashboard </p>
             </RouterLink>
-            <RouterLink to="/auto-cropper" class="Item" title="Auto Crop">
+            <RouterLink to="/auto-cropper/" :class="['Item', {'router-link-active': $route.path.startsWith('/auto-cropper/')}]" title="Auto Crop">
                 <Icon icon="fluent:crop-sparkle-24-filled" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Auto Crop </p>
+            </RouterLink>
+            <RouterLink to="/upload" class="Item" title="Upload">
+                <Icon icon="material-symbols:upload" width="36" height="36"></Icon>
+                <p v-if="menu_toggled"> Upload </p>
             </RouterLink>
             <RouterLink to="/statistics" class="Item" title="Statistics">
                 <Icon icon="wpf:statistics" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Statistics </p>
             </RouterLink>
-            <RouterLink to="/profile" class="Item" title="Profile">
+            <RouterLink v-if="user_store.user?.uuid" :to="{ name: 'user', params: { uuid: user_store.user?.uuid}}" class="Item" title="Profile">
                 <Icon icon="iconamoon:profile-fill" width="36" height="36"></Icon>
-                <p v-if="menu_toggled"> Profile </p>
-            </RouterLink>
-            <RouterLink to="/api-tester" class="Item"title="API Tester">
-                <Icon icon="fluent-mdl2:test-auto-solid" width="36" height="36"></Icon>
-                <p v-if="menu_toggled"> API Tester </p>
+                <p v-if="menu_toggled"> User </p>
             </RouterLink>
             <RouterLink to="/settings" class="Item"title="Settings">
                 <Icon icon="ic:outline-settings" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Settings </p>
             </RouterLink>
-
         </nav>
         <a class="GH-Link" href="https://github.com/benkoger/pronghorn-census" title="Github repo">
             <Icon icon="fe:github" width="36" height="36"></Icon>

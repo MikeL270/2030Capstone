@@ -1,5 +1,5 @@
 -- UUID default: DEFAULT gen_random_uuid()
--- Date default: DEFAULT CURRENT_DATE
+-- Date default: DEFAULT CURRENT_TIMESTAMP
 
 -- Drop all user-defined schemas (excluding system schemas like public, pg_catalog, information_schema)
 DO $$ DECLARE
@@ -18,14 +18,15 @@ CREATE SCHEMA projectmanagement;
 
 CREATE TABLE core.images (
   image_id serial PRIMARY KEY,
+  survey_id integer NOT NULL DEFAULT 0,
   herd_unit_id integer NOT NULL DEFAULT 0,
   name varchar(50) NOT NULL,
   in_training boolean DEFAULT false,
   crops_generated smallint DEFAULT 0,
   reviewd_by_user_id integer NOT NULL DEFAULT 0,
   opened_by_user_id integer NOT NULL DEFAULT 0,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   image_length_px integer NOT NULL,
   image_width_px integer NOT NULL,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
@@ -41,8 +42,8 @@ CREATE TABLE core.predictions (
   box_ty integer NOT NULL,
   box_bx integer NOT NULL,
   box_by integer NOT NULL,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -56,8 +57,8 @@ CREATE TABLE core.reviewed_area (
   reviewed_areaLengthPx integer NOT NULL DEFAULT 2100,
   reviewed_areaWidthPx integer NOT NULL DEFAULT 2100,
   reviewd_by_user_id integer NOT NULL DEFAULT 0,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -71,8 +72,8 @@ CREATE TABLE core.annotations (
   box_bx integer NOT NULL,
   box_by integer NOT NULL,
   created_by_user_id integer NOT NULL,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -100,8 +101,8 @@ CREATE TABLE usermanagement.users (
   external_auth_id varchar(255),
   external_auth_provider varchar(50),
   status varchar(20) NOT NULL DEFAULT 'active',
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login timestamptz,
   locale varchar(10),
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
@@ -109,9 +110,9 @@ CREATE TABLE usermanagement.users (
 
 CREATE TABLE usermanagement.roles (
   role_id serial PRIMARY KEY,
-  role varchar(25) UNIQUE NOT NULL,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  name varchar(25) UNIQUE NOT NULL,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -119,8 +120,8 @@ CREATE TABLE usermanagement.organizations (
   organization_id serial PRIMARY KEY,
   name varchar(50) UNIQUE NOT NULL,
   logo_url varchar(1000),
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -145,16 +146,16 @@ CREATE TABLE usermanagement.organizations_users (
 CREATE TABLE projectmanagement.projects (
   project_id serial PRIMARY KEY,
   name varchar(50) NOT NULL,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
 CREATE TABLE projectmanagement.schemas (
   schema_id serial PRIMARY KEY,
   name varchar(30) NOT NULL,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -164,24 +165,24 @@ CREATE TABLE projectmanagement.labels (
   label smallint NOT NULL,
   name varchar(50) NOT NULL,
   image_link varchar(1000),
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
 CREATE TABLE projectmanagement.herd_units (
   herd_unit_id serial PRIMARY KEY,
   name varchar(30) NOT NULL,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
 CREATE TABLE projectmanagement.models (
   model_id serial PRIMARY KEY,
   name varchar(30) NOT NULL,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -190,8 +191,8 @@ CREATE TABLE projectmanagement.surveys (
   survey_year integer NOT NULL,
   name varchar(50),
   additional_info text,
-  created date NOT NULL DEFAULT CURRENT_DATE,
-  modified date NOT NULL DEFAULT CURRENT_DATE,
+  created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -207,19 +208,19 @@ CREATE TABLE projectmanagement.projects_schemas (
   PRIMARY KEY (project_id, schema_id)
 );
 
-CREATE TABLE projectmanagement.herd_units_projects (
+CREATE TABLE projectmanagement.projects_herd_units (
   project_id integer,
   herd_unit_id integer,
   PRIMARY KEY (project_id, herd_unit_id)
 );
 
-CREATE TABLE projectmanagement.models_projects (
+CREATE TABLE projectmanagement.projects_models (
   project_id integer,
   model_id integer,
   PRIMARY KEY (project_id, model_id)
 );
 
-CREATE TABLE projectmanagement.surveys_projects (
+CREATE TABLE projectmanagement.projects_surveys (
   survey_id integer,
   project_id integer,
   PRIMARY KEY (survey_id, project_id)
@@ -236,6 +237,8 @@ CREATE INDEX ON core.images (herd_unit_id);
 CREATE INDEX ON core.images (created);
 
 CREATE INDEX ON core.images (uuid);
+
+CREATE INDEX ON core.images (survey_id);
 
 CREATE INDEX ON core.predictions (label_id);
 
@@ -273,7 +276,7 @@ CREATE INDEX ON usermanagement.users (locale);
 
 CREATE INDEX ON usermanagement.users (uuid);
 
-CREATE INDEX ON usermanagement.roles (role);
+CREATE INDEX ON usermanagement.roles (name);
 
 CREATE INDEX ON usermanagement.roles (created);
 
@@ -327,6 +330,8 @@ ALTER TABLE core.images ADD FOREIGN KEY (opened_by_user_id) REFERENCES usermanag
 
 ALTER TABLE core.images ADD FOREIGN KEY (reviewd_by_user_id) REFERENCES usermanagement.users (user_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE core.images ADD FOREIGN KEY (survey_id) REFERENCES projectmanagement.surveys (survey_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
 ALTER TABLE core.predictions ADD FOREIGN KEY (image_id) REFERENCES core.images (image_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE core.predictions ADD FOREIGN KEY (label_id) REFERENCES projectmanagement.labels (label_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
@@ -375,17 +380,17 @@ ALTER TABLE projectmanagement.projects_schemas ADD FOREIGN KEY (schema_id) REFER
 
 ALTER TABLE projectmanagement.projects_schemas ADD FOREIGN KEY (project_id) REFERENCES projectmanagement.projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE projectmanagement.herd_units_projects ADD FOREIGN KEY (herd_unit_id) REFERENCES projectmanagement.herd_units (herd_unit_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE projectmanagement.projects_herd_units ADD FOREIGN KEY (herd_unit_id) REFERENCES projectmanagement.herd_units (herd_unit_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE projectmanagement.herd_units_projects ADD FOREIGN KEY (project_id) REFERENCES projectmanagement.projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE projectmanagement.projects_herd_units ADD FOREIGN KEY (project_id) REFERENCES projectmanagement.projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE projectmanagement.models_projects ADD FOREIGN KEY (project_id) REFERENCES projectmanagement.projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE projectmanagement.projects_models ADD FOREIGN KEY (project_id) REFERENCES projectmanagement.projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE projectmanagement.models_projects ADD FOREIGN KEY (model_id) REFERENCES projectmanagement.models (model_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE projectmanagement.projects_models ADD FOREIGN KEY (model_id) REFERENCES projectmanagement.models (model_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE projectmanagement.surveys_projects ADD FOREIGN KEY (survey_id) REFERENCES projectmanagement.surveys (survey_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE projectmanagement.projects_surveys ADD FOREIGN KEY (survey_id) REFERENCES projectmanagement.surveys (survey_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE projectmanagement.surveys_projects ADD FOREIGN KEY (project_id) REFERENCES projectmanagement.projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE projectmanagement.projects_surveys ADD FOREIGN KEY (project_id) REFERENCES projectmanagement.projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE projectmanagement.surveys_herd_units ADD FOREIGN KEY (survey_id) REFERENCES projectmanagement.surveys (survey_id);
 
@@ -396,7 +401,7 @@ ALTER TABLE projectmanagement.surveys_herd_units ADD FOREIGN KEY (herd_unit_id) 
 
 INSERT INTO usermanagement.users (user_id, username, Status) VALUES (0, 'NO_USER', 'DISABLED');
 
-INSERT INTO usermanagement.roles (role_id, role) VALUES (0, 'NO_ROLE');
+INSERT INTO usermanagement.roles (role_id, name) VALUES (0, 'NO_ROLE');
 
 INSERT INTO usermanagement.organizations (organization_id, name) VALUES (0, 'NO_ORGANIZATION');
 
@@ -422,10 +427,10 @@ INSERT INTO projectmanagement.projects_users (project_id, user_id) VALUES (0, 0)
 
 INSERT INTO projectmanagement.projects_schemas (project_id, schema_id) VALUES (0, 0);
 
-INSERT INTO projectmanagement.herd_units_projects (herd_unit_id, project_id) VALUES (0, 0);
+INSERT INTO projectmanagement.projects_herd_units (herd_unit_id, project_id) VALUES (0, 0);
 
-INSERT INTO projectmanagement.models_projects(model_id, project_id) VALUES (0, 0);
+INSERT INTO projectmanagement.projects_models(model_id, project_id) VALUES (0, 0);
 
-INSERT INTO projectmanagement.surveys_projects(survey_id, project_id) VALUES (0, 0);
+INSERT INTO projectmanagement.projects_surveys(survey_id, project_id) VALUES (0, 0);
 
 INSERT INTO projectmanagement.surveys_herd_units(survey_id, herd_unit_id) VALUES (0, 0);

@@ -3,7 +3,7 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: June 27, 2025
+# Updated: July 23, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -18,8 +18,11 @@ from cropgenerator import auto_crop, create_subcrop, save_crop
 from cropgenerator.generatorobjects import CgOBJ, CropgenJSONPRovider, Prediction, Box
 import database as db
 import json
+import boto3
+from botocore.client import Config
+from boto3.s3.transfer import TransferConfig
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Configuration
@@ -34,13 +37,6 @@ db_config = {
     'port': '5432'              
 }
 
-prefix = len('high-altitude-pronghorn-survey-')
-suffix = len('_crop_xx')
-
-root = os.environ.get('ROOT')
-herd_unit = os.environ.get('HERD_UNIT')
-save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
-os.makedirs(save_folder, exist_ok=True) # type: ignore
 use_s3 = True
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -57,7 +53,7 @@ CORS(app, resources={
         'origins': [
             'http://testing.lancecomputer.com:5173', # Development
             #'http://192.168.0.3:6900', # Production
-            'http://localhost:5173',
+            #'http://localhost:5173',
         ],
         'supports_credentials': True     
     }
@@ -82,56 +78,283 @@ login_manager.init_app(app)
 base = db.Database(db_config)
 
 #Initialize s3 object storage
-if use_s3:
-    import boto3
-    from botocore.client import Config
-    from boto3.s3.transfer import TransferConfig
 
-    BUCKET_NAME = 'mlance4' # Change to production bucket name
+BUCKET_NAME = 'mlance4' # Change to production bucket name
 
-    extra_args = {
-        'ContentType': 'image/jpg',
+extra_args = {
+    'ContentType': 'image/jpg',
+}
+
+s3_config = Config(
+    signature_version='s3',
+    s3={
+        'payload_signing_enabled': False,
+        'addressing_style': 'virtual',
+        'request_checksum_calculation': 'when_required',
+        'response_checksum_validation': 'when_required' 
     }
+)
 
-    s3_config = Config(
-        signature_version='s3',
-        s3={
-            'payload_signing_enabled': False,
-            'addressing_style': 'virtual',
-            'request_checksum_calculation': 'when_required',
-            'response_checksum_validation': 'when_required' 
-        }
-    )
+pathfinder = boto3.client(
+    's3',
+    config = s3_config,
+    endpoint_url = os.environ.get('AWS_ENDPOINT_URL_S3') 
+)
 
-    pathfinder = boto3.client(
-        's3',
-        config = s3_config,
-        endpoint_url = os.environ.get('AWS_ENDPOINT_URL_S3') 
-    )
-
-    transfer_config = TransferConfig(
-        use_threads = True, #experimentally changed this to true, change to false if this things gets mad 
-        multipart_threshold = 16 * 1024 * 1024
-    )   
+transfer_config = TransferConfig(
+    use_threads = True, #experimentally changed this to true, change to false if this things gets mad 
+    multipart_threshold = 16 * 1024 * 1024
+)   
 #---------------------------------------------------------------------------------------------------------------------------#
 
 # User session management
+
 @login_manager.user_loader
 @cache.memoize(300)
 def load_user(session_user_id):
-    db_id = int(session_user_id)
-    return base.get_user(db_id)
+    user = base.get_user(UUID(session_user_id))
+    print(session_user_id) 
+    return user 
 
-@login_manager.unauthorized_callback
+@login_manager.unauthorized_handler
 def unathorizated_callback():
     abort(401, 'unathorized, are you logged in? Should you be accessing this?')
 
 @app.route('/api/v1/authenticate', methods=['POST'])
 def authenticate():
+    req_data = request.get_json()
+    if not req_data or 'external-id' not in req_data:
+        abort(400, 'malformed request')
+    user = base.get_user(req_data['external-id'])
+    print(user)#
+    if not user:
+        abort(401, 'authentication failed')
+    else:
+        login_user(user)
+        if not user.last_login:
+            user.last_login = base.login_user(user)
+        else:
+            base.login_user(user)
+        serialized_user = json.dumps(user, default=app.json_provider_class(app).default)
+        return Response(serialized_user, mimetype='application/json'), 201
+
+@app.route('/api/v1/check_auth', methods=["GET"])
+@login_required
+def check_auth():
+    return Response('true'), 201
+
+@app.route('/api/v1/users/get_current_user', methods = ['GET'])
+@login_required
+def get_user():
+    user = base.get_user(UUID(current_user.id))
+    serialized_user = json.dumps(user, default=app.json_provider_class(app).default)
+    return Response(serialized_user, mimetype='application/json'), 201
+
+@app.route('/api/v1/deauthenticate', methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Organization CRUD
+@app.route('/api/v1/create/organization')
+@login_required
+def create_organization():
+    pass
+
+@app.route('/api/v1/request/organizations/all')
+@login_required
+def get_user_organizations():
+    organizations = base.get_user_organizations(current_user)
+    serialized_organizations = [json.dumps(organization, defalut=app.json_provider_class(app).default) for organization in organizations] if organizations else None
+    return jsonify(serialized_organizations), 201 
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Role CRUD
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Project CRUD
+
+@app.route('/api/v1/projects/create', methods = ['POST'])
+@login_required
+def create_project():
+    name = request.json.get('project_name') 
+    project = base.create_project(name = name, users = current_user)
+    serialized_project = json.dumps(project, default=app.json_provider_class(app).default)
+    return Response(serialized_project, mimetype='application/json'), 201
+
+@app.route('/api/v1/projects/request/<string:project_id>', methods=['GET'])
+@login_required
+def get_project(project_id: str):
+    project = base.get_project(project_id = UUID(project_id))
+    if not project:
+        abort(404, 'project not found')
+    user_can_access_proj = base.check_user_in_project(current_user, project)
+    print(user_can_access_proj)
+    serialized_project = json.dumps(project, default=app.json_provider_class(app).default)
+    return Response(serialized_project, mimetype='application/json'), 201 if user_can_access_proj else abort(401, 'unauthorized')
+
+@app.route('/api/v1/request/projects/all')
+@login_required
+def get_all_projects():
+    projects = base.get_user_projects(current_user)
+    serialized_projects = [json.dumps(project, default=app.json_provider_class(app).default) for project in projects] if projects else None
+    return jsonify(serialized_projects), 201
+
+@app.route('/api/v1/projects/update/<string:project_id>', methods = ['PUT'])
+@login_required
+def update_project(project_id: str):
     pass
 
 #---------------------------------------------------------------------------------------------------------------------------#
+# Schema CRUD
 
+@app.route('/api/v1/request/projects/<string:project_id>/schemas/all', methods=['GET'])
+@login_required
+def get_project_schemas(project_id: str):
+    schemas = base.get_project_schemas(UUID(project_id))
+    serialized_schemas = [json.dumps(schema, default=app.json_provider_class(app).default) for schema in schemas] if schemas else None
+    return jsonify(serialized_schemas), 201
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Label CRUD
+
+@app.route('/api/v1/create/label')
+@login_required
+def create_label():
+    pass
+
+@app.route('/api/v1/request/projects/<string:project_id>/schemas/<string:schema_id>/labels/all', methods=['GET'])
+@login_required
+def get_schema_labels(project_id: str, schema_id: str):
+    labels = base.get_schema_labels(UUID(schema_id))
+    serialized_labels = [json.dumps(label, default=app.json_provider_class(app).default) for label in labels] if labels else None
+    return jsonify(serialized_labels), 201
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Herd Unit Crud
+
+@app.route('/api/v1/request/projects/<string:project_id>/herd_units/all', methods=['GET'])
+@login_required
+def get_project_herdunits(project_id: str):
+    herd_units = base.get_project_herd_units(UUID(project_id))
+    serialized_herd_units = [json.dumps(herd_unit, default=app.json_provider_class(app).default) for herd_unit in herd_units] if herd_units else None
+    if serialized_herd_units is None:
+        abort(404, 'No Herd Units Found')
+    return jsonify(serialized_herd_units), 201
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Model Crud
+
+@app.route('/api/v1/request/projects/<string:project_id>/models/all', methods=['GET'])
+@login_required
+def get_project_models(project_id: str):
+    models = base.get_project_models(UUID(project_id))
+    serialized_models = [json.dumps(model, default=app.json_provider_class(app).default) for model in models] if models else None
+    if serialized_models is None:
+        abort(404, 'No Models Found')
+    return jsonify (serialized_models), 201
+
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Survey Crud
+
+@app.route('/api/v1/request/projects/<string:project_id>/surveys/all', methods=['GET'])
+@login_required
+def get_project_surveys(project_id: str):
+	surveys = base.get_projects_surveys(UUID(project_id))
+	serialized_surveys = [json.dumps(survey, default=app.json_provider_class(app).default) for survey in surveys] if surveys else None
+	if serialized_surveys is None:
+		abort(404, 'No Surveys Found')
+	return jsonify(serialized_surveys), 201
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Image and Prediction Mass Uploader
+
+@app.route('/api/v1/uploads/presigned-url', methods=['POST'])
+@login_required
+def get_presigned_url():
+    '''
+    Generates a pre-signed URL for a single file chunk. 
+    This is the core endpoint for offloading data transfer. 
+    The client sends a PUT request to this temporary URL with the chunk data.
+    '''
+    upload_id = request.json.get('upload_id')
+    part_number = request.json.get('part_number')
+    img_key = request.json.get('s3_key')
+    try: 
+        response = pathfinder.generate_presigned_url(
+        ClientMethod='upload_part',
+        Params={
+            'BUCKET': BUCKET_NAME,
+            'KEY': img_key,
+            'UploadId': upload_id,
+            'PartNumber': part_number
+        }
+        )
+        return jsonify(response), 201
+    except Exception as e:
+        abort(500)
+
+
+
+@app.route('/api/v1/upload/image/initiate', methods=['POST'])
+@login_required
+def init_upload():
+    '''
+    Initiates a new multipart upload. The client calls this for each file 
+    to be uploaded. the API responds with a unique UploadId, which is required 
+    for all subsequent chunk uploads for that file.
+    '''
+    img_id = request.json.get('image_id')
+    herd_unit_id = request.json.get('herd_unit_id') # Herd unit object's UUID from db
+    survey_id = request.json.get('survey_id') # Survey oject's UUID from db
+    img_key = f'images/survey/{survey_id}/herd_unit/{herd_unit_id}/image/{img_id}'
+    try: 
+        response = pathfinder.create_multipart_upload(
+            Bucket = BUCKET_NAME,
+            Key = img_key,
+            ContentType = 'image/jpeg',
+        )
+        upload_id = response['UploadId']
+        return jsonify({'upload_id': upload_id}), 201
+    except Exception as e:
+        abort(500)
+
+@app.route('/api/v1/upload/image/complete', methods=['POST'])
+@login_required
+def upload_complete():
+    '''
+    Finalizes a multipart upload. After all chunks have been successfully 
+    uploaded, the client calls this endpoint with the UploadId and a list 
+    of all part details (PartNumber, ETag) to assemble the file on the 
+    storage backend.
+    '''
+
+@app.route('/api/v1/upload/image/abort', methods=['POST'])
+@login_required
+def abort_upload():
+    '''
+    Aborts a multipart upload. This endpoint is for cleaning up partial 
+    uploads on the storage backend if an upload is canceled or fails
+    permanently.
+    '''
+
+@app.route('/api/v1/upload/save-to-db', methods=['POST'])
+@login_required
+def save_to_db():
+    '''
+    	Saves to the database.
+    '''
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Error Handling
+@app.errorhandler(404)
+def not_found(error):
+    return f'404: {error.description}', 404
+
+
+#---------------------------------------------------------------------------------------------------------------------------#
 # batches = {}
 
 # #---------------------------------------------------------------------------------------------------------------------------#
@@ -403,7 +626,7 @@ def authenticate():
 #     del batches[session['bgroupid']][batch_id]
 #     return jsonify(message='success'), 201
 
-# if __name__ == "__main__":
-#     app.run(debug=True, host='0.0.0.0')
+if __name__ == "__main__":
+    app.run(debug=True, host='0.0.0.0')
 
     

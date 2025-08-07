@@ -1,6 +1,7 @@
 import './assets/main.css';
 import { createApp } from 'vue';
-import { createPinia } from 'pinia';
+import { createPinia } from 'pinia'; 
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'; 
 import App from './App.vue';
 import router from './router' ;
 import { Icon } from '@iconify/vue';
@@ -9,6 +10,7 @@ import { POSITION, type PluginOptions } from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
 
 const pinia = createPinia()
+pinia.use(piniaPluginPersistedstate)
 const app = createApp(App);
 
 app.use(pinia);
@@ -19,7 +21,7 @@ await router.isReady();
 const options: PluginOptions = {
     position: POSITION.BOTTOM_RIGHT,
     transition: "Vue-Toastification__bounce",
-    maxToasts: 1,
+    maxToasts: 5,
     newestOnTop: true
 };
 

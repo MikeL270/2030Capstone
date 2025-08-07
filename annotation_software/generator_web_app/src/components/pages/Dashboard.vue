@@ -1,18 +1,18 @@
 <script lang="ts">
+import { defineComponent } from 'vue';
+import { useUserStore } from '@/modules/stores/userStore';
 
-export default {
-    components: {
+export default defineComponent({
+    name: 'Dashboard',
+    setup() {
+        const user_store = (useUserStore());
+        return { user_store }
     }
-}
-
+})
 </script>
 <template>
-    <div class="Page-Container">
-       <p> Dashboard </p>
-    </div>
 </template>
-    
 <style scoped>
-   
+
 </style>
 

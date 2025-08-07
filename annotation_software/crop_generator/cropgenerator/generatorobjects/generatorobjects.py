@@ -1,7 +1,7 @@
 # Class definition for objects used in the crop_generator module and database
 # Author: Michael B. Lance
 # created: April 4, 2025
-# updated: July 9, 2025
+# updated: August, 2 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import numpy as np
@@ -35,8 +35,8 @@ class Project(CgOBJ):
     '''
     project_id: int
     name: str
-    created: datetime.date
-    modified: datetime.date
+    created: datetime
+    modified: datetime
     uuid: UUID
 
     def serialize(self):
@@ -54,8 +54,8 @@ class Schema(CgOBJ):
     '''
     schema_id: int
     name: str
-    created: datetime.date
-    modified: datetime.date
+    created: datetime
+    modified: datetime
     uuid: UUID
 
     def serialize(self):
@@ -76,8 +76,8 @@ class Label(CgOBJ):
     label: int
     name: str
     image_link: str
-    created: datetime.date
-    modified: datetime.date
+    created: datetime
+    modified: datetime
     uuid: UUID
 
     def serialize(self):
@@ -97,8 +97,8 @@ class HerdUnit(CgOBJ):
     '''
     herd_unit_id: int
     name: str
-    created: datetime.date
-    modified: datetime.date
+    created: datetime
+    modified: datetime
     uuid: UUID
 
     def serialize(self):
@@ -116,8 +116,8 @@ class Model(CgOBJ):
     '''
     model_id: int
     name: str
-    created: datetime.date
-    modified: datetime.date
+    created: datetime
+    modified: datetime
     uuid: UUID
 
     def serialize(self):
@@ -137,8 +137,8 @@ class Survey(CgOBJ):
     survey_year: int
     name: str
     additional_info: str
-    created: datetime.date
-    modified: datetime.date
+    created: datetime
+    modified: datetime
     uuid: UUID
 
     def serialize(self):
@@ -157,7 +157,8 @@ class Survey(CgOBJ):
 class User(UserMixin, CgOBJ):
     def __init__(self, user_id: int, username: str, external_auth_id: str, external_auth_provider: str, status: str,
                  created: datetime.date, modified: datetime.date, last_login: datetime,  locale: str, uuid: UUID, roles: tuple[str] | None = None):
-        self.id = str(user_id) # this is this way to make Flask-Login happy
+        self.id = str(uuid) # this is this way to make Flask-Login happy
+        self.user_id = user_id
         self.username = username
         self.external_auth_id = external_auth_id
         self.external_auth_provider = external_auth_provider
@@ -183,21 +184,21 @@ class User(UserMixin, CgOBJ):
             'modified': self.modified,
             'last_login': self.last_login,
             'locale': self.locale,
-            'uuid': self.uuid,
+            'uuid': self.id,
             'roles': self.roles
         }
     
 @dataclass
 class Role(CgOBJ):
     role_id: int
-    role: str
-    created: datetime.date
-    modified: datetime.date
+    name: str
+    created: datetime
+    modified: datetime
     uuid: UUID
 
     def serialize(self):
         return {
-            'role': self.role,
+            'name': self.name,
             'created': self.created,
             'modified': self.modified,
             'uuid': self.uuid
@@ -207,8 +208,8 @@ class Role(CgOBJ):
 class Organization(CgOBJ):
     organization_id: int
     name: str
-    created: datetime.date
-    modified: datetime.date
+    created: datetime
+    modified: datetime
     logo_url: str | None
     uuid: UUID
 
@@ -221,8 +222,8 @@ class Organization(CgOBJ):
             'uuid': self.uuid
         }
 
-
 #---------------------------------------------------------------------------------------------------------------------------#
+# Core 
 
 class Box(CgOBJ):
     ''' A Box contains dimensional data for crops and predictions
@@ -274,41 +275,21 @@ class Box(CgOBJ):
             'bottom_right': list(self.bottom_right),
         }
 
-# class HerdUnit(CgOBJ):
-#     def __init__(self, db_id: int=None, name: str=None, year: str=None):
-#         self.id = db_id
-#         self.name = name
-#         self.survey_year = year
-
-#     def serialize(self):
-#         return {
-#             'id': self.id,
-#             'name': self.name,
-#             'survey_year': self.survey_year
-#         }
-
-
-# class Model(CgOBJ):
-#     def __init__(self, db_id: int=None, model_name: str=None):
-#         self.id = db_id
-#         self.name = model_name
-    
-#     def serialize(self):
-#         return {
-#             'id': self.id,
-#             'name': self.name
-#         }
-
+@dataclass
 class Image(CgOBJ):
-    def __init__(self, db_id: int=None, name: str=None, herd_unit: HerdUnit=None, in_training:bool=False, local_path: str=None):
-        self.id = db_id
-        self.name = name
-        self.herd_unit = herd_unit
-        self.in_training = in_training
-        self.local_path = local_path
-        self.url = None
-        self.image = None
-        self.img_encoded = None
+    image_id: int
+    herd_unit_id: int
+    name: str
+    in_training: bool
+    crops_generated: int
+    reviewed_by_user_id: int
+    opened_by_user_id: int
+    created: datetime
+    modified: datetime
+    image_length_px: int
+    image_width_px: int
+    uuid: UUID
+    image: None
 
     def set_image(self, image_data: np.ndarray):
         if isinstance(image_data, bytes):
@@ -339,23 +320,29 @@ class Image(CgOBJ):
         _, self.img_encoded = cv2.imencode(img_format, self.get_image())
         return self.img_encoded.tobytes()
         
-
     def serialize(self) -> dict:
         return {
-            'id': self.id,
             'name': self.name,
-            'herd_unit': self.herd_unit.serialize(),
             'in_training': self.in_training,
-            'url': self.url,
+            'crops_generated': self.crops_generated,
+            'created': self.created,
+            'modified': self.modified,
+            'image_length_px': self.image_length_px,
+            'image_width_px': self.image_width_px,
+            'uuid': self.uuid
         }
 
 class Prediction(CgOBJ):
-    def __init__(self, db_id: int=None, dimensions: Box=None, score: float=None, label: int=None, model: Model=None):
-        self.id = db_id
-        self.model = model
-        self.dimensions = dimensions
+    def __init__(self, pred_id: int, image_id: int, model_id: int, score: float, box_tx: int, box_ty: int,
+                 box_bx: int, box_by: int, created: datetime | None, modified: datetime | None, uuid: UUID):
+        self.pred_id = pred_id
+        self.image_id = image_id
+        self.model_id = model_id
         self.score = score
-        self.label = label
+        self.dimensions = Box((box_tx, box_ty), (box_bx, box_by))
+        self.created = created 
+        self.modified = modified
+        self.uuid = uuid
     
     def serialize(self) -> dict:
         return {

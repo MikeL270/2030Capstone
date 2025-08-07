@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Authenticate  from '@/components/Authenticate.vue';
-import { useUserStore } from '@/modules/userManagement';
+import { useUserStore } from '@/modules/stores/userStore';
 
 
 const router = createRouter({
@@ -23,17 +23,17 @@ const router = createRouter({
       },
     },
     { 
-      path: '/profile', 
-      name: 'profile', 
-      component: () => import('./components/pages/Profile.vue'), 
+      path: '/user/:uuid', 
+      name: 'user', 
+      component: () => import('./components/pages/User.vue'), 
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
       },
     },
     { 
-      path: '/auto-cropper', 
-      name: 'Auto-Cropper', 
+      path: '/auto-cropper/:projects?/:uuid?', 
+      name: 'auto-cropper', 
       component: () => import('./components/pages/Auto-Cropper.vue'),
       meta: {
         requiresAuth: true,
@@ -58,14 +58,14 @@ const router = createRouter({
         requiresNoLayout: false,
       },
     },
-    { 
-      path: '/api-tester', 
-      name: 'api-tester', 
-      component: () => import('./components/pages/api_tester/ApiTesterMain.vue'),
+    {
+      path: '/upload/:project?/:uuid?',
+      name: 'upload',
+      component: () => import('./components/pages/Uploader.vue'),
       meta: {
         requiresAuth: true,
-        requiresNoLayout: false
-      },
+        requiresNoLayout: false,
+      }
     }
   ],
 });
@@ -79,7 +79,7 @@ router.beforeEach(async (to, from, next) => {
       next();
     } else {
       await user_store.check_auth();
-      if (await user_store.check_auth()) {
+      if (user_store.logged_in) {
           next();
       } else {
         next({
@@ -88,7 +88,6 @@ router.beforeEach(async (to, from, next) => {
         });
       }
     }
-    
   } else {
     next()
   }

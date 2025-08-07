@@ -1,7 +1,7 @@
 // Typescript Class definition analogues for crop_generator objects 
 // Author: Michael B. Lance
 // Created: April 9, 2025
-// Updated: June 17, 2025
+// Updated: August 8, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { mean } from 'lodash';
@@ -42,37 +42,24 @@ export class Box implements Box_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface HerdUnit_intf {
-    id: number,
-    name: string,
-    survey_year: string,
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
 }
 
 export class HerdUnit implements HerdUnit_intf {
-    id: number;
     name: string;
-    survey_year: string; 
+    created: Date;
+    modified: Date;
+    uuid: string;
+
     
-    constructor(herd_unit: HerdUnit_intf) {
-        this.id = herd_unit.id;
-        this.name = herd_unit.name;
-        this.survey_year = herd_unit.survey_year;
-    }
-}
-
-//---------------------------------------------------------------------------------------------------------------------------//
-
-export interface Model_intf {
-    id: number,
-    name: string,
-}
-
-export class Model implements Model_intf {
-    id: number;
-    name: string;
-
-    constructor(model: Model_intf) {
-        this.id = model.id;
-        this.name = model.name;
+    constructor(herdunit: HerdUnit_intf) {
+        this.name = herdunit.name;
+        this.created = new Date(herdunit.created);
+        this.modified = new Date(herdunit.modified);
+        this.uuid = herdunit.uuid;
     }
 }
 
@@ -190,14 +177,213 @@ export class PredictionCrop implements PredictionCrop_intf {
 }
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export interface User {
-    db_id: number | undefined, 
-    status: string | undefined, 
-    role: string | undefined, 
-    created: Date | undefined, 
-    updated: Date | undefined, 
-    locale: string | undefined,
-    userName: string | undefined, 
+export interface Role_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+}
+
+export class Role implements Role_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+
+    constructor(role: Role_intf) {
+        this.name = role.name;
+        this.created = new Date(role.created);
+        this.modified = new Date(role.modified);
+        this.uuid = role.uuid;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface User_intf {
+    username: string;
+    status: string;
+    created: Date;
+    modified: Date;
+    last_login: Date;
+    locale: string;
+    uuid: string;
+    roles: Role_intf[];
+}
+
+export class User {
+    username: string;
+    status: string;
+    created: Date;
+    modified: Date;
+    last_login: Date;
+    locale: string;
+    roles: Role[];
+    uuid: string;
+
+    constructor(usr: User_intf) {
+        this.username = usr.username;
+        this.status = usr.status;
+        this.created = new Date(usr.created);
+        this.modified = new Date(usr.modified);
+        this.last_login = new Date(usr.last_login);
+        this.locale = usr.locale;
+        this.roles = [];
+        for (const role of usr.roles) this.roles.push(new Role(role));
+        this.uuid = usr.uuid;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface Organization_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    logo_url: string | undefined;
+    uuid: string;
+}
+
+export class Organization implements Organization_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    logo_url: string | undefined;
+    uuid: string;
+
+    constructor(Org: Organization_intf) {
+        this.name = Org.name;
+        this.created = new Date(Org.created);
+        this.modified = new Date(Org.modified);
+        this.logo_url = Org.logo_url;
+        this.uuid = Org.uuid;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface Project_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+}
+
+export class Project implements Project_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+
+    constructor(Proj: Project_intf) {
+        this.name = Proj.name;
+        this.created = new Date(Proj.created);
+        this.modified = new Date(Proj.modified);
+        this.uuid = Proj.uuid;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface Schema_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+}
+
+export class Schema implements Schema_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+
+    constructor(Schem: Schema_intf) {
+        this.name = Schem.name;
+        this.created = new Date(Schem.created);
+        this.modified = new Date(Schem.modified);
+        this.uuid = Schem.uuid;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface Label_intf {
+    label: number;
+    name: string;
+    image_link: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+}
+
+export class Label implements Label_intf {
+    label: number;
+    name: string;
+    image_link: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+
+    constructor(lbl: Label_intf) {
+        this.label = lbl.label;
+        this.name = lbl.name;
+        this.image_link = lbl.image_link;
+        this.created = new Date(lbl.created);
+        this.modified = new Date(lbl.modified);
+        this.uuid = lbl.uuid;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface Survey_intf {
+    survey_year: number;
+    name: string;
+    additional_info: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+}
+
+export class Survey implements Survey_intf {
+    survey_year: number;
+    name: string;
+    additional_info: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+
+    constructor(srvy: Survey_intf) {
+        this.survey_year = srvy.survey_year;
+        this.name = srvy.name;
+        this.additional_info = srvy.additional_info;
+        this.created = new Date(srvy.created);
+        this.modified = new Date(srvy.modified);
+        this.uuid = srvy.uuid;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface Model_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+}
+
+export class Model implements Model_intf {
+    name: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
+    constructor(mdl: Model_intf) {
+        this.name = mdl.name;
+        this.created = new Date(mdl.created);
+        this.modified = new Date(mdl.modified);
+        this.uuid = mdl.uuid
+    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
