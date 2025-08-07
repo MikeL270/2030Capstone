@@ -170,3 +170,4 @@ cython_debug/
 scratch.txt
 .stfolder
 *.env
+node_modules/
