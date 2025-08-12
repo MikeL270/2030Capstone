@@ -56,9 +56,9 @@ app.config['SESSION_COOKIE_SECURE'] = False
 CORS(app, resources={
     r'/api/*': {
         'origins': [
-            'http://testing.lancecomputer.com:5173', # Development
+            #'http://testing.lancecomputer.com:5173', # Development
+			#'http://testing.lancecomputer.com:6900', # Testing
             'https://pronghorn-census.arcc.uwyo.edu', # Production
-            'http://testing.lancecomputer.com:6900'
         ],
         'supports_credentials': True     
     }
