@@ -7,7 +7,6 @@
 import { defineStore } from 'pinia';
 import { authUser, checkAuth, getCurrentUser, getUserOrganizations } from '../apiV1Methods.ts';
 import { User, Organization } from '@/types/generatorobjects.ts';
-import { Checkbox } from 'primevue';
 
 //---------------------------------------------------------------------------------------------------------------------------//
 

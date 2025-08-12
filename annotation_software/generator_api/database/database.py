@@ -1180,24 +1180,25 @@ class Database:
         return self._delete_survey(survey_ids = survey_ids)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    # Core - Images
+    # Core - Images	
 
     @connect
-    def _create_image(self, cursor: psycopg.Cursor, name: str, herd_unit_id: int | UUID, image_length: int, image_width: int) -> Image | None:
+    def _create_image(self, cursor: psycopg.Cursor, name: str, herd_unit_id: int | UUID, survey_id: int | UUID, image_length: int, image_width: int) -> Image | None:
         '''
         
         '''
         cursor.row_factory = class_row(Image)
         herd_unit_id = herd_unit_id if isinstance(herd_unit_id, int) else self._get_herd_unit(herd_unit_id).herd_unit_id
-        cursor.execute(sql.SQL(' INSERT INTO core.images (herd_unit_id, name, image_length_px, image_width_px) VALUES (%s, %s, %s, %s) RETURNING *; '), (herd_unit_id, name, image_length, image_width))
-        image = cursor.fetchone()
+        survey_id = survey_id if isinstance(survey_id, int) else self._get_survey(survey_id).survey_id
+        cursor.execute(sql.SQL(' INSERT INTO core.images (herd_unit_id, survey_id, name, image_length_px, image_width_px) VALUES (%s, %s, %s, %s, %s) RETURNING *; '), (herd_unit_id, survey_id, name, image_length, image_width))
+        image = cursor.fetchone()	
         return image if isinstance(image, Image) else None 
 
-    def create_image(self, name: str, herd_unit_id: int | UUID, image_length: int, image_width: int) -> Image | None:
+    def create_image(self, name: str, herd_unit_id: int | UUID, survey_id: int | UUID, image_length: int, image_width: int) -> Image | None:
         '''
         
         '''
-        return self._create_image(name = name, herd_unit_id = herd_unit_id, image_length = image_length, image_width = image_width)
+        return self._create_image(name = name, herd_unit_id = herd_unit_id, survey_id=survey_id, image_length = image_length, image_width = image_width)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 

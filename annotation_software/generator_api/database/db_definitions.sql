@@ -23,7 +23,7 @@ CREATE TABLE core.images (
   name varchar(50) NOT NULL,
   in_training boolean DEFAULT false,
   crops_generated smallint DEFAULT 0,
-  reviewd_by_user_id integer NOT NULL DEFAULT 0,
+  reviewed_by_user_id integer NOT NULL DEFAULT 0,
   opened_by_user_id integer NOT NULL DEFAULT 0,
   created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -66,26 +66,41 @@ export class HerdUnit implements HerdUnit_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Image_intf {
-    id: number,
-    name: string,
-    herd_unit: HerdUnit,
-    in_training: boolean, 
-    url: string,
+	name: string;
+	in_training: boolean;
+	crops_generated: number;
+	reviewed_by_user_id: string | undefined;
+	opened_by_user_id: string | undefined;
+	created: Date;
+	modified: Date;
+	image_length_px: number;
+	image_width_px: number;
+	uuid: string;
 }
 
 export class Image implements Image_intf {
-    id: number;
     name: string;
-    herd_unit: HerdUnit;
-    in_training: boolean;
-    url: string;
+	in_training: boolean;
+	crops_generated: number;
+	reviewed_by_user_id: string | undefined;
+	opened_by_user_id: string | undefined;
+	created: Date;
+	modified: Date;
+	image_length_px: number;
+	image_width_px: number;
+	uuid: string;
   
     constructor(img: Image_intf) {
-        this.id = img.id;
         this.name = img.name;
-        this.herd_unit = img.herd_unit;
-        this.in_training = img.in_training;
-        this.url = img.url;
+		this.in_training = img.in_training;
+		this.crops_generated = img.crops_generated;
+		this.reviewed_by_user_id = img.reviewed_by_user_id;
+		this.opened_by_user_id = img.opened_by_user_id;
+		this.created = new Date(img.created);
+		this.modified = new Date(img.modified);
+		this.image_length_px = img.image_length_px;
+		this.image_width_px = img.image_width_px;
+		this.uuid = img.uuid
     }
 }
 

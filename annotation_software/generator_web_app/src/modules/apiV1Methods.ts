@@ -4,17 +4,19 @@
 // Updated: August 6, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
-import _ from 'lodash';
+import _, { update } from 'lodash';
 import { Box, Image, Prediction, Crop, PredictionCrop, Project, Organization, User, Schema,
          Label, HerdUnit, Survey, Model
         } from '@/types/generatorobjects.ts';
 import type { Prediction_intf,  PredictionCrop_intf, CropData, BatchData, BatchesData, 
-              Crops, Batch, Batches, User_intf
+              Crops, Batch, Batches, User_intf,
+			  Image_intf
             } from '@/types/generatorobjects.ts';
 import { useToast } from 'vue-toastification'
+import { stringifyQuery } from 'vue-router';
 
 //const api_url: string = 'http://pronghorn-count.arcc.uwyo.edu/api/v1'; //"production"
-const api_url: string = 'http://testing.lancecomputer.com:5000/api/v1';
+const api_url: URL = new URL('http://testing.lancecomputer.com:5000/api/v1');
 const uh_oh: string = 'status:';
 
 const toast = useToast()
@@ -317,9 +319,140 @@ export async function getProjectSurveys(project_id: string | undefined): Promise
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
-// 
+// Image Crud
+
+export async function createImage(project_id: string | undefined, survey_id: string | undefined,
+	herd_unit_id: string | undefined, name: string, image_length: number, image_width: number
+): Promise<Image | undefined> {
+	try {
+		const response = await fetch(`${api_url}/create/image`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				'project_id': project_id,
+				'survey_id': survey_id,
+				'herd_unit_id': herd_unit_id,
+				'name': name,
+				'image_length': image_length,
+				'image_width': image_width,
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)	
+		const resp = await response.json();
+		const image = new Image(JSON.parse(resp))
+		console.log(resp)
+		return image;
+	} catch (error: any) {
+        console.error("There was an error fetching the data:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+}
 
 //---------------------------------------------------------------------------------------------------------------------------//
+ // Multipart image upload
+
+ export async function createMultiPartUpload(image_key: string): Promise<string | undefined> {
+	try {
+		const response = await fetch(`${api_url}/upload/image/create_multipart_upload`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				'image_key': image_key,
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+			const resp = await response.json();
+		return resp.upload_id as string;
+	} catch (error: any) {
+        console.error("There was an error creating the upload:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+ }
+
+export async function getPresignedUrl(upload_id: string, part_number: number, image_key: string, chunk_size: number, chunk_md5: string): Promise<string | undefined> {
+	try {
+		const response = await fetch(`${api_url}/upload/image/presigned-url`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				'upload_id': upload_id,
+				'part_number': part_number,
+				'image_key': image_key,
+				'chunk_size': chunk_size,
+				'chunk_md5': chunk_md5,
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		console.log(resp)
+		return resp as string;
+	} catch (error: any) {
+        console.error("There was an error creating the presigned url:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+}
+
+export async function abortMultipartUpload(image_key: string, upload_id: string): Promise<string | undefined> {
+	try {
+		const response = await fetch(`${api_url}/upload/image/abort`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				'image_key': image_key,
+				'upload_id': upload_id,
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json()
+		return resp as string;
+	} catch (error: any) {
+        console.error("There was an error aborting the multipart upload:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+}
+
+export async function completeMultiPartUpload(image_key: string, parts: any[], upload_id: string): Promise<string | undefined> {
+	try {
+		const response = await fetch(`${api_url}/upload/image/complete`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				'image_key': image_key,
+				'parts': parts,
+				'upload_id': upload_id
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		return await response.json() as string;
+	} catch (error: any) {
+        console.error("There was an error completeing the multipart upload:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
 // GET requests:
 
 // export async function testApi(): Promise<string> {
