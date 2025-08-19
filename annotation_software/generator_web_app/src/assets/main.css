@@ -4,16 +4,15 @@
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
+  width: 100vw;
+  height: 100vh;
   font-weight: normal;
 }
-
-
 .Header {
   top: 0;
   left: 0;
   width: 100%;
 }
-
 a,
 .green {
   text-decoration: none;
@@ -21,20 +20,39 @@ a,
   transition: 0.4s;
   padding: 3px;
 }
-
+.Utility-Title {
+	margin-bottom: auto;
+	width: 100%;
+	display: flex;
+	color: var(--color-heading);
+	justify-content: center;
+	border-radius: 4px 4px 0px 0px;
+	background-color: var(--wygf-bg-blue);
+	padding: 0.5%;
+	button {
+		background: none;
+		border: none;
+		color: var(--color-heading);
+		font-size: 1em;
+	}
+	button:hover {
+		color: var(--wygf-yellow);
+		cursor: pointer;
+	}
+}
 .Page-Container {
   justify-self: center;
+  position: relative;
   align-self: center;
-  margin: 2.5%;
+  margin: 4vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 95%;
-  max-width: 92vw;
-  height: 90%;
-  max-height: 90%;
+  width: 100%;
+  height: 89vh;
+  max-height: 85vh;
   background-color: var(--color-background-soft);
-  border-radius: 4px;
+  flex-shrink: 1;
 }
 
 .Page-Content h1 {

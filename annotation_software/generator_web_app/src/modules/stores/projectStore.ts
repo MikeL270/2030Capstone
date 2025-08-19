@@ -5,7 +5,6 @@
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { defineStore } from "pinia";
-import { useUserStore } from "./userStore";
 import { getProjects, getProjectSchemas, getProjectHerdUnits, getProjectModels, getProjectSurveys, getSchemaLabels } from "../apiV1Methods";
 import  { Project, Schema, Label, HerdUnit, Model, Survey } from "../../types/generatorobjects"; 
 

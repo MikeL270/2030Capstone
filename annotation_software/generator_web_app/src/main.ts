@@ -1,4 +1,5 @@
 import './assets/main.css';
+import 'vue-toastification/dist/index.css';
 import { createApp } from 'vue';
 import { createPinia } from 'pinia'; 
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'; 
@@ -7,7 +8,6 @@ import router from './router' ;
 import { Icon } from '@iconify/vue';
 import Toast from 'vue-toastification';
 import { POSITION, type PluginOptions } from 'vue-toastification';
-import 'vue-toastification/dist/index.css';
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)

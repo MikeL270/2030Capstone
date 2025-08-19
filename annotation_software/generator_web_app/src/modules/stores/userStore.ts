@@ -28,6 +28,7 @@ export const useUserStore = defineStore('userStore', {
         },
         async get_current_user() {
             this.user = await getCurrentUser() as User;
+			if (this.user != undefined) this.logged_in = true;
         },
         async check_auth() {
             this.logged_in = (await checkAuth()) ? true : false;

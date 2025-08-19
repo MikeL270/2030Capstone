@@ -4,7 +4,6 @@
 // Updated: August 6, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
-import _, { update } from 'lodash';
 import { Box, Image, Prediction, Crop, PredictionCrop, Project, Organization, User, Schema,
          Label, HerdUnit, Survey, Model
         } from '@/types/generatorobjects.ts';
@@ -13,7 +12,6 @@ import type { Prediction_intf,  PredictionCrop_intf, CropData, BatchData, Batche
 			  Image_intf
             } from '@/types/generatorobjects.ts';
 import { useToast } from 'vue-toastification'
-import { stringifyQuery } from 'vue-router';
 
 //const api_url: string = 'http://pronghorn-count.arcc.uwyo.edu/api/v1'; //"production"
 const api_url: URL = new URL('http://testing.lancecomputer.com:5000/api/v1');
@@ -343,7 +341,6 @@ export async function createImage(project_id: string | undefined, survey_id: str
 		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)	
 		const resp = await response.json();
 		const image = new Image(JSON.parse(resp))
-		console.log(resp)
 		return image;
 	} catch (error: any) {
         console.error("There was an error fetching the data:", error);
@@ -395,7 +392,6 @@ export async function getPresignedUrl(upload_id: string, part_number: number, im
 		});
 		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
 		const resp = await response.json();
-		console.log(resp)
 		return resp as string;
 	} catch (error: any) {
         console.error("There was an error creating the presigned url:", error);

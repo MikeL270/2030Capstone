@@ -9,13 +9,13 @@ const router = createRouter({
     
      { 
       path: '/authenticate', 
-      name: 'authenticator', 
+      name: 'authenticate', 
       component: Authenticate, 
       meta: {requiresNoLayout: true},
     },
     { 
       path: '/', 
-      name: 'Dashboard', 
+      name: 'dashboard', 
       component: () => import('./components/pages/Dashboard.vue'),
       meta: {
         requiresAuth: true,
@@ -23,7 +23,7 @@ const router = createRouter({
       },
     },
     { 
-      path: '/user/:uuid', 
+      path: '/user/:uuid?', 
       name: 'user', 
       component: () => import('./components/pages/User.vue'), 
       meta: {
@@ -34,7 +34,7 @@ const router = createRouter({
     { 
       path: '/auto-cropper/:projects?/:uuid?', 
       name: 'auto-cropper', 
-      component: () => import('./components/pages/Auto-Cropper.vue'),
+      component: () => import('./components/pages/auto_cropper/Auto-Cropper.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -59,9 +59,9 @@ const router = createRouter({
       },
     },
     {
-      path: '/upload/:project?/:uuid?',
+      path: '/upload/:projects?/:uuid?',
       name: 'upload',
-      component: () => import('./components/pages/Uploader.vue'),
+      component: () => import('./components/pages/uploader/Upload-Utility.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -83,7 +83,7 @@ router.beforeEach(async (to, from, next) => {
           next();
       } else {
         next({
-          name: 'authenticator',
+          name: 'authenticate',
           query: { redirect: to.fullPath },
         });
       }

@@ -3,14 +3,17 @@ import { defineComponent } from 'vue';
 import { ref } from 'vue';
 import { Icon } from '@iconify/vue';
 import { RouterLink} from 'vue-router';
-import { useUserStore } from '@/modules/stores/userStore';;
+import { useUserStore } from '@/modules/stores/userStore';
+import { usePreferenceStore } from '@/modules/stores/preferencesStore';
+
 
 export default defineComponent({
     name: 'Menu',
     setup() {
         const menu_toggled = ref(false);
-        const user_store = (useUserStore());
-        return { menu_toggled, user_store}
+        const user_store = useUserStore();
+		const pref_store = usePreferenceStore();
+        return { menu_toggled, user_store, pref_store }
     }
 })
 </script>
@@ -22,11 +25,11 @@ export default defineComponent({
                 <Icon icon="ic:round-dashboard" width="36" height="36" ></Icon>
                 <p v-if="menu_toggled"> Dashboard </p>
             </RouterLink>
-            <RouterLink to="/auto-cropper/" :class="['Item', {'router-link-active': $route.path.startsWith('/auto-cropper/')}]" title="Auto Crop">
+            <RouterLink to="/auto-cropper/" :class="['Item', {'router-link-active': $route.path.startsWith('/auto-cropper')}]" title="Auto Crop">
                 <Icon icon="fluent:crop-sparkle-24-filled" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Auto Crop </p>
             </RouterLink>
-            <RouterLink to="/upload" class="Item" title="Upload">
+            <RouterLink to="/upload" class="Item" :class="['Item', {'router-link-active': $route.path.startsWith('/upload')}]" title="Upload">
                 <Icon icon="material-symbols:upload" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Upload </p>
             </RouterLink>
@@ -34,11 +37,11 @@ export default defineComponent({
                 <Icon icon="wpf:statistics" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Statistics </p>
             </RouterLink>
-            <RouterLink v-if="user_store.user?.uuid" :to="{ name: 'user', params: { uuid: user_store.user?.uuid}}" class="Item" title="Profile">
+            <RouterLink v-if="user_store.logged_in" :to="{ name: 'user', params: { uuid: user_store.user?.uuid}}" class="Item" title="Profile">
                 <Icon icon="iconamoon:profile-fill" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> User </p>
             </RouterLink>
-            <RouterLink to="/settings" class="Item"title="Settings">
+            <RouterLink to="/settings" class="Item" title="Settings">
                 <Icon icon="ic:outline-settings" width="36" height="36"></Icon>
                 <p v-if="menu_toggled"> Settings </p>
             </RouterLink>
@@ -57,7 +60,7 @@ export default defineComponent({
         align-items: center;
         justify-content: center;
         height: 100%;
-        width: auto;
+        width: 3vw;
         background-color: var(--wygf-bg-blue);
         box-shadow: 0 4px 6px 2px var(--color-background-soft);
     }
@@ -68,18 +71,11 @@ export default defineComponent({
         align-items: center;
         width: 100%;
     }
-  
     .Menu:hover {
         align-items: flex-start;
         padding-right: 5px;
-    }
-    .Toggle-Button {
-        background: none;
-        border: none;
-        color: white;
-    }
-    .Toggle-Button:hover {
-        color: var(--color-text);
+		width: 8vw;
+		opacity: 95%
     }
     .Item {
         display: flex;
@@ -91,6 +87,7 @@ export default defineComponent({
     }
     .Item:hover {
         color: var(--color-text);
+		cursor: pointer;
         background: none;
     }
     .router-link-active {
@@ -106,11 +103,9 @@ export default defineComponent({
         gap: 1vw;
         border-top: 1px solid var(--color-border);
         width: 100%;
-        box-shadow: 0 4px 6px 2px rgba(0,0,0,0.25);
     }
     .GH-Link:hover {
         color: var(--color-text);
-        background-color:  rgba(0,0,0, 0);
     }
 </style>
 

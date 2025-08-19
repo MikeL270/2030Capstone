@@ -1,15 +1,29 @@
 <script setup lang="ts">
 import Header from './components/Header.vue'
 import Menu from './components/Menu.vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView } from 'vue-router'
+import { useUserStore } from './modules/stores/userStore';
+import { usePreferenceStore } from './modules/stores/preferencesStore';
 
-const route = useRoute();
+// Do this first
+const user_store = useUserStore();
+if (user_store.user == undefined) user_store.get_current_user();
+
+const pref_store = usePreferenceStore();
+
+if (pref_store.first_login) {
+	pref_store.getBrowserPreference();
+	pref_store.first_login = false; 
+} else {
+	pref_store.setTheme(pref_store.theme);
+}
+
 </script>
 
 <template>
   <Header />
   <main>
-    <Menu v-if="!route.meta.requiresNoLayout" />
+    <Menu v-if="!$route.meta.requiresNoLayout" />
       <RouterView />
   </main>
 </template>
@@ -21,7 +35,7 @@ const route = useRoute();
     left: 0;
     display: flex;
     justify-content: flex-start;
-    height: 92vh;
+    height: 95.5vh;
     width: 100%;
     max-width: 100%;
     overflow: hidden;

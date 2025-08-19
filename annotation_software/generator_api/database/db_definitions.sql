@@ -37,7 +37,7 @@ CREATE TABLE core.predictions (
   image_id integer NOT NULL,
   model_id integer NOT NULL DEFAULT 0,
   score double precision NOT NULL,
-  label_id integer NOT NULL DEFAULT 0,
+  schema_id integer NOT NULL DEFAULT 0,
   box_tx integer NOT NULL,
   box_ty integer NOT NULL,
   box_bx integer NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE core.reviewed_area (
 
 CREATE TABLE core.annotations (
   annotation_id serial PRIMARY KEY,
-  label_id integer NOT NULL DEFAULT 0,
+  schema_id integer NOT NULL DEFAULT 0,
   image_id integer NOT NULL,
   herd_unit_id integer NOT NULL DEFAULT 0,
   box_tx integer NOT NULL,
@@ -232,7 +232,7 @@ CREATE TABLE projectmanagement.surveys_herd_units (
   PRIMARY KEY (survey_id, herd_unit_id)
 );
 
-CREATE INDEX ON core.images (herd_unit_id);
+CREATE UNIQUE INDEX ON core.images (herd_unit_id, name);
 
 CREATE INDEX ON core.images (created);
 
@@ -240,7 +240,7 @@ CREATE INDEX ON core.images (uuid);
 
 CREATE INDEX ON core.images (survey_id);
 
-CREATE INDEX ON core.predictions (label_id);
+CREATE INDEX ON core.predictions (schema_id);
 
 CREATE INDEX ON core.predictions (score);
 
@@ -258,7 +258,7 @@ CREATE INDEX ON core.reviewed_area (reviewed_areaLengthPx, reviewed_areaWidthPx)
 
 CREATE INDEX ON core.reviewed_area (uuid);
 
-CREATE INDEX ON core.annotations (label_id);
+CREATE INDEX ON core.annotations (schema_id);
 
 CREATE INDEX ON core.annotations (image_id);
 
@@ -334,7 +334,7 @@ ALTER TABLE core.images ADD FOREIGN KEY (survey_id) REFERENCES projectmanagement
 
 ALTER TABLE core.predictions ADD FOREIGN KEY (image_id) REFERENCES core.images (image_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE core.predictions ADD FOREIGN KEY (label_id) REFERENCES projectmanagement.labels (label_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
+ALTER TABLE core.predictions ADD FOREIGN KEY (schema_id) REFERENCES projectmanagement.schemas (schema_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
 ALTER TABLE core.predictions ADD FOREIGN KEY (model_id) REFERENCES projectmanagement.models (model_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
@@ -344,7 +344,7 @@ ALTER TABLE core.reviewed_area ADD FOREIGN KEY (reviewd_by_user_id) REFERENCES u
 
 ALTER TABLE core.annotations ADD FOREIGN KEY (image_id) REFERENCES core.images (image_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
-ALTER TABLE core.annotations ADD FOREIGN KEY (label_id) REFERENCES projectmanagement.labels (label_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
+ALTER TABLE core.annotations ADD FOREIGN KEY (schema_id) REFERENCES projectmanagement.schemas (schema_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
 ALTER TABLE projectmanagement.labels ADD FOREIGN KEY (schema_id) REFERENCES projectmanagement.schemas (schema_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
