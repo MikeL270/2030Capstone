@@ -10,7 +10,8 @@ This tool is designed to be easily and rapidly scalable using containerization t
 
 
 
-* Postgresql [logo]: https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Postgresql_elephant.svg/640px-Postgresql_elephant.svg.png "Postgresql Logo"
+* Postgresql [logo]: https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Logo Title Text 2"
+
 * Flask
 * Gunicorn
 * Valkey
