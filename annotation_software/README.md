@@ -6,12 +6,11 @@ The annotation software is an SPA (Single Page Application) written in VueJS des
 
 This tool is designed to be easily and rapidly scalable using containerization tools such as podman or docker. The included compose and container files are compatible with any containerization service that implements the [OCI](https://opencontainers.org/) (Open Container Initiative) standards. It is recommended to deploy this project to a linux system, primarily as a windows based deployment has not currently been tested. This project was designed with modularity at its core, meaning each component in the stack can be used in isolation. For example, one could take the API and the database and write their own front end.
 
+### *Coming soon: Detailed set up guide*
+
 ## Tech Stack
 
-
-
-* Postgresql [logo]: https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Logo Title Text 2"
-
+* Postgresql 
 * Flask
 * Gunicorn
 * Valkey
@@ -53,9 +52,39 @@ In the interest of performance and scalability we opted not to use an ORM (Objec
 
 	base.update_project(project) # Database is informed of the change
 
-	# Objects can also be modified directly by passing kwargs to to the update_x() method for the object. Valid keywords are parsed and safely converted using psycopg's built in SQL library and used to construct the appropriate query. This is NOT generated sql per se. 
+	# Objects can also be modified directly by passing kwargs to to the update_x() method for the object.
+	# Valid keywords are parsed and safely converted using psycopg's built in SQL library and used to construct the appropriate query.
+	# This is NOT generated sql per se. 
 	base.update_project(project, name='example_3')
 ```
 
 The choice to write our own abstraction layer was very deliberate; there are well documented issues with ORMs such as sqlAlchemy when considering complex relationships and performance scaling for complex multi-user applications. The goal was to as closely emulate the ease of use of an ORM while avoiding the massive overhead and inefficient generated SQL statements. We did not make a better ORM, we made a high performance specialized abstraction layer specifically for this project.
 
+## Using the app
+
+### *This content is subject to change, components may be added, modified, or removed as they are developed.*
+As previously stated in this readme, the front end for this project is an SPA (Singe Page Application) built with VueJS using their built in Vue-Router plugin. Single page applications are advantages as they reduce the number of requests made to the server for content. This application is lazy loaded, making it a middle ground between a true SPA and a traditional webpage, components are loaded on an as needed basis and then cached in the browser to avoid further requests to the server. This app also makes use of a global state Vue plugin known as [Pinia](https://pinia.vuejs.org), trading some memory consumption for reduced trips to the server. It is important to note that architecturally speaking the frontend is divorced frorm the API layer, meaning it can be hosted on a separate server. Another cool feature is the use of dynamic routes, meaning URLS are created on the fly by the webapp to allow you to access any component with any selection provided your user has access to the nedded data. 
+
+### Authentication
+All users must properly authenticate in order to access the project. Currently this project uses a secret token based authentication system for strictly local users. Each user is given a unique high-entropy randomly generated token used to authenticate into the application. The eventaul plan is to replace this with robust token exchange systsem detailed in Oauth2. 
+
+### Dashboard
+The dashboard is the first *component* (or page) loaded on a users first time login. The dashboard will display different content based on the user's *role*. The content of any user's dashboard is subject to change as development progresses. Its primary purpose is to be a centralized location to view and manage project's and their statistics. Other potential content includes user's *tasks* and *quick access tiles* to quickly access previously viewed components. 
+
+### Label(er)
+The label(er) component is used to produce a small set of preliminary data to build a bootstrap model, from there the user would move to the Auto Cropper module. 
+
+### Auto Cropper
+The Auto Cropper utility is the bread and butter of the application. This tool is used to rapidly generate training data for the computer vision models that make up the backbone of the census projects. The actual workflow is preceeded by the user's selection of contextual elements, which enable this tool to be used for move than one type of census on one instance. The user is then presented with small crops of an image that contain a prediction made by a computer vision model along with a toggleable bounding box, ability to change the predictions label (create a propper annotation from a false positive that happens to be a valid object of a different class in the schema). More than one user can use the Auto Cropper at the same time, working on the same *herd unit* and same model's predictions without producing conflicting information. 
+
+### Uploader
+The Uploader utility is designed to easily allow a user (with the propper role) to add imagery data to the platform. This tool is designed to robustly handle large volumes of image data, hundreds of gigabytes, with a degree of fault tolerance.
+
+### Statistics *subject to change*
+The statistics module is planned to contain a plethora of data visualization tools regarding model performance and other things that are statistical in nature. 
+
+### User
+The user module is planned to be another module that has slightly different content based on the user's roles. This module will be the hub for admin users to be able to manage users of their *organization*, assign users to projects, add and remove users, etc. For non admin users this page will simply show the information for thier profile, and be largley static. 
+
+### Settings
+The settings module is the eventual home for all configurable options for a user's account. Its pretty standard.
