@@ -8,23 +8,22 @@
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from flask import Flask, jsonify, request, Response, abort, session
+from flask_session import Session
+import redis
 from flask_cors import CORS
 from flask_caching import Cache
-from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from dotenv import load_dotenv 
 import os
+import cv2
 from cropgenerator import auto_crop, create_subcrop, save_crop
-from cropgenerator.generatorobjects import CgOBJ, CropgenJSONPRovider, Prediction, Box
+from cropgenerator.generatorobjects import CropgenJSONPRovider
 import database as db
 import json
 import boto3
 from botocore.client import Config
 from boto3.s3.transfer import TransferConfig
-from datetime import datetime
 from uuid import UUID
-import logging
-import sys
-
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Configuration
@@ -49,6 +48,12 @@ app.json_provider_class = CropgenJSONPRovider
 app.secret_key = os.environ.get('SECRET_KEY')
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = False 
+app.config['SESSION_TYPE'] = 'redis'
+app.config['SESSION_PERMANENT'] = True
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_REDIS'] = redis.from_url(os.environ.get('SESSION_REDIS'))
+
+server_session = Session(app)
 
 CORS(app, resources={
 	r'/api/*': {
@@ -61,6 +66,7 @@ CORS(app, resources={
 	}
 })
 
+# Cache
 cache = Cache()
 
 cache_config={
@@ -104,7 +110,6 @@ transfer_config = TransferConfig(
     multipart_threshold=16 * 1024 * 1024
 )  
 #---------------------------------------------------------------------------------------------------------------------------#
-
 # User session management
 
 @login_manager.user_loader
@@ -241,6 +246,15 @@ def get_project_herdunits(project_id: str):
 		abort(404, 'No Herd Units Found')
 	return jsonify(serialized_herd_units), 201
 
+@app.route('/api/v1/request/surveys/<string:survey_id>/herd_units/all', methods=['GET'])
+@login_required
+def get_survey_herdunits(survey_id: str):
+	herd_units = base.get_cropping_herd_units(UUID(survey_id))
+	serialized_herd_units = [json.dumps(herd_unit, default=app.json_provider_class(app).default) for herd_unit in herd_units] if herd_units else None
+	if serialized_herd_units is None:
+		abort(404, 'No Herd Units Found')
+	return jsonify(serialized_herd_units), 201
+
 #---------------------------------------------------------------------------------------------------------------------------#
 # Model Crud
 
@@ -248,6 +262,15 @@ def get_project_herdunits(project_id: str):
 @login_required
 def get_project_models(project_id: str):
 	models = base.get_project_models(UUID(project_id))
+	serialized_models = [json.dumps(model, default=app.json_provider_class(app).default) for model in models] if models else None
+	if serialized_models is None:
+		abort(404, 'No Models Found')
+	return jsonify (serialized_models), 201
+
+@app.route('/api/v1/request/surveys/<string:survey_id>/herd_units/<string:herd_unit_id>/schemas/<string:schema_id>/models/all', methods=['GET'])
+@login_required
+def get_cropper_models(survey_id: str, herd_unit_id: str, schema_id: str):
+	models = base.get_cropping_models(UUID(survey_id), UUID(herd_unit_id), UUID(schema_id))
 	serialized_models = [json.dumps(model, default=app.json_provider_class(app).default) for model in models] if models else None
 	if serialized_models is None:
 		abort(404, 'No Models Found')
@@ -369,9 +392,69 @@ def abort_upload():
 			UploadId = data['upload_id'],
 		)
 	except Exception as e: #
-		print(e)
 		abort(500, e)
 	return jsonify(response), 201
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Auto Cropping
+@app.route('/api/v1/create/batch', methods=['POST'])
+@login_required
+def get_batch():
+	'''
+	
+	'''
+	data = request.get_json()
+	if 'pred_crop_data' in session: # Delete last batch's prediction crops
+		for data in session['pred_crop_data']:
+			cache.delete(data['uuid'])
+		session.pop('pred_crop_data')
+	img_batch = base.get_batch(
+		UUID(data['survey_id']),
+		UUID(data['herd_unit_id']),
+		int(data['size']),
+		int(data['label']),
+		float(data['score']),
+		UUID(data['model_id']),
+		current_user)
+	if img_batch is None:
+		abort(404, 'Cannot get batch')
+	
+	return img_batch, 201
+
+@app.route('/api/v1/create/prediction_crops', methods=['POST'])
+@login_required
+def create_prediction_crops():
+	'''
+	
+	'''
+	data = request.get_json()
+	image = base.get_image(UUID(data['image_id']))
+	img_data = cache.get(image.uuid)
+	if not img_data:
+		img_key = f'images/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/image/{image.name}'
+		img_data = pathfinder.get_object(Bucket=BUCKET_NAME, Key=img_key)['Body'].read()
+		cache.set(image.uuid, img_data, 360) 
+	image.set_image(img_data)
+	pred_crops = create_subcrop(image, data['predictions'])
+	serialized_pred_crops = []
+	for crop in pred_crops: # Save crop image data into the cache
+		cache.set(crop.uuid, crop.get_image(), timeout=0) # prediction crops don't expire, the MUST be deleted
+		serialized_pred_crops.append(json.dumps(crop, default=app.json_provider_class(app).default))
+	json_pred_crop_data = jsonify(serialized_pred_crops)
+	if 'pred_crop_data' not in session:
+		session['pred_crop_data'] = []
+	session['pred_crop_data'] + serialized_pred_crops
+	return json_pred_crop_data, 201
+
+@app.route('/api/v1/request/image/<string:image_id>/pred_crop/<string:pred_crop_id>', methods=['GET'])
+def get_pred_crop(image_id: str, pred_crop_id: str):
+	'''
+	
+	'''
+	crop = cache.get(pred_crop_id)
+	_, encoded_img = cv2.imencode('.webp', crop)
+
+	return Response(encoded_img.tobytes(), mimetype='image/webp'), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Error Handling
@@ -381,9 +464,10 @@ def not_found(error):
 
 @app.errorhandler(500)
 def internal_service_error(error):
-	return f'500: {error.description}', 5600
+	return f'500: {error.description}', 500
 
 #---------------------------------------------------------------------------------------------------------------------------#
+
 # batches = {}
 
 # #---------------------------------------------------------------------------------------------------------------------------#

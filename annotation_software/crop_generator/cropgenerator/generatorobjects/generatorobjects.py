@@ -5,7 +5,6 @@
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import numpy as np
-import cv2
 import os
 from flask.json.provider import DefaultJSONProvider
 import cv2
@@ -115,6 +114,7 @@ class Model(CgOBJ):
 	
 	'''
 	model_id: int
+	schema_id: int
 	name: str
 	created: datetime
 	modified: datetime
@@ -278,7 +278,7 @@ class Box(CgOBJ):
 @dataclass
 class Image(CgOBJ):
 	def __init__(self, image_id: int, herd_unit_id: int, survey_id: int, name: str,
-				in_training: bool, crops_generated: int, reviewed_by_user_id: int, opened_by_user_id: int,
+				in_training: bool, crops_generated: int, opened_by_user_id: int,
 				created: datetime, modified: datetime, image_length_px: int, image_width_px: int,
 				uuid: UUID):
 		self.image_id = image_id
@@ -287,7 +287,6 @@ class Image(CgOBJ):
 		self.name = name
 		self.in_training = in_training
 		self.crops_generated = crops_generated
-		self.reviewed_by_user_id = reviewed_by_user_id
 		self.opened_by_user_id = opened_by_user_id
 		self.created = created
 		self.modified = modified
@@ -338,11 +337,12 @@ class Image(CgOBJ):
 		}
 
 class Prediction(CgOBJ):
-	def __init__(self, pred_id: int, image_id: int, model_id: int, score: float, box_tx: int, box_ty: int,
+	def __init__(self, pred_id: int, image_id: int, model_id: int, label: int, score: float, box_tx: int, box_ty: int,
 				 box_bx: int, box_by: int, created: datetime | None, modified: datetime | None, uuid: UUID):
 		self.pred_id = pred_id
 		self.image_id = image_id
 		self.model_id = model_id
+		self.label = label
 		self.score = score
 		self.dimensions = Box((box_tx, box_ty), (box_bx, box_by))
 		self.created = created 
@@ -351,16 +351,16 @@ class Prediction(CgOBJ):
 	
 	def serialize(self) -> dict:
 		return {
-			'id': self.id,
-			'model': self.model.serialize(),
 			'dimensions': self.dimensions.serialize(),
 			'score': self.score,
 			'label': self.label,
+			'created': self.created,
+			'modified': self.modified,
+			'uuid': self.uuid
 		}
 
 class Crop(Image):
-	def __init__(self, db_id: int=None, image_id: int=None, name: str=None, dimensions: Box=None):
-		super().__init__(db_id, name)
+	def __init__(self, image_id: int, name: str, dimensions: Box):
 		self.image_id = image_id
 		self.crop_dimensions = dimensions
 
@@ -371,31 +371,33 @@ class Crop(Image):
 		return {
 			'id': self.id,
 			'image_id': self.image_id,
-			'name': self.name,
+			'name': self.name, 
 			'dimensions': self.crop_dimensions.serialize(),
 			'url' : self.url,
 		}
 	
 class PredictionCrop(Crop):
-	def __init__(self, pred_crop_id: int=None, image_id: int=None, name: str=None, score: float=None, label: int=None, dimensions: Box=None, 
-				 url: str=None):
-		self.pred_crop_id = pred_crop_id
+	def __init__(self, image_id: UUID, name: str, score: float, label: int, dimensions: Box, 
+				bounding_box: Box, uuid: UUID, url: str=None):
 		self.image_id = image_id
 		self.name = name
 		self.score = score
 		self.label = label 
 		self.dimensions = dimensions
+		self.bounding_box = bounding_box
 		self.approved = False
+		self.uuid = uuid
 	
 	def serialize(self) -> dict:
 		return {
-			'id': self.pred_crop_id,
 			'image_id': self.image_id,
 			'name': self.name,
 			'score': self.score,
 			'label': self.label,
 			'dimensions': self.dimensions.serialize(),
+			'bounding_box': self.bounding_box.serialize(),
 			'approved': self.approved,
+			'uuid': self.uuid,
 		}
 #---------------------------------------------------------------------------------------------------------------------------#
 

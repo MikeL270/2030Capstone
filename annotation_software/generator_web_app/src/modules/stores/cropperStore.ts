@@ -5,52 +5,75 @@
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { defineStore } from "pinia";
-import { Project, Schema, Label, Model, HerdUnit } from "@/types/generatorobjects";
-import { getProjectSchemas, getSchemaLabels, getProjectHerdUnits, getProjectModels } from "../apiV1Methods";
+import { useProjectStore } from "./projectStore";
+import { Image, Prediction, PredictionCrop } from "@/types/generatorobjects";
+import { getBatch, getPredCrops } from "../apiV1Methods";
+import { usePreferenceStore } from "./preferencesStore";
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
+const pstore = useProjectStore();
+const prefstore = usePreferenceStore();
+
+
 export const useAutoCropperStore = defineStore('autoCropperStore', {
     state: () => ({
-        project: undefined as Project | undefined,
-        schemas: undefined as Schema[] | undefined,
-        labels: undefined as Label[] | undefined,
-        models: undefined as Model[] | undefined,
-        herd_units: undefined as HerdUnit[] | undefined,
-        schema: undefined as Schema | undefined,
-        label: undefined as Label | undefined,
-        model: undefined as Model | undefined,
-        herd_unit: undefined as HerdUnit | undefined,
+        images: undefined as Image[] | undefined,
+		image_idx: undefined as number | undefined,
+		predictions: undefined as Prediction[][] | undefined,
+		predictions_idx: undefined as number | undefined,
+		selected_predictions: undefined as number[] | undefined,
+		prediction_crops: undefined as PredictionCrop[][] | undefined,
+		loading: false,
     }),
-    actions: {
-        async get_project_schemas(): Promise<boolean> {
-            this.schemas = await getProjectSchemas(this.project?.uuid);
-            if (this.schemas) { return true; } else { return false; }
-        },
-        async get_schema_labels(): Promise<boolean> {
-            this.labels = await getSchemaLabels(this.project?.uuid, this.schema?.uuid);
-            if (this.labels) { return true; } else { return false; }
-        },
+	getters: {
+		CurrentImage: (state) => (state.images && state.image_idx != undefined) ? state.images[state.image_idx] : undefined,
+		ImageNum: (state) => (state.image_idx != undefined) ? (state.image_idx + 1): 0,
+		CurrentPredictions: (state) => (state.predictions && state.image_idx != undefined ) ? state.predictions[state.image_idx] : undefined,
+		CurrentPredictionCrops: (state) => (state.prediction_crops && state.image_idx != undefined) ? state.prediction_crops[state.image_idx] : undefined,
 
-        async get_project_herd_units(): Promise<boolean> {
-            this.herd_units = await getProjectHerdUnits(this.project?.uuid);
-            if (this.herd_units) { return true; } else { return false; }
-        },
-        async get_project_models(): Promise<boolean> {
-            this.models = await getProjectModels(this.project?.uuid);
-            if (this.models) { return true; } else { return false; }
-        },
-        clear_selectables() {
-            this.schemas = undefined;
-            this.labels = undefined;
-            this.models = undefined;
-            this.herd_units = undefined;
-        },
-        clear_selection() {
-            this.schema = undefined;
-            this.label = undefined;
-            this.model = undefined;
-            this.herd_unit = undefined;
-        }
+	},
+    actions: {
+		async get_batch() {
+			this.loading = true;
+			const resp = await getBatch(pstore.CurrentSurvey?.uuid, pstore.CurrentHerdUnit?.uuid, prefstore.batch_size, 0.9, pstore.CurrentLabel?.label, pstore.CurrentModel?.uuid)
+			if (resp == undefined) return
+			this.images = resp[0] as Image[]
+			this.image_idx = 0; 
+			this.predictions = resp[1] as Prediction[][]
+			this.predictions_idx = 0;
+			this.loading = false;
+		},
+		async get_prediction_crops() {
+			this.loading = true;
+			if (this.CurrentImage && this.CurrentPredictions && this.image_idx != undefined) {
+				const predCrops = await getPredCrops(this.CurrentImage.uuid, pstore.CurrentSurvey?.uuid, pstore.CurrentHerdUnit?.uuid, this.CurrentPredictions);
+				if (!this.prediction_crops) this.prediction_crops = []
+				if (predCrops) this.prediction_crops?.splice(this.image_idx, 0, predCrops)
+			}
+			
+			this.loading = false;
+		},
+		async next_image() {
+			if (this.loading) return;
+			if (this.image_idx !=undefined && this.image_idx < prefstore.batch_size - 1) this.image_idx++;
+			if (this.prediction_crops && this.image_idx != undefined && this.prediction_crops[this.image_idx] != undefined)	{
+				return;
+			} else {
+				await this.get_prediction_crops();
+			}
+		},
+		async previous_image() {
+			if (this.loading) return;
+			if (this.image_idx !=undefined && this.image_idx > 0) this.image_idx--;
+			if (this.prediction_crops && this.image_idx != undefined && this.prediction_crops[this.image_idx] != undefined) {
+				console.log('using pred crops in memory boss')
+				return;
+			} else {
+				console.log('hitting the api because I am dumb')
+				await this.get_prediction_crops();
+
+			}
+		}
     }
 })

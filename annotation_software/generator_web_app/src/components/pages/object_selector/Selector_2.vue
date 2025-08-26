@@ -106,7 +106,7 @@ export default defineComponent({
                 <p> Modified </p>
                 <p> External ID </p> 
             </div>
-            <figure>
+            <figure v-if="project_store.models">
                 <button class="Entry" v-for="model in project_store.models" @click="project_store.set_current_model(model)" :class="{Selected: project_store.CurrentModel?.uuid == model.uuid}">
                     <p> {{ model.name }} </p> 
                         <p> {{ model.created.toLocaleString('en-US', { 
@@ -124,6 +124,13 @@ export default defineComponent({
                         <p> {{ model.uuid }} </p>
                 </button>
             </figure>
+			<figure v-else="">
+				<p style="margin: 5%;"> 
+					<i style="opacity: 50%"> * You must first select a schema and Herd Unit before you can select 
+					a model. If you cannot see any models after selecting a schema and Herd Unit that is because the selection has no viable models.
+					Conisder double checking you survey selection if you aren't seeing a model you think you should. </i>
+				</p>
+			</figure>
         </div>
     </div>
 </template>

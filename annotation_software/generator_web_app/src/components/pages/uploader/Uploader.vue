@@ -1,4 +1,4 @@
-<script lang="ts">
+ <script lang="ts">
 // https://serversideup.net/blog/file-uploads-using-fetch-api-and-vuejs/
 // https://blog.logrocket.com/customizing-drag-drop-file-uploading-vue/#creating-advanced-dropzone
 import { defineComponent } from "vue";
@@ -44,9 +44,6 @@ export default defineComponent({
 		};
   	},
 	computed: {
-		...mapState(useProjectStore, {
-			CurrentProject: "CurrentProject",
-		}),
 		uploadSize() {
 			if (this.files.length == 0) return filesize(0);
 			let total_size = 0;
@@ -57,21 +54,6 @@ export default defineComponent({
 			return this.files.length;
 		}
   	},
-	watch: {
-	CurrentProject(newValue: Project, oldValue: Project) {
-		if (newValue != oldValue && newValue != undefined) {
-			this.project_store.clear_state();
-			this.project_store.get_project_children();
-			this.$router.push({
-				name: "upload",
-				params: { projects: "projects", uuid: newValue.uuid },
-			});
-	  	} else {
-			this.project_store.clear_state();
-			this.$router.push({ name: "upload" });
-	  	}
-	},
-  },
   methods: {
 	on_change() {
 		if (this.$refs.file) {

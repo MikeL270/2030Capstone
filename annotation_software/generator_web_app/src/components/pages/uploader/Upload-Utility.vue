@@ -96,7 +96,7 @@ export default defineComponent({
 				Uploader
 			</button>
 		</h2>
-		<div id="Component-Container">
+		<div class="Component-Container">
 			<Selector_1 v-if="current_crumb == 0"/>
 			<Selector_2 v-if="current_crumb == 1"/>
 			<Upload v-if="current_crumb == 2"/>

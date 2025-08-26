@@ -2,7 +2,7 @@
 import '@/assets/selector.css';
 import { defineComponent, defineAsyncComponent, ref } from "vue";
 import { useProjectStore } from "@/modules/stores/projectStore";
-import { Project, Schema } from "@/types/generatorobjects";
+import { Project, Survey, Schema, HerdUnit, Label, Model } from "@/types/generatorobjects";
 import { mapState } from "pinia";
 
 var crumb_num = ref<number>(0);
@@ -31,26 +31,58 @@ export default defineComponent({
 	...mapState(useProjectStore, {
 		CurrentProject: 'CurrentProject',
 		CurrentSchema: 'CurrentSchema', 
+		CurrentSurvey: 'CurrentSurvey',
+		CurrentHerdUnit: 'CurrentHerdUnit',
+		CurrentLabel: 'CurrentLabel',
+		CurrentModel: 'CurrentModel',
 	})
 	},
 	watch: {
 		CurrentProject(newValue: Project, oldValue: Project) {
-			if(newValue != oldValue && newValue != undefined) {
+			if (newValue != oldValue && newValue != undefined) {
 				this.project_store.clear_state();
-				this.project_store.get_project_children();
+				this.project_store.get_project_cropper_children();
 				this.$router.push({name: 'auto-cropper', params: { projects: 'projects', uuid: newValue.uuid }})
 			} else {
 				this.project_store.clear_state();
 				this.$router.push({name: 'auto-cropper'});
 			}
 		},
+		CurrentSurvey(newValue: Survey, oldValue: Survey) {
+			const currentQuery = {...this.$route.query};
+			this.project_store.clear_herd_units();
+			this.project_store.clear_models();
+			if (newValue !=oldValue && newValue != undefined) {
+				const newQuery = {
+					...currentQuery,
+					survey: newValue.uuid,
+					herd_unit: undefined,
+					model: undefined,
+
+				};
+				this.$router.push({query: newQuery});
+				this.project_store.get_cropper_herd_units();
+				this.project_store.get_cropper_models();
+			} else {
+				const newQuery = {
+					...currentQuery,
+					survey: undefined,
+					herd_unit: undefined,
+					model: undefined,
+				};
+				this.$router.push({query: newQuery});
+			}
+		},
 		CurrentSchema(newValue: Schema, oldValue: Schema) {
 			const currentQuery = {...this.$route.query };
-			if(newValue != oldValue && newValue != undefined) {
+			this.project_store.clear_labels();
+			this.project_store.clear_models();
+			if (newValue != oldValue && newValue != undefined) {
 				const newQuery = {
 					...currentQuery,
 					schema: newValue.uuid,
-					label: undefined
+					label: undefined,
+					model: undefined
 				};
 				this.$router.push({query: newQuery})
 				this.project_store.get_labels();
@@ -59,17 +91,37 @@ export default defineComponent({
 					...currentQuery,
 					schema: undefined,
 					label: undefined,
-				}
-				this.project_store.labels = undefined;
-				this.project_store.label_idx = undefined;
+					model: undefined,
+				};
 				this.$router.push({query: newQuery});
 			}
 		},
+		CurrentHerdUnit(newValue: HerdUnit, oldValue: HerdUnit) {
+			const currentQuery = {...this.$route.query };
+			this.project_store.clear_models();
+			if (newValue != oldValue && newValue != undefined) {
+				const newQuery = {
+					...currentQuery,
+					herd_unit: newValue.uuid,
+					model: undefined,
+				};
+				this.$router.push({query: newQuery})
+				this.project_store.get_cropper_models();	
+			} else {
+				const newQuery = {
+					...currentQuery,
+					herd_unit: undefined,
+					model: undefined,
+				};
+				this.$router.push({query: newQuery});
+			}
+		}
 	},
 	methods: {
 		increment_crumb() {
 			if (this.current_crumb == 0 && !this.project_store.CurrentProject) return;
 			else if (this.current_crumb == 0 && !this.project_store.CurrentProject) return;
+			else if (this.current_crumb == 0 && !this.project_store.CurrentSurvey) return;
 			else if (this.current_crumb == 1 && !this.project_store.CurrentSchema) return;
 			else if (this.current_crumb == 1 && !this.project_store.CurrentLabel) return;
 			else if (this.current_crumb == 1 && !this.project_store.CurrentHerdUnit) return;
@@ -100,7 +152,7 @@ export default defineComponent({
 				Cropper
 			</button>
 		</h2>
-		<div id="Component-Container">
+		<div class="Component-Container">
 			<Selector_1 v-if="current_crumb == 0"/>
 			<Selector_2 v-if="current_crumb == 1" />
 			<Crop v-if="current_crumb == 2" />
@@ -185,9 +237,9 @@ export default defineComponent({
 						</li>
 					</ol>
 					<br/>
-					<hr/>
-					<h2> Cropper Configuration Verification </h2>
 					<div id="Configuration-Verification" v-if="project_store.CurrentLabel && project_store.CurrentModel && project_store.CurrentHerdUnit">
+						<hr/>
+						<h2> Cropper Configuration Verification </h2>
 						<img v-bind:src="project_store.CurrentLabel?.image_link"></img>
 						<p>
 							You are about to create training data crops of {{ project_store.CurrentLabel.name }}

@@ -5,12 +5,8 @@
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { Box, Image, Prediction, Crop, PredictionCrop, Project, Organization, User, Schema,
-         Label, HerdUnit, Survey, Model
-        } from '@/types/generatorobjects.ts';
-import type { Prediction_intf,  PredictionCrop_intf, CropData, BatchData, BatchesData, 
-              Crops, Batch, Batches, User_intf,
-			  Image_intf
-            } from '@/types/generatorobjects.ts';
+         Label, HerdUnit, Survey, Model } from '@/types/generatorobjects.ts';
+import type { Prediction_intf, User_intf, Image_intf, PredictionCrop_intf } from '@/types/generatorobjects.ts';
 import { useToast } from 'vue-toastification'
 
 //const api_url: string = 'http://pronghorn-count.arcc.uwyo.edu/api/v1'; //"production"
@@ -75,70 +71,6 @@ export async function getCurrentUser(): Promise<User | undefined> {
         console.error("Error: ", error)
         return undefined;
     }
-}
-
-//---------------------------------------------------------------------------------------------------------------------------//
-// Deserialization functions
-
-function deserialize_predictions(data: Prediction_intf[]): Prediction[] {
-    var predictions = [];
-    for (const pred of data) {
-        predictions.push(new Prediction(pred));
-    }
-    return predictions
-}
-
-function deserialize_batch(data: BatchData): Batch {
-    var batch: Batch = {};
-    
-    for (const image_id in data) {
-        const image = data[image_id]['image']
-        const predictions: Prediction_intf[] = data[image_id]['predictions'];
-        batch[+image_id] = {
-        'image': new Image(image),
-        'predictions': deserialize_predictions(predictions),
-        'approved_predictions': [],
-        'pred_crops': [],
-        'crops': []
-        }
-    };
-    return batch;
-}
-
-function deserialize_batches (data: BatchesData): Batches {
-    var batches = {} as Batches
- 
-    for (const batch_id in data) {
-        batches[batch_id] = deserialize_batch(data[batch_id] as BatchData);
-    };
-    return batches
-}
-
-function deserialize_pred_crops(pred_crops_data: PredictionCrop_intf[], batch_id: number, image_id: number) : PredictionCrop[] {
-    var pred_crops = []
-    
-    for (const pred_crop of pred_crops_data) {
-  
-        pred_crops.push( new PredictionCrop
-            (pred_crop,
-             `${api_url}/batches/${batch_id}/images/${image_id}/pred_crops/${pred_crop.id}`
-        ));
-    };
-    return pred_crops;
-}
-
-function deserialize_crops(crops_data: CropData) : Crops {
-    var crops = {} as Crops;
-    for (const crop_num in crops_data) {
-        var crop_data = crops_data[crop_num]['crop'];
-        var prediction_data = crops_data[crop_num]['predictions'];
-        var crop_id = crop_data['id'];
-        crops[crop_id] = {
-            'crop' : new Crop(crop_data),
-            'predictions': deserialize_predictions(prediction_data)
-        };
-    };
-    return crops;
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -260,8 +192,28 @@ export async function getProjectHerdUnits(project_id: string | undefined): Promi
         var herd_units = [];
         for (const herd_unit of resp) herd_units.push(new HerdUnit(JSON.parse(herd_unit)));
         return herd_units;
-        
     } catch (error: any) {
+        console.error("There was an error fetching the data:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+}
+
+export async function getCropperHerdUnits(survey_id: string | undefined): Promise<HerdUnit[] | undefined> {
+	try {
+		const response = await fetch(`${api_url}/request/surveys/${survey_id}/herd_units/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+        const resp = await response.json();
+        var herd_units = [];
+        for (const herd_unit of resp) herd_units.push(new HerdUnit(JSON.parse(herd_unit)));
+        return herd_units;
+	} catch (error: any) {
         console.error("There was an error fetching the data:", error);
         toast.error(`${error}`);
         return undefined;
@@ -292,6 +244,27 @@ export async function getProjectModels(project_id: string | undefined): Promise<
     }
 }
 
+export async function getCropperModels(survey_id: string | undefined, herd_unit_id: string | undefined, schema_id: string | undefined): Promise<Model[] | undefined> {
+	try {
+		const response = await fetch(`${api_url}/request/surveys/${survey_id}/herd_units/${herd_unit_id}/schemas/${schema_id}/models/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		var models = [];
+		for (const model of resp) models.push(new Model(JSON.parse(model)));
+		return models;
+	} catch (error: any) {
+        console.error("There was an error fetching the data:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+}
+
 //---------------------------------------------------------------------------------------------------------------------------//
 // Survey Crud
 
@@ -304,7 +277,7 @@ export async function getProjectSurveys(project_id: string | undefined): Promise
                 'Content-Type': 'application/json',
             },
          });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`);
         const resp = await response.json();
         var surveys = [];
         for (const survey of resp) surveys.push(new Survey(JSON.parse(survey)));
@@ -446,6 +419,82 @@ export async function completeMultiPartUpload(image_key: string, parts: any[], u
     }
 
 }
+
+//---------------------------------------------------------------------------------------------------------------------------//
+// Auto Cropping
+
+export async function getBatch(survey_id: string | undefined, herd_unit_id: string | undefined, size: number,
+	score: number, label: number | undefined, model_id: string | undefined): Promise<[Image[], Prediction[][]] | undefined> {
+	try {
+		const response = await fetch(`${api_url}/create/batch`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				'survey_id': survey_id,
+				'herd_unit_id': herd_unit_id,
+				'size': size,
+				'score': score,
+				'label': label,
+				'model_id': model_id,
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`);
+		const resp = await response.json();
+		const images: Image[] = [];
+		const predictions: Prediction[][] = [];
+		for (const img of resp) {
+			images.push(new Image(img as Image_intf));
+			const preds: Prediction[] = []
+			for (const pred of img['predictions']) {
+				preds.push(new Prediction(pred as Prediction_intf))
+			}
+			predictions.push(preds)
+		}
+		return [images, predictions];
+	} catch (error: any) {
+        console.error("There was an error completeing the multipart upload:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+
+}
+
+export async function getPredCrops(image_id: string | undefined, survey_id: string | undefined, 
+	herd_unit_id: string | undefined, predictions: Prediction[] | undefined): Promise<PredictionCrop[] | undefined> {
+	try {
+		const response = await fetch(`${api_url}/create/prediction_crops`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				'image_id': image_id,
+				'survey_id': survey_id,
+				'herd_unit_id': herd_unit_id,
+				'predictions': predictions,
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`);
+		const resp = await response.json();
+		const pred_crops: PredictionCrop[] = []
+		for (const row of resp) {
+			const predCrop = JSON.parse(row) as PredictionCrop_intf
+			pred_crops.push(new PredictionCrop(
+				predCrop,
+				`${api_url}/request/image/${image_id}/pred_crop/${predCrop.uuid}`));
+		}
+		return pred_crops;
+	} catch (error: any) {
+        console.error("There was an error creating pred crops:", error);
+        toast.error(`${error}`);
+        return undefined;
+    }
+}
+
 
 //---------------------------------------------------------------------------------------------------------------------------//
 

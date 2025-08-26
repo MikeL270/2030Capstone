@@ -96,7 +96,7 @@ header {
         width: 8px;
         left: 0.25vw;
         bottom: 4px;
-        background-color: var(--color-border);
+        background-color: rgb(73, 73, 73);
         -webkit-transition: 0.4s;
         transition: 0.4s;
     }
@@ -105,9 +105,9 @@ header {
         box-shadow: 0 0 1px #101010;
     }
     input:checked + .slider:before {
-        -webkit-transform: translateX(1.25vw);
-        -ms-transform: translateX(1.25vw);
-        transform: translateX(1.25vw);
+        -webkit-transform: translateX(1.19vw);
+        -ms-transform: translateX(1.19vw);
+        transform: translateX(1.19vw);
     }
     .slider.round {
         border-radius: 34px;

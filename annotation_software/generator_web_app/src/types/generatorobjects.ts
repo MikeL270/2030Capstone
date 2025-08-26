@@ -9,8 +9,8 @@ import { mean } from 'lodash';
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Box_intf {
-    top_left: number[],
-    bottom_right: number[],
+	top_left: number[];
+	bottom_right: number[];
 }
 
 export class Box implements Box_intf {
@@ -20,23 +20,21 @@ export class Box implements Box_intf {
         this.top_left = box.top_left;
         this.bottom_right = box.bottom_right;
     }
-
     get_center(): number[] {
         let x = mean([this.top_left[0], this.bottom_right[0]]);
         let y = mean([this.top_left[1], this.bottom_right[1]]);
         return [x, y];
     }
-
     get_points(): number[] {
         return [this.top_left[0], this.top_left[1], this.bottom_right[0], this.bottom_right[1]];
     }
+	get_width(): number {
+		return Math.abs(this.top_left[0] - this.bottom_right[0]);
+	}
+	get_height(): number {
+		return Math.abs(this.top_left[1] - this.bottom_right[1]);
+	}
 
-    serialize(): object {
-        return {
-            'top_left': this.top_left,
-            'bottom_right': this.bottom_right,
-        };
-    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -69,8 +67,6 @@ export interface Image_intf {
 	name: string;
 	in_training: boolean;
 	crops_generated: number;
-	reviewed_by_user_id: string | undefined;
-	opened_by_user_id: string | undefined;
 	created: Date;
 	modified: Date;
 	image_length_px: number;
@@ -82,8 +78,6 @@ export class Image implements Image_intf {
     name: string;
 	in_training: boolean;
 	crops_generated: number;
-	reviewed_by_user_id: string | undefined;
-	opened_by_user_id: string | undefined;
 	created: Date;
 	modified: Date;
 	image_length_px: number;
@@ -94,8 +88,6 @@ export class Image implements Image_intf {
         this.name = img.name;
 		this.in_training = img.in_training;
 		this.crops_generated = img.crops_generated;
-		this.reviewed_by_user_id = img.reviewed_by_user_id;
-		this.opened_by_user_id = img.opened_by_user_id;
 		this.created = new Date(img.created);
 		this.modified = new Date(img.modified);
 		this.image_length_px = img.image_length_px;
@@ -107,26 +99,29 @@ export class Image implements Image_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Prediction_intf { 
-    id: number,
-    model: Model,
-    dimensions: Box,
-    score: number,
-    label: number,
-}
-
-export class Prediction implements Prediction_intf {
-    id: number;
-    model: Model;
     dimensions: Box;
     score: number;
     label: number;
+	created: Date;
+	modified: Date;
+	uuid: string;
+}
+
+export class Prediction implements Prediction_intf {
+    dimensions: Box;
+    score: number;
+    label: number;
+	created: Date;
+	modified: Date;
+	uuid: string;
 
     constructor(pred: Prediction_intf) {
-        this.id = pred.id;
-        this.model = pred.model;
         this.dimensions = pred.dimensions;
         this.score = pred.score;
         this.label = pred.label;    
+		this.created = new Date(pred.created);
+		this.modified = new Date(pred.modified);
+		this.uuid = pred.uuid;
     }
 }
 
@@ -160,33 +155,37 @@ export class Crop implements Crop_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface PredictionCrop_intf {
-    id: number,
-    image_id: number,
-    name: string,
-    score: number,
-    label: number,
-    dimensions: Box,
-    approved: boolean,
+    image_id: string;
+    name: string;
+    score: number;
+    label: number;
+    dimensions: Box;
+	bounding_box: Box;
+    approved: boolean;
+	uuid: string;
 }
 
 export class PredictionCrop implements PredictionCrop_intf {
-    id: number;
-    image_id: number;
+    image_id: string;
     name: string;
     score: number;
     label: number;
     approved: boolean;
     dimensions: Box;
+	bounding_box: Box;
     url: string;
+	uuid: string;
+	draw_box: boolean = false;
     
     constructor(predcrop: PredictionCrop_intf, url: string) { 
-        this.id = predcrop.id;
         this.image_id = predcrop.image_id;
         this.name = predcrop.name;
         this.score = predcrop.score;
         this.label = predcrop.label;
-        this.dimensions = predcrop.dimensions;
+        this.dimensions = new Box(predcrop.dimensions);
+		this.bounding_box = new Box(predcrop.bounding_box);
         this.approved = predcrop.approved;
+		this.uuid = predcrop.uuid;
         this.url = url;
     }
 }
@@ -401,53 +400,6 @@ export class Model implements Model_intf {
     }
 }
 
-//---------------------------------------------------------------------------------------------------------------------------//
-// Expected structures for data from the API
-export interface CropData {
-    [crop_id: number]: {
-        'crop': Crop_intf,
-        'predictions': Prediction_intf[],
-    }
-}
-
-export interface BatchData {
-    [image_id: number]: {
-        image: Image_intf,
-        predictions: Prediction_intf[],
-        approved_predictions: number[] | undefined,
-        pred_crops: PredictionCrop_intf[] | undefined,
-        crops: CropData | undefined
-    }
-}
-
-export interface BatchesData {
-    [batch_id: number]: BatchData
-}
-
-//---------------------------------------------------------------------------------------------------------------------------//
-
-//Structures to be returned upon deserializing
-
-export interface Crops {
-    [crop_id: number]: {
-        'crop': Crop,
-        'predictions': Prediction[],
-    }
-}
-
-export interface Batch {
-    [image_id: number]: {
-        image: Image,
-        predictions: Prediction[],
-        approved_predictions: number[],
-        pred_crops: PredictionCrop[],
-        crops: Crops,
-    };
-}
-
-export interface Batches {
-    [batch_id: number]: Batch
-}
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export default {};

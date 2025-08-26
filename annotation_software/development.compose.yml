@@ -10,6 +10,7 @@ services:
       IMAGES: "${CROP_FOLDER}"
       SECRET_KEY: "${SECRET_KEY}"
       VALKEY_HOST: "${VALKEY_HOST}"
+      SESSION_REDIS: "${SESSION_REDIS}"
       VALKEY_PASS: "${VALKEY_PASS}"
       AWS_ENDPOINT_URL_S3: "${AWS_ENDPOINT_URL_S3}"
       DB_HOST: "${DB_HOST}"
@@ -32,13 +33,9 @@ services:
   dev-valkey:
     container_name: prong-valkey-dev
     image: docker.io/valkey/valkey:8.1.1
-    mem_limit: 256M
-    cpus: 0.25
     healthcheck:
       test: valkey-cli ping || exit 1
     restart: always
-    ports:
-      - "6379:6379"
     command: valkey-server --requirepass ${VALKEY_PASS}
     networks: 
       - dev_pronghorn_app_network

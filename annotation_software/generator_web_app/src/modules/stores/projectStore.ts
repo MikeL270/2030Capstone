@@ -5,7 +5,7 @@
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { defineStore } from "pinia";
-import { getProjects, getProjectSchemas, getProjectHerdUnits, getProjectModels, getProjectSurveys, getSchemaLabels } from "../apiV1Methods";
+import { getProjects, getProjectSchemas, getProjectHerdUnits, getProjectModels, getProjectSurveys, getSchemaLabels, getCropperModels, getCropperHerdUnits } from "../apiV1Methods";
 import  { Project, Schema, Label, HerdUnit, Model, Survey } from "../../types/generatorobjects"; 
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -82,9 +82,12 @@ export const useProjectStore = defineStore('projectStore', {
         get_label_by_id(id: string) {
             if (this.labels) return this.labels.find(label => label.uuid === id) as Label;
         },
-        async get_models() {
+        async get_project_models() {
             if (this.CurrentProject) this.models = await getProjectModels(this.CurrentProject.uuid) as Model[];
         },
+		async get_cropper_models() {
+			if (this.CurrentSurvey && this.CurrentHerdUnit && this.CurrentSchema) this.models = await  getCropperModels(this.CurrentSurvey.uuid, this.CurrentHerdUnit.uuid, this.CurrentSchema.uuid) as Model[];
+		},
         set_current_model(model: Model | undefined) {
             if (this.models && model != undefined) {
                 const idx = this.models.indexOf(model);
@@ -95,9 +98,12 @@ export const useProjectStore = defineStore('projectStore', {
                 this.model_idx = idx;
             }
         },
-        async get_herd_units() {
+        async get_project_herd_units() {
             if (this.CurrentProject) this.herd_units = await getProjectHerdUnits(this.CurrentProject.uuid) as HerdUnit[];
         },
+		async get_cropper_herd_units() {
+			if (this.CurrentSurvey) this.herd_units = await getCropperHerdUnits(this.CurrentSurvey.uuid) as HerdUnit[];
+		},
         set_current_herd_unit(herdunit: HerdUnit | undefined) {
             if (this.herd_units && herdunit != undefined) {
                 const idx = this.herd_units.indexOf(herdunit);
@@ -122,10 +128,15 @@ export const useProjectStore = defineStore('projectStore', {
             }
         },
 		async get_project_children() {
-			await this.get_herd_units();
-			await this.get_models();
+			await this.get_project_herd_units();
+			await this.get_surveys();
+			await this.get_project_models();
+			await this.get_schemas();
+		},
+		async get_project_cropper_children() {
 			await this.get_surveys();
 			await this.get_schemas();
+			await this.get_cropper_models();
 		},
         clear_state() {
 			this.schemas = undefined;
@@ -138,6 +149,26 @@ export const useProjectStore = defineStore('projectStore', {
 			this.herd_unit_idx = undefined;
 			this.surveys = undefined;
 			this.survey_idx = undefined;
-        }
+        },
+		clear_herd_units() {
+			this.herd_units = undefined;
+			this.herd_unit_idx = undefined;
+		},
+		clear_models() {
+			this.models = undefined;
+			this.model_idx = undefined;
+		},
+		clear_surveys() {
+			this.surveys = undefined;
+			this.survey_idx = undefined;
+		},
+		clear_schemas() {
+			this.schemas = undefined;
+			this.schema_idx = undefined
+		},
+		clear_labels() {
+			this.labels = undefined;
+			this.label_idx = undefined;
+		}
     }
 })

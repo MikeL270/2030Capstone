@@ -67,3 +67,5 @@ services:
 networks: 
   pronghorn_app_network:
     driver: bridge
+
+    

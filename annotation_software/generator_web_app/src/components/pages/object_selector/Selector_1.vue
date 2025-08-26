@@ -82,7 +82,8 @@ export default defineComponent({
 		grid-template-rows: auto;
     }
 	.Configuration-Menu {
-		height: 100%;
+		height: 100% !important;
+		max-height: 100%;
 	}
 </style>
 

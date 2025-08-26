@@ -2,6 +2,7 @@
 models/
 .env
 .env[]Zone.Identifier
+.directory
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
