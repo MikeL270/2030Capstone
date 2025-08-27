@@ -3,12 +3,14 @@ import { defineComponent } from "vue";
 import { useAutoCropperStore } from "@/modules/stores/cropperStore";
 import { mapState } from "pinia";
 import { PredictionCrop } from "@/types/generatorobjects";
+import { useProjectStore } from "@/modules/stores/projectStore";
 
 export default defineComponent({
 	name: 'cropper',
 	setup() {
 		const cstore = useAutoCropperStore();
-		return { cstore };
+		const pstore = useProjectStore();
+		return { cstore, pstore };
 	},
 	data(): {
 		predCropRefs: Record<string, HTMLCanvasElement>,
@@ -25,32 +27,16 @@ export default defineComponent({
 	async mounted() {
 		if (!this.cstore.images) await this.cstore.get_batch();
 		await this.cstore.get_prediction_crops();
-		this.render_pred_crops();
+		this.render_bounding_boxes();
 		document.addEventListener('keydown', this.handle_key_press);
 	},
 	methods: {
-	draw_crop_to_canvas(canvas: HTMLCanvasElement, url: string) {
-		if (!canvas || !url ) return;
-		const ctx = canvas.getContext('2d');
-		const image = new window.Image()
-		image.src = url;
-		// pass predcrop to function and access ref by uuid to redraw the image
-		// or create 
-		image.onload = () => {
-			canvas.width = image.width;
-			canvas.height = image.height;
-			ctx?.drawImage(image, 0, 0)
-		};
-		image.onerror = () => {
-    		console.error(`Failed to load image from URL: ${url}`);
-      	};
-	},
-	render_pred_crops() {
+	render_bounding_boxes() {
 		setTimeout(() => {
 			this.cstore.CurrentPredictionCrops?.forEach((predCrop) => {
 				const canvas = this.predCropRefs[predCrop.uuid];
 				if (canvas) {
-					this.draw_crop_to_canvas(canvas, predCrop.url);
+					this.draw_bounding_box(canvas, predCrop);
 				}
 			});
 		}, 0)
@@ -58,31 +44,23 @@ export default defineComponent({
 	draw_bounding_box(canvas: HTMLCanvasElement, predCrop: PredictionCrop) {
 		if (!canvas || predCrop == undefined) return;
 		const box = predCrop.bounding_box;
-		const draw = (predCrop.draw_box) ? false : true;
-		// Toggle draw box boolean for predcrop object w/ annoying typescript declaration checks
-		if (!this.cstore.CurrentPredictionCrops) return;
-		this.cstore.CurrentPredictionCrops[this.cstore.CurrentPredictionCrops?.indexOf(predCrop)].draw_box = draw;
+		canvas.width = predCrop.dimensions.get_width();
+		canvas.height = predCrop.dimensions.get_height();
 		const ctx = canvas.getContext('2d');
-		// if disabling 
-		if (draw == false) {
-			this.draw_crop_to_canvas(canvas, predCrop.url);
-			return;
-		}
 		if (ctx == null) return;
-		ctx?.beginPath();
+		ctx.beginPath();
 		ctx.lineWidth = 2;
 		ctx.strokeStyle = "red";
-		ctx?.rect(box.top_left[0], box.top_left[1], box.get_width(), box.get_height());
-		ctx?.stroke();
-
+		ctx.rect(box.top_left[0], box.top_left[1], box.get_width(), box.get_height());
+		ctx.stroke();
 	},
 	async handle_right_arrow() {
 		await this.cstore.next_image();
-		this.render_pred_crops();
+		this.render_bounding_boxes();
 	},
 	async handle_left_arrow() {
 		await this.cstore.previous_image();
-		this.render_pred_crops();
+		this.render_bounding_boxes();
 	},
 	handle_key_press(event: KeyboardEvent) {
             switch(event.code) {
@@ -118,10 +96,11 @@ export default defineComponent({
 				<figure v-for="predCrop in cstore.CurrentPredictionCrops" :key="predCrop.uuid" :ref="'crop-' + predCrop.uuid" class="Annotation">
 					<button @click="console.log('pressed')">
 						<p> Score: {{ predCrop.score?.toFixed(3) }} </p>
-						<canvas :ref="(el) => {if (el) {predCropRefs[predCrop.uuid] = el as HTMLCanvasElement}}"></canvas>
+						<canvas :ref="(el) => {if (el) {predCropRefs[predCrop.uuid] = el as HTMLCanvasElement}}" :class="{Visible: predCrop.draw_box}"></canvas>
+						<img :src="predCrop.url"></img>
 					</button>
-					<p> Toggle Boxes: </p>
-					<input type="checkbox" name="box-toggle" @change="draw_bounding_box(predCropRefs[predCrop.uuid], predCrop)"/>
+					<p> Box: </p>
+					<input type="checkbox" name="box-toggle" v-model="predCrop.draw_box"/>
 				</figure>
 			</div>
 		</div>
@@ -193,9 +172,19 @@ export default defineComponent({
 	padding: 0.5vw;
 	background-color: var(--wygf-bg-blue);
 	box-shadow: 0 4px 6px 2px var(--color-background);
-	canvas {
+	img {
 		height: 150px;
 		width: 150px;
+	}
+	canvas {
+		display: none;
+		position: absolute;
+		height: 150px;
+		width: 150px;
+		z-index: 1;
+	}
+	canvas.Visible {
+		display: block;
 	}
 	button {
 		border: none;
