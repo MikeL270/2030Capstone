@@ -495,7 +495,30 @@ export async function getPredCrops(image_id: string | undefined, survey_id: stri
     }
 }
 
-
+export async function submitNoAnnotations(image_id: string, predictions: Prediction[]): Promise<boolean> {
+	try {
+		const response = await fetch(`${api_url}/update/image/no-annotations`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				'image_id': image_id,
+				'predictions': predictions
+			}),
+		});
+		if (!response.ok) {
+			throw new Error(`${uh_oh} ${await response.text()}`);
+		} else {
+			return true;
+		}
+	} catch (error: any) {
+        console.error("There was an error creating pred crops:", error);
+        toast.error(`${error}`);
+        return false;
+    }
+}
 //---------------------------------------------------------------------------------------------------------------------------//
 
 // GET requests:

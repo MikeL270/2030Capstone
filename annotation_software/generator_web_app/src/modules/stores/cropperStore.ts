@@ -7,7 +7,7 @@
 import { defineStore } from "pinia";
 import { useProjectStore } from "./projectStore";
 import { Image, Prediction, PredictionCrop } from "@/types/generatorobjects";
-import { getBatch, getPredCrops } from "../apiV1Methods";
+import { getBatch, getPredCrops, submitNoAnnotations } from "../apiV1Methods";
 import { usePreferenceStore } from "./preferencesStore";
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -54,9 +54,15 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			
 			this.loading = false;
 		},
+		async submit_no_annotations() {
+			if (this.image_idx != undefined && this.images && this.predictions && this.predictions[this.image_idx]) {
+				await submitNoAnnotations(this.images[this.image_idx].uuid, this.predictions[this.image_idx]);
+			}
+
+		},
 		async next_image() {
 			if (this.loading) return;
-			if (this.image_idx !=undefined && this.image_idx < prefstore.batch_size - 1) this.image_idx++;
+			if (this.image_idx != undefined && this.image_idx < prefstore.batch_size - 1) this.image_idx++;
 			if (this.prediction_crops && this.image_idx != undefined && this.prediction_crops[this.image_idx] != undefined)	{
 				return;
 			} else {

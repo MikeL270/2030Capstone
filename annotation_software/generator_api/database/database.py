@@ -942,7 +942,6 @@ class Database:
 		return self._delete_herd_unit(herd_unit_ids = herd_unit_ids)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
 	# Project Management - Models
 	
 	@connect
@@ -1261,8 +1260,21 @@ class Database:
 		return self._update_image(image_id = image_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Core - Predictions
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Core - Annotations
+
+	@connect
+	def _create_annotation(self, cursor: psycopg.Cursor, label_id: Label | int | UUID, image_id: Image | int | UUID,
+						  herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: int) -> Annotation | Prediction:
+		'''
+		
+		'''
 
 
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Core - reviewed_area
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Relationship Management - usermanagement <-> usermanagement: users <-> roles
@@ -1886,6 +1898,58 @@ class Database:
 
 		'''
 		return self._get_batch(survey_id = survey_id, herd_unit_id = herd_unit_id, batch_size = batch_size, user_id = user_id, label = label, score = score, model_id = model_id)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Functionality - Close image
+
+	@connect
+	def _close_image(self, cursor: psycopg.Cursor, image_id: Image | int | UUID) -> bool:
+		'''
+		
+		'''
+		query = sql.SQL('UPDATE core.images SET opened_by_user_id = 0 WHERE {id_field} = %s; ')
+		match image_id: 
+			case int():
+				cursor.execute(query.format(id_field = sql.Identifier('image_id')), (image_id,))
+			case Image():
+				cursor.execute(query.format(id_field = sql.Identifier('image_id')), (image_id.image_id,))
+			case UUID():
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (image_id,))
+			case _:
+				raise TypError('image_id must be of type Image, int, or UUID')
+		return True if cursor.rowcount > 0 else False
+
+	def close_image(self, image_id: Image | int | UUID) -> bool:
+		'''
+		
+		'''
+		return self._close_image(image_id = image_id)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Functionality - Delcare predictions as reviewed
+
+	@connect
+	def _set_predictions_reviewed(self, cursor: psycopg.Cursor, pred_ids: list[Prediction | int | UUID], user_id: int) -> bool:
+		'''
+		
+		'''
+		query = sql.SQL(' UPDATE core.predictions SET reviewed_by_user_id = %s WHERE {id_field} = %s ')
+		match pred_ids:
+			case list() if isinstance(pred_ids[0], int):
+				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, pred_id) for pred_id in pred_ids])
+			case list() if isinstance(pred_ids[0], Prediction):
+				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, pred.prediction_id) for pred in pred_ids])
+			case list() if isinstance(pred_ids[0], UUID):
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(user_id, uuid) for uuid in pred_ids])
+			case _:
+				raise TypeError('pred_ids must be a list of ints, Predictions, or UUIDS')
+		return True if cursor.rowcount > 0 else False
+	
+	def set_predictions_reviewed(self, pred_ids: list[Prediction | int | UUID], user_id: int) -> bool:
+		'''
+		
+		'''
+		return self._set_predictions_reviewed(pred_ids = pred_ids, user_id = user_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # class Database(ABC): # Abstract class for all database types

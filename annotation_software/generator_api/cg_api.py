@@ -456,8 +456,21 @@ def get_pred_crop(image_id: str, pred_crop_id: str):
 
 	return Response(encoded_img.tobytes(), mimetype='image/webp'), 201
 
+@app.route('/api/v1/update/image/no-annotations', methods=["POST"])
+@login_required
+def no_annotations():
+	'''
+	
+	'''
+	data = request.get_json()
+	res_1 = base.close_image(data['image_id'])
+	res_2 = base.set_predictions_reviewed(data['prediction_ids'], current_user.user_id)	 
+	return '', 201 if res_1 and res_2 else abort(500, 'Update failed!')
+
+
 #---------------------------------------------------------------------------------------------------------------------------#
 # Error Handling
+
 @app.errorhandler(404)
 def not_found(error):
 	return f'404: {error.description}', 404

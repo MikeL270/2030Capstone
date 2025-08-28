@@ -116,13 +116,42 @@ export class Prediction implements Prediction_intf {
 	uuid: string;
 
     constructor(pred: Prediction_intf) {
-        this.dimensions = pred.dimensions;
+        this.dimensions = new Box(pred.dimensions);
         this.score = pred.score;
         this.label = pred.label;    
 		this.created = new Date(pred.created);
 		this.modified = new Date(pred.modified);
 		this.uuid = pred.uuid;
     }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface Annotation_intf {
+	dimensions: Box;
+	score: number;
+    label: number;
+	created: Date;
+	modified: Date;
+	uuid: string;
+}
+
+export class Annotation implements Annotation_intf {
+	dimensions: Box;
+	score: number;
+    label: number;
+	created: Date;
+	modified: Date;
+	uuid: string;
+
+	constructor (annotation: Annotation_intf) {
+		this.dimensions = new Box(annotation.dimensions);
+        this.score = annotation.score;
+        this.label = annotation.label;    
+		this.created = new Date(annotation.created);
+		this.modified = new Date(annotation.modified);
+		this.uuid = annotation.uuid;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//

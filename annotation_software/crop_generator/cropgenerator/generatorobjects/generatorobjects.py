@@ -358,6 +358,30 @@ class Prediction(CgOBJ):
 			'modified': self.modified,
 			'uuid': self.uuid
 		}
+	
+class Annotation(CgOBJ):
+	def __init__(self, annotation_id: int, label_id: int, image_id: int, herd_unit_id: int,
+			  	box_tx: int, box_ty: int, box_bx: int, box_by: int, created_by_user_id: int, 
+				created: datetime | None, modified: datetime | None, uuid: UUID):
+		self.annotation_id = annotation_id
+		self.label_id = label_id
+		self.image_id = image_id
+		self.herd_unit_id = herd_unit_id
+		self.dimensions = Box((box_tx, box_ty), (box_bx, box_by))
+		self.created_by_user_id = created_by_user_id
+		self.created = created
+		self.modifed = modified
+		self.uuid = uuid
+	
+	def serialize(self) -> dict:
+		return {
+			'dimensions': self.dimensions.serialize(),
+			'score': self.score,
+			'label': self.label,
+			'created': self.created,
+			'modified': self.modified,
+			'uuid': self.uuid
+		}
 
 class Crop(Image):
 	def __init__(self, image_id: int, name: str, dimensions: Box):
