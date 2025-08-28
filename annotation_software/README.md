@@ -2,11 +2,7 @@
 
 The annotation software is an SPA (Single Page Application) written in VueJS designed to assist in the production of labeled training data by implementing a method known as model assisted labeling with a few creative twists. In a greater scope, this tool is envisioned to be a ubiquitous tool for managing wildlife census projects using computer vision models. The goal is to create an intuitive interface that allows for the rapid scalining of specialized models capable of accurately tracking herd populations with minimal human oversight. 
 
-## Deployment
-
 This tool is designed to be easily and rapidly scalable using containerization tools such as podman or docker. The included compose and container files are compatible with any containerization service that implements the [OCI](https://opencontainers.org/) (Open Container Initiative) standards. It is recommended to deploy this project to a linux system, primarily as a windows based deployment has not currently been tested. This project was designed with modularity at its core, meaning each component in the stack can be used in isolation. For example, one could take the API and the database and write their own front end.
-
-### *Coming soon: Detailed set up guide*
 
 ## Tech Stack
 
@@ -25,7 +21,9 @@ This tool is designed to be easily and rapidly scalable using containerization t
 
 3. **Database:** This project makes use of the SQL relational database Postgresql, which enables the rapid management of structured relational data (such as machine learning predictions and annotations).
 
-4. **Frontend** The frontend is a lazily loaded SPA (Single Page Application) built with VueJS and typescript, allowing for a feature rich, high performance front end that enables a seamless user experience.
+4. **Valkey:** Valkey is an open source fork of the caching tool *redis*. Redis (valkey) caches are used to increase performance and enable scalability of web applications just like this one. [Valkey](https://valkey.io/) <-> [Redis](https://redis.io/).
+
+5. **Frontend** The frontend is a lazily loaded SPA (Single Page Application) built with VueJS and typescript, allowing for a feature rich, high performance front end that enables a seamless user experience.
 
 ### Database Abstraction
 
@@ -59,6 +57,24 @@ In the interest of performance and scalability we opted not to use an ORM (Objec
 ```
 
 The choice to write our own abstraction layer was very deliberate; there are well documented issues with ORMs such as sqlAlchemy when considering complex relationships and performance scaling for complex multi-user applications. The goal was to as closely emulate the ease of use of an ORM while avoiding the massive overhead and inefficient generated SQL statements. We did not make a better ORM, we made a high performance specialized abstraction layer specifically for this project.
+
+## Deployment
+
+This folder (annotation_software) contains a set of *container files* and *YAML Compose* files that are designed to *hopefully* automate most of the deployment process. Each major component gets it's own container managed using any OCI compliant container orchestration tool. Before composing our containers we must provide the nessacary *secrets* to the orchestration tool. *Be sure to have read the major components section to understand exactly what it is that you are deploying.*
+
+### Requirements
+* **Some Computer, Somewhere:** Thanks to our microservice architecture, this tool can be hosted on one bigger computer, or a few smaller computers. This guide assumes you will be using one big computer. It will be up to the user to alter the compose files if they wish to alter the configuration. There are no plans for any sort of install utility as of now. 
+* **Podman and Podman-Compose **OR** Docker and Compose Version:**
+	* *podman: 4.3.1*
+  	* *podman-compose: 1.4.0*
+  	* *docker: 28.3.3, build 980b856*
+  	* *docker compose: 2.39.1*
+
+### Secrets
+
+* **SECRET_KEY** -- The secret key is used by *flask_session* to cryptographically sign user session tokens to protect against common types of attacks such as Cross Site Request Forgery (CSRF) and ensure *cookie* integrity. This key is simply a unique, random string with a high degree of *entropy* that should not be reused between deployments. Reccomending a source to generate this key would be counter productive, and eventually we will implement a system for auto-generating this key for you.
+  
+* **VALKEY_HOST** -- The valkey host secret is used by the *API* to know how to talk to the caching tool known as *redis*. By default this project uses an open source fork of redis known as *valkey* that is by default 
 
 ## Using the app
 
