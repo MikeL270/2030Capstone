@@ -12,6 +12,7 @@ This tool is designed to be easily and rapidly scalable using containerization t
 * Valkey
 * VueJS with Typescript
 * Nginx
+* CEPH Object Gateway S3 API (Interchangable with AWS S3)
 
 ### Major Components
 
@@ -60,21 +61,63 @@ The choice to write our own abstraction layer was very deliberate; there are wel
 
 ## Deployment
 
+### Acknowledgement
+
+At this early stage in development parts of the set up process remains manual. For example, the initialization process of the database schema is not fully integrated, however a detailed ER diagram can be found on [dbdiagram.io](https://dbdiagram.io/d/Pronghorn-68542f3bf039ec6d36042887). As we progress torwards a more feature complete product we will begin to automate more of the installation process. 
+
 This folder (annotation_software) contains a set of *container files* and *YAML Compose* files that are designed to *hopefully* automate most of the deployment process. Each major component gets it's own container managed using any OCI compliant container orchestration tool. Before composing our containers we must provide the nessacary *secrets* to the orchestration tool. *Be sure to have read the major components section to understand exactly what it is that you are deploying.*
 
 ### Requirements
-* **Some Computer, Somewhere:** Thanks to our microservice architecture, this tool can be hosted on one bigger computer, or a few smaller computers. This guide assumes you will be using one big computer. It will be up to the user to alter the compose files if they wish to alter the configuration. There are no plans for any sort of install utility as of now. 
+
+* **Some Computer, Somewhere:** Thanks to our microservice architecture, this tool can be hosted on one bigger computer, or a few smaller computers. This guide assumes you will be using one big computer. It will be up to the user to alter the compose files if they wish to alter the configuration. There are no plans for any sort of install utility as of now.
+  
 * **Podman and Podman-Compose **OR** Docker and Compose Version:**
 	* *podman: 4.3.1*
   	* *podman-compose: 1.4.0*
-  	* *docker: 28.3.3, build 980b856*
+  	* *docker: 28.3.3*
   	* *docker compose: 2.39.1*
 
 ### Secrets
 
+Below is a list of *secrets* that must be provided to the application in order for it work correctly. These secrets should be placed inside of a *.env* file in the same directory as the compose files. These secrets must either sourced or produced by the end user for their instance of the application. Note that the entirety of this application can be hosted on-prem, in the cloud, or in a hybrid structure, where you choose to host components will determine how you source quite a few of these secrets. 
+
+* **APPLICATION_URL** -- This is the url the application will be served from. 
+
 * **SECRET_KEY** -- The secret key is used by *flask_session* to cryptographically sign user session tokens to protect against common types of attacks such as Cross Site Request Forgery (CSRF) and ensure *cookie* integrity. This key is simply a unique, random string with a high degree of *entropy* that should not be reused between deployments. Reccomending a source to generate this key would be counter productive, and eventually we will implement a system for auto-generating this key for you.
   
-* **VALKEY_HOST** -- The valkey host secret is used by the *API* to know how to talk to the caching tool known as *redis*. By default this project uses an open source fork of redis known as *valkey* that is by default 
+* **VALKEY_HOST** -- The valkey host secret stores the URL for the valkey instance. If your database is one of the containers then you can simply use the name of the container. 
+
+* **VALKEY_PASS** -- The valkey pass is used to control access to the cache server. Even if your valkey cache is on-prem it is still important to keep it secure.
+
+* **AWS_ENDPOINT_S3** -- This secret stores the URL for your S3 compliant object storage provider of choice. Note that you are not required to use AWS, but you can if you want to.
+
+* **DB_HOST** -- This secret stores the URL for the postgres database. If your database is one of the containers then you can simply use the name of the container.
+
+* **DB_USER** -- This is the user in the database that will be used by the API to access data.
+
+* **DB_PASS** -- This is the password associated with the above user.
+
+* **DB_NAME** -- This is the name of the database.
+
+* **AWS_ACCESS_KEY_ID** -- This is a key provided by your S3 compliant storage provider.
+
+* **AWS_SECRET_ACCESS_KEY** -- This is another key provided by your S3 compliant storage provider. 
+
+## Build Process
+
+Setting the secrets *(and building your database)* is hopefully the hardest part of the process. The build process is controlled by your container management tool. This is a good time to note that this software comes with absolutely no warranty, especially if you modify the orchestration script. Good luck. 
+
+### Podman
+In the same directory as production.compose.yml, run this command
+```bash
+	podman-compose up -d
+```
+
+### Docker
+In the same directory as production.compose.yml, run this command
+```bash
+	docker compose up -d
+```
 
 ## Using the app
 
