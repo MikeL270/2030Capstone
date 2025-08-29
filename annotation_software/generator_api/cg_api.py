@@ -436,7 +436,7 @@ def create_prediction_crops():
 		cache.set(image.uuid, img_data, 360) 
 	image.set_image(img_data)
 	pred_crops = create_subcrop(image, data['predictions'])
-	serialized_pred_crops = []
+	serialized_pred_crops = [] 
 	for crop in pred_crops: # Save crop image data into the cache
 		cache.set(crop.uuid, crop.get_image(), timeout=0) # prediction crops don't expire, the MUST be deleted
 		serialized_pred_crops.append(json.dumps(crop, default=app.json_provider_class(app).default))

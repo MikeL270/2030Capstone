@@ -1864,7 +1864,7 @@ class Database:
 				  	I.uuid,
                     json_agg(
                         json_build_object(
-							'dimensions', json_build_array(P.box_tx, P.box_ty, P.box_bx, P.box_by),
+							'dimensions', json_build_object('top_left', json_build_array(P.box_tx, P.box_ty), 'bottom_right', json_build_array(P.box_bx, P.box_by)),
                             'score', P.score,
                             'label', P.label,
 				  			'created', P.created,

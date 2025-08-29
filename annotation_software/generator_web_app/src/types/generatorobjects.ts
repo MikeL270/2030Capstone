@@ -34,6 +34,10 @@ export class Box implements Box_intf {
 	get_height(): number {
 		return Math.abs(this.top_left[1] - this.bottom_right[1]);
 	}
+	serialize() {
+		return [this.top_left[0], this.top_left[1], this.bottom_right[0], this.bottom_right[1]];
+		
+	}
 
 }
 

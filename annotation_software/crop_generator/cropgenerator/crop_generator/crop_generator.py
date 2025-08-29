@@ -263,7 +263,7 @@ def create_subcrop(image: Image, predictions: list[dict[str: any]], crop_size: i
 			return False 
  
 		for pred in predictions:
-			box = [int(num) for num in pred['dimensions']]
+			box = pred['dimensions']['top_left'] + pred['dimensions']['bottom_right']
 			ymin = np.max([box[1] - crop_size, 0])
 			ymax = np.min([box[3] + crop_size, img.shape[0]])
 			xmin = np.max([box[0] - crop_size, 0])
