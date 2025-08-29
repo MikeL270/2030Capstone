@@ -4,20 +4,17 @@ services:
       context: .
       dockerfile: production.prongapi.containerfile
     environment:
-      ROOT: "${ROOT}"
-      HERD_UNIT: "${HERD_UNIT}"
-      CROP_FOLDER: "${CROP_FOLDER}"
-      IMAGES: "${CROP_FOLDER}"
+      APPLICATION_URL: "${APPLICATION_URL}"
       SECRET_KEY: "${SECRET_KEY}"
       VALKEY_HOST: "${VALKEY_HOST}"
       VALKEY_PASS: "${VALKEY_PASS}"
       AWS_ENDPOINT_URL_S3: "${AWS_ENDPOINT_URL_S3}"
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DB_HOST: "${DB_HOST}"
       DB_USER: "${DB_USER}"
       DB_PASS: "${DB_PASS}" 
       DB_NAME: "${DB_NAME}"
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ${DATA_PATH}:/data
     ports:
@@ -32,8 +29,6 @@ services:
     healthcheck:
       test: valkey-cli ping || exit 1
     restart: always
-    ports:
-      - "6379:6379"
     command: valkey-server --requirepass ${VALKEY_PASS}
     networks: 
       - pronghorn_app_network 

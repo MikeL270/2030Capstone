@@ -38,8 +38,8 @@ db_config = {
 prefix = len('high-altitude-pronghorn-survey-')
 suffix = len('_crop_xx')
 
-root = os.environ.get('ROOT')
-herd_unit = os.environ.get('HERD_UNIT')
+root = ''
+herd_unit = ''
 #save_folder = os.path.join(root, 'Images', os.environ.get('CROP_FOLDER')) #type: ignore
 #os.makedirs(save_folder, exist_ok=True) # type: ignore
 use_s3 = True
@@ -56,9 +56,7 @@ app.config['SESSION_COOKIE_SECURE'] = False
 CORS(app, resources={
     r'/api/*': {
         'origins': [
-            #'http://testing.lancecomputer.com:5173', # Development
-			#'http://testing.lancecomputer.com:6900', # Testing
-            'https://pronghorn-census.arcc.uwyo.edu', # Production
+           os.environ.get('APPLICATION_URL')
         ],
         'supports_credentials': True     
     }
