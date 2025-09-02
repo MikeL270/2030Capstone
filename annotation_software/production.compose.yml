@@ -15,8 +15,6 @@ services:
       DB_USER: "${DB_USER}"
       DB_PASS: "${DB_PASS}" 
       DB_NAME: "${DB_NAME}"
-    volumes:
-      - ${DATA_PATH}:/data
     ports:
       - "8000:8000"
     networks: 
