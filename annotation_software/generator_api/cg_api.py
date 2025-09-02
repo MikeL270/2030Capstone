@@ -45,18 +45,19 @@ herd_unit = ''
 use_s3 = True
  
 #---------------------------------------------------------------------------------------------------------------------------#
-# Flask Instantiation
-
+# Flask Instantiation 
+ 
 app = Flask(__name__)
 app.json_provider_class = CropgenJSONPRovider
 app.secret_key = os.environ.get('SECRET_KEY')
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = False 
-
+url = os.environ.get('APPLICATION_URL')
+  
 CORS(app, resources={
     r'/api/*': {
         'origins': [
-           os.environ.get('APPLICATION_URL')
+           url
         ],
         'supports_credentials': True     
     }
@@ -87,7 +88,7 @@ if use_s3:
     from botocore.client import Config
     from boto3.s3.transfer import TransferConfig
 
-    BUCKET_NAME = 'mlance4' # Change to production bucket name
+    BUCKET_NAME = 'pronghorn-count' # Change to production bucket name
 
     extra_args = {
         'ContentType': 'image/jpg',
@@ -323,11 +324,12 @@ def create_pred_crops(batch_id: int, image_id: int):
         abort(404, f'Image {image_id} not found')
     predictions = batches[session['bgroupid']][batch_id][image_id]['predictions']
     if use_s3:
-        image_key = f'images/{2024}/{image.herd_unit.name.lower()}/{image.name}.JPG'
+        image_key = f'images/{2024}/{image.herd_unit.name.lower()}/{image.name[0:50]}.JPG'
+        print(image_key)
         image.set_image(pathfinder.get_object(Bucket=BUCKET_NAME, Key=image_key)['Body'].read())
     crops = create_subcrop(image, predictions)
     batches[session['bgroupid']][batch_id][image_id]['pred_crops'] = {}
-    for crop in crops:
+    for crop in crops: 
         batches[session['bgroupid']][batch_id][image_id]['pred_crops'][crop.pred_crop_id] = crop
 
     serialized_data = json.dumps(crops, default=app.json_provider_class(app).default)

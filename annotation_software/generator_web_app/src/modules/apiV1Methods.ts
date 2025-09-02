@@ -10,9 +10,9 @@ import type { Prediction_intf,  PredictionCrop_intf, CropData, BatchData, Batche
               Crops, Batch, Batches } from '@/types/generatorobjects.ts';
 import { useToast } from 'vue-toastification'
 
-const api_url: string = 'https://pronghorn-census.arcc.uwyo.edu/api/v1'; // production
+//const api_url: string = 'https://pronghorn-census.arcc.uwyo.edu/api/v1'; // production
 //const api_url: string = 'http://testing.lancecomputer.com:5000/api/v1';  // development
-//const api_url: string = 'http://testing.lancecomputer.com:8000/api/v1' // testing
+const api_url: string = 'http://testing.lancecomputer.com:8000/api/v1' // testing
 const uh_oh: string = 'You did something wrong! status: ';
 
 const toast = useToast()
