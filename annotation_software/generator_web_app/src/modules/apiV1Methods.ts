@@ -453,9 +453,9 @@ export async function getBatch(survey_id: string | undefined, herd_unit_id: stri
 			}
 			predictions.push(preds)
 		}
-		return [images, predictions];
+		return [images as Image[], predictions as Prediction[][]];
 	} catch (error: any) {
-        console.error("There was an error completeing the multipart upload:", error);
+        console.error("There was an error fetching the batch", error);
         toast.error(`${error}`);
         return undefined;
     }

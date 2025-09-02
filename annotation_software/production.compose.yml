@@ -4,10 +4,6 @@ services:
       context: .
       dockerfile: production.prongapi.containerfile
     environment:
-      ROOT: "${ROOT}"
-      HERD_UNIT: "${HERD_UNIT}"
-      CROP_FOLDER: "${CROP_FOLDER}"
-      IMAGES: "${CROP_FOLDER}"
       SECRET_KEY: "${SECRET_KEY}"
       VALKEY_HOST: "${VALKEY_HOST}"
       VALKEY_PASS: "${VALKEY_PASS}"

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, onMounted } from "vue";
 import { useAutoCropperStore } from "@/modules/stores/cropperStore";
 import { mapState } from "pinia";
 import { PredictionCrop } from "@/types/generatorobjects";
@@ -10,6 +10,16 @@ export default defineComponent({
 	setup() {
 		const cstore = useAutoCropperStore();
 		const pstore = useProjectStore();
+		const startup = async () => {
+			if (!cstore.bootstrapped) {
+			console.log('calling');
+			await cstore.bootstrap();
+		} else {
+			console.log('im an idiot');
+		}
+		
+		};
+		startup();
 		return { cstore, pstore };
 	},
 	data(): {
@@ -19,21 +29,25 @@ export default defineComponent({
 			predCropRefs: {},
 		}
 	},
-	// computed: {
-	// 	...mapState(useAutoCropperStore, {
-	// 		Curr
-	// 	})
-	// },
-	async mounted() {
-		if (!this.cstore.images) await this.cstore.get_batch();
-		await this.cstore.get_prediction_crops();
-		this.render_bounding_boxes();
+	computed: {
+		...mapState(useAutoCropperStore, {
+			CurrentPredictionCrops: 'CurrentPredictionCrops'
+		})
+	},
+	watch: {
+		CurrentPredictionCrops(newValue: PredictionCrop[], oldValue: PredictionCrop[]) {
+			if (newValue != oldValue && newValue != undefined) {
+				this.render_bounding_boxes();
+			}
+		}
+	},
+	async mounted() { 
 		document.addEventListener('keydown', this.handle_key_press);
 	},
 	methods: {
 	render_bounding_boxes() {
 		setTimeout(() => {
-			this.cstore.CurrentPredictionCrops?.forEach((predCrop) => {
+			this.cstore.CurrentPredictionCrops.forEach((predCrop) => {
 				const canvas = this.predCropRefs[predCrop.uuid];
 				if (canvas) {
 					this.draw_bounding_box(canvas, predCrop);
@@ -56,11 +70,11 @@ export default defineComponent({
 	},
 	async handle_right_arrow() {
 		await this.cstore.next_image();
-		this.render_bounding_boxes();
+		//this.render_bounding_boxes();
 	},
 	async handle_left_arrow() {
 		await this.cstore.previous_image();
-		this.render_bounding_boxes();
+		//this.render_bounding_boxes();
 	},
 	handle_key_press(event: KeyboardEvent) {
             switch(event.code) {
@@ -90,11 +104,11 @@ export default defineComponent({
 <template>
 	<div id="Cropper-Contianer">
 		<div id="Predictions-Container" v-if="!cstore.loading">
-			<h2> <u> {{ cstore.CurrentImage?.name }} </u> </h2>
-			<p> {{ cstore.ImageNum }} / {{ cstore.images?.length }} </p>
+			<h2> <u> {{ cstore.CurrentImage.name }} </u> </h2>
+			<p> {{ cstore.ImageNum }} / {{ cstore.CurrentImages.length }} </p>
 			<div id="Predictions-Table">
-				<figure v-for="predCrop in cstore.CurrentPredictionCrops" :key="predCrop.uuid" :ref="'crop-' + predCrop.uuid" class="Annotation">
-					<button @click="console.log('pressed')">
+				<figure v-for="predCrop in cstore.CurrentPredictionCrops" :key="predCrop.uuid" :ref="'crop-' + predCrop.uuid" class="Annotation" :class="{Approved: predCrop.approved == true}">
+					<button @click="predCrop.approved = (predCrop.approved) ? false : true">
 						<p> Score: {{ predCrop.score?.toFixed(3) }} </p>
 						<canvas :ref="(el) => {if (el) {predCropRefs[predCrop.uuid] = el as HTMLCanvasElement}}" :class="{Visible: predCrop.draw_box}"></canvas>
 						<img :src="predCrop.url"></img>
@@ -172,6 +186,8 @@ export default defineComponent({
 	padding: 0.5vw;
 	background-color: var(--wygf-bg-blue);
 	box-shadow: 0 4px 6px 2px var(--color-background);
+	flex-grow: 0;
+	flex-shrink: 0;
 	img {
 		height: 150px;
 		width: 150px;
@@ -200,6 +216,9 @@ export default defineComponent({
 		cursor: pointer;
 		color: var(--wygf-yellow);
 	}
+}
+.Approved {
+	box-shadow: 0 0 3px 1px var(--wygf-yellow)
 }
 #Tool-Bar{
 	width: 80%;
