@@ -3,7 +3,7 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: July 23, 2025
+# Updated: August 3, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -37,8 +37,6 @@ db_config = {
 	'host': os.environ.get('DB_HOST'),           
 	'port': '5432'              
 }
-
-use_s3 = True
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Flask Instantiation
@@ -113,7 +111,7 @@ transfer_config = TransferConfig(
 # User session management
 
 @login_manager.user_loader
-@cache.memoize(300)
+@cache.cached(300)
 def load_user(session_user_id):
 	user = base.get_user(UUID(session_user_id))
 	print(session_user_id) 

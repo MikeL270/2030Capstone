@@ -56,35 +56,32 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 				'prediction_crops':[]
 			} as batch;
 			this.batches[batch_index]['images'] = resp[0];
-			this.image_idx = 0; 
 			this.batches[batch_index]['predictions'] = resp[1];
+			console.log('batch fetched')
 		},
 		async bootstrap() {
-			console.log('called')
 			this.loading = true;
 			await this.get_batch(0);
-			await this.get_prediction_crops(this.image_idx);
+			await this.get_prediction_crops(this.batch_idx, this.image_idx);
 			this.loading = false;
 			this.bootstrapped = true;
-			// prefecth next batch
-			this.get_batch(1);
+			// prefecth next image
+			this.get_prediction_crops(this.batch_idx, this.image_idx + 1)
 		},
 		async next_batch() {
-			if (this.NextBatch) {
-				this.batch_idx++;
-				this.image_idx = 0;
-				return;
-			} else {
-				// clear older batch
-				// TODO: instead of just deleting the batch cache it in valkey session in a form of lifo/filo stack
-				if (this.batches.length > 3) delete this.batches[0];
-
+			// clear older batch
+			// TODO: instead of just deleting the batch cache it in valkey session in a form of lifo/filo stack
+			if (this.batches.length > 3) delete this.batches[0];
+			if (!this.NextBatch) {
+				await this.get_batch(this.image_idx + 1);
 			}
-		
+			this.batch_idx++;
+			this.image_idx = 0;
+			await this.get_prediction_crops(this.batch_idx, this.image_idx + 1);
 		},
-		async get_prediction_crops(image_index: number) {
-			const predCrops = await getPredCrops(this.CurrentImage.uuid, pstore.CurrentSurvey?.uuid, pstore.CurrentHerdUnit?.uuid, this.CurrentPredictions);
-			if (predCrops) this.batches[this.batch_idx]['prediction_crops'][image_index] = predCrops;
+		async get_prediction_crops(batch_index: number, image_index: number) {
+			const predCrops = await getPredCrops(this.batches[batch_index]['images'][image_index].uuid, pstore.CurrentSurvey?.uuid, pstore.CurrentHerdUnit?.uuid, this.CurrentPredictions);
+			if (predCrops) this.batches[batch_index]['prediction_crops'][image_index] = predCrops;
 		},
 		async submit_no_annotations() {
 			if (this.loading) return;
@@ -96,20 +93,31 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			if (this.loading) return;
 			// preload the next batch if halfway through 	
 			if (this.image_idx == Math.floor(this.CurrentImages.length / 2)) {
-				this.get_batch(this.image_idx + 1);
+				this.get_batch(this.batch_idx + 1);
 			}
+
+			if (this.image_idx + 2 == this.CurrentImages.length && this.NextBatch) {
+				this.get_prediction_crops(this.batch_idx + 1, 0)
+				console.log('getting next batch first image');
+			}
+			if (this.image_idx + 1 >= this.CurrentImages.length) {
+				this.loading = true;
+				this.next_batch();
+				this.loading = false;
+				return;
+			} 
 			// if next prediction crops already exist increase image_idx
 			if (this.NextPredictionCrops) {
-				console.log('I broke it')
 				this.image_idx++;
-				return;
 			} else {
 				this.loading = true;
 				this.image_idx++;
-				await this.get_prediction_crops(this.image_idx);
+				await this.get_prediction_crops(this.batch_idx, this.image_idx);
 				this.loading = false;
-				// preload the next prediction crops 
-				//this.get_prediction_crops(this.image_idx++);
+			}
+			// preload the next prediction crops 
+			if (this.image_idx + 1 < this.CurrentImages.length) {
+				this.get_prediction_crops(this.batch_idx, this.image_idx + 1);
 			}
 		},
 		async previous_image() {
@@ -118,11 +126,15 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			if (this.LastPredictionCrops) {
 				this.image_idx--;
 				return;
-			} else {
+			} else if (this.image_idx > 0) {
 				this.loading = true;
 				this.image_idx--;
-				await this.get_prediction_crops(this.image_idx);
+				await this.get_prediction_crops(this.batch_idx, this.image_idx);
 				this.loading = false;
+			} else if (this.image_idx == 0 && this.LastBatch){
+				this.batch_idx--;
+				this.image_idx = this.CurrentImages.length - 1;
+				return;
 			}
 		}
     }

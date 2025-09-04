@@ -31,7 +31,7 @@ services:
     networks: 
       - dev_pronghorn_app_network
   dev-valkey:
-    container_name: prong-valkey-dev
+    container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
     healthcheck:
       test: valkey-cli ping || exit 1

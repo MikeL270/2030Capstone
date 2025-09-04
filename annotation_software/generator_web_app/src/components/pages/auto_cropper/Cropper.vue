@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent, onMounted } from "vue";
+import { defineComponent, onMounted, ref } from "vue";
 import { useAutoCropperStore } from "@/modules/stores/cropperStore";
 import { mapState } from "pinia";
 import { PredictionCrop } from "@/types/generatorobjects";
@@ -12,10 +12,9 @@ export default defineComponent({
 		const pstore = useProjectStore();
 		const startup = async () => {
 			if (!cstore.bootstrapped) {
-			console.log('calling');
 			await cstore.bootstrap();
 		} else {
-			console.log('im an idiot');
+			return
 		}
 		
 		};
@@ -38,7 +37,7 @@ export default defineComponent({
 		CurrentPredictionCrops(newValue: PredictionCrop[], oldValue: PredictionCrop[]) {
 			if (newValue != oldValue && newValue != undefined) {
 				this.render_bounding_boxes();
-			}
+			} 
 		}
 	},
 	async mounted() { 
@@ -47,7 +46,7 @@ export default defineComponent({
 	methods: {
 	render_bounding_boxes() {
 		setTimeout(() => {
-			this.cstore.CurrentPredictionCrops.forEach((predCrop) => {
+			this.CurrentPredictionCrops.forEach((predCrop) => {
 				const canvas = this.predCropRefs[predCrop.uuid];
 				if (canvas) {
 					this.draw_bounding_box(canvas, predCrop);
@@ -107,10 +106,10 @@ export default defineComponent({
 			<h2> <u> {{ cstore.CurrentImage.name }} </u> </h2>
 			<p> {{ cstore.ImageNum }} / {{ cstore.CurrentImages.length }} </p>
 			<div id="Predictions-Table">
-				<figure v-for="predCrop in cstore.CurrentPredictionCrops" :key="predCrop.uuid" :ref="'crop-' + predCrop.uuid" class="Annotation" :class="{Approved: predCrop.approved == true}">
+				<figure v-for="predCrop in cstore.CurrentPredictionCrops" :key="predCrop.uuid" :ref="'crop-' + predCrop.uuid" class="Annotation" :class="{Approved: predCrop.approved == true}" :title="'Prediction: ' + predCrop.uuid">
 					<button @click="predCrop.approved = (predCrop.approved) ? false : true">
 						<p> Score: {{ predCrop.score?.toFixed(3) }} </p>
-						<canvas :ref="(el) => {if (el) {predCropRefs[predCrop.uuid] = el as HTMLCanvasElement}}" :class="{Visible: predCrop.draw_box}"></canvas>
+						<canvas :ref="(el) => {if (el) {predCropRefs[predCrop.uuid] = el as HTMLCanvasElement}}" :class="{Visible: predCrop.draw_box}" ></canvas>
 						<img :src="predCrop.url"></img>
 					</button>
 					<p> Box: </p>

@@ -276,7 +276,7 @@ def create_subcrop(image: Image, predictions: list[dict[str: any]], crop_size: i
 				label = pred['label'],
 				dimensions = Box((int(xmin), int(ymax)), (int(xmax), int(ymin))),
 				bounding_box = Box((int(box[0] - xmin), int(box[1] - ymin)), (int(box[2] - xmin), int(box[3] - ymin))),
-				uuid = uuid4()
+				uuid = pred['uuid']
 			)
 			crop.set_image(img[ymin:ymax, xmin:xmax].copy())
 			crops.append(crop)

@@ -49,8 +49,8 @@ a,
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 89vh;
-  max-height: 85vh;
+  height: 90vh;
+  max-height: 95vh;
   background-color: var(--color-background-soft);
   flex-shrink: 1;
 }
