@@ -32,7 +32,7 @@ db_config = {
     'user': os.environ.get('DB_USER'),              
     'password': os.environ.get('DB_PASS'),    
     'host': os.environ.get('DB_HOST'),           
-    'port': '5432'              
+    'port': '5433'              
 }
 
 prefix = len('high-altitude-pronghorn-survey-')
@@ -50,8 +50,8 @@ use_s3 = True
 app = Flask(__name__)
 app.json_provider_class = CropgenJSONPRovider
 app.secret_key = os.environ.get('SECRET_KEY')
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False 
+app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
+app.config['SESSION_COOKIE_SECURE'] = True
 url = os.environ.get('APPLICATION_URL')
   
 CORS(app, resources={

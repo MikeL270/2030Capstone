@@ -15,15 +15,13 @@ services:
       DB_USER: "${DB_USER}"
       DB_PASS: "${DB_PASS}" 
       DB_NAME: "${DB_NAME}"
-    ports:
-      - "8000:8000"
+    #ports:
+      #- "8000:8000"
     networks: 
       - pronghorn_app_network 
   valkey:
     container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
-    mem_limit: 256M
-    cpus: 0.25
     healthcheck:
       test: valkey-cli ping || exit 1
     restart: always
@@ -35,9 +33,14 @@ services:
       context: .
       dockerfile: production.prongwebapp.containerfile
     ports:
-      - "6900:6900"
+      - "80:80"
+      - "443:443"
+      #- "6900:6900"
     networks: 
       - pronghorn_app_network
+    volumes:
+      - nginx_conf:/etc/nginx/
+      - nginx_certs:/etc/ssl/
 
   # Postgres database, uncomment if not using external database host
   # db:
@@ -56,6 +59,9 @@ services:
   #     - "5432:5432"
   #   user: "999:999"
 
+volumes:
+  nginx_conf:
+  nginx_certs:
 
 networks: 
   pronghorn_app_network:

@@ -28,8 +28,6 @@ services:
   valkey:
     container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
-    mem_limit: 256M
-    cpus: 0.25
     healthcheck:
       test: valkey-cli ping || exit 1
     restart: always
