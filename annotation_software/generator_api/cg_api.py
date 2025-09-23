@@ -86,7 +86,7 @@ base = db.Database(db_config)
 
 #Initialize s3 object storage
 
-BUCKET_NAME = 'mlance4' # Change to production bucket name
+BUCKET_NAME = 'pronghorn-count' # Change to production bucket name
 
 from botocore.config import Config
 from boto3.s3.transfer import TransferConfig
