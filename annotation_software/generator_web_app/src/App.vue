@@ -37,7 +37,8 @@ if (pref_store.first_login) {
     justify-content: flex-start;
     height: 95.5vh;
     width: 100%;
+	max-width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: none;
   }
 </style>

@@ -1,7 +1,7 @@
 // Project state store 
 // Author: Michael B. Lance
 // Created: August 6, 2025
-// Updated: August 6, 2025
+// Updated: September 11, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { defineStore } from "pinia";
@@ -12,33 +12,33 @@ import  { Project, Schema, Label, HerdUnit, Model, Survey } from "../../types/ge
 
 export const useProjectStore = defineStore('projectStore', {
     state: () => ({
-        projects: undefined as Project[] | undefined,
+        projects: [] as Project[],
         project_idx: undefined as number | undefined,
-        schemas: undefined as Schema[] | undefined,
+        schemas: [] as Schema[],
         schema_idx: undefined as number | undefined,
-        labels: undefined as Label[] | undefined,
+        labels: [] as Label[],
         label_idx: undefined as number | undefined,
-        models: undefined as Model[] | undefined,
+        models: [] as Model[],
         model_idx: undefined as number | undefined,
-        herd_units: undefined as HerdUnit[] | undefined,
+        herd_units: [] as HerdUnit[],
         herd_unit_idx: undefined as number | undefined,
-        surveys: undefined as Survey[] | undefined,
+        surveys: [] as Survey[],
         survey_idx: undefined as number | undefined
     }),
     getters: {
-        CurrentProject: (state) => (state.projects && state.project_idx != undefined) ? state.projects[state.project_idx] : undefined,
-        CurrentSchema: (state) => (state.schemas && state.schema_idx!= undefined) ? state.schemas[state.schema_idx] : undefined,
-        CurrentLabel: (state) => (state.labels && state.label_idx != undefined) ? state.labels[state.label_idx] : undefined,
-        CurrentModel: (state) => (state.models && state.model_idx != undefined) ? state.models[state.model_idx] : undefined,
-		CurrentHerdUnit: (state) => (state.herd_units && state.herd_unit_idx != undefined) ? state.herd_units[state.herd_unit_idx] : undefined,
-		CurrentSurvey: (state) => (state.surveys && state.survey_idx != undefined) ? state.surveys[state.survey_idx] : undefined,
+        CurrentProject: (state) => (state.project_idx != undefined) ? state.projects[state.project_idx] : undefined,
+        CurrentSchema: (state) => (state.schema_idx != undefined) ? state.schemas[state.schema_idx] : undefined,
+        CurrentLabel: (state) => (state.label_idx != undefined) ? state.labels[state.label_idx] : undefined,
+		CurrentModel: (state) => (state.model_idx != undefined) ? state.models[state.model_idx] : undefined,
+		CurrentHerdUnit: (state) => (state.herd_unit_idx != undefined) ? state.herd_units[state.herd_unit_idx] : undefined,
+		CurrentSurvey: (state) => (state.survey_idx != undefined) ? state.surveys[state.survey_idx] : undefined,
     },
     actions: {
         async get_projects() {
             this.projects = await getProjects() as Project[];
         },
         set_current_project(project: Project | undefined) {
-            if (this.projects && project != undefined) {
+            if (project != undefined) {
                 const idx = this.projects.indexOf(project);
                 if (this.project_idx == idx) {
                     this.project_idx = undefined;
@@ -54,7 +54,7 @@ export const useProjectStore = defineStore('projectStore', {
             if (this.CurrentProject) this.schemas = await getProjectSchemas(this.CurrentProject.uuid) as Schema[];
         },
         set_current_schema(schema: Schema | undefined) {
-            if (this.schemas && schema != undefined) { 
+            if (schema != undefined) { 
                 const idx = this.schemas.indexOf(schema);
                 if (this.schema_idx == idx) {
                     this.schema_idx = undefined;
@@ -70,7 +70,7 @@ export const useProjectStore = defineStore('projectStore', {
             if (this.CurrentProject && this.CurrentSchema) this.labels = await getSchemaLabels(this.CurrentProject.uuid, this.CurrentSchema.uuid) as Label[];
         },
         set_current_label(label: Label | undefined) {
-            if (this.labels && label != undefined) {
+            if (label != undefined) {
 				const idx = this.labels.indexOf(label);
 				if (this.label_idx == idx) {
 					this.label_idx = undefined;
@@ -89,7 +89,7 @@ export const useProjectStore = defineStore('projectStore', {
 			if (this.CurrentSurvey && this.CurrentHerdUnit && this.CurrentSchema) this.models = await  getCropperModels(this.CurrentSurvey.uuid, this.CurrentHerdUnit.uuid, this.CurrentSchema.uuid) as Model[];
 		},
         set_current_model(model: Model | undefined) {
-            if (this.models && model != undefined) {
+            if (model != undefined) {
                 const idx = this.models.indexOf(model);
                 if (this.model_idx == idx) {
                     this.model_idx = undefined;
@@ -105,7 +105,7 @@ export const useProjectStore = defineStore('projectStore', {
 			if (this.CurrentSurvey) this.herd_units = await getCropperHerdUnits(this.CurrentSurvey.uuid) as HerdUnit[];
 		},
         set_current_herd_unit(herdunit: HerdUnit | undefined) {
-            if (this.herd_units && herdunit != undefined) {
+            if (herdunit != undefined) {
                 const idx = this.herd_units.indexOf(herdunit);
                 if (this.herd_unit_idx == idx) {
                     this.herd_unit_idx = undefined;
@@ -118,7 +118,7 @@ export const useProjectStore = defineStore('projectStore', {
             if (this.CurrentProject) this.surveys = await getProjectSurveys(this.CurrentProject.uuid) as Survey[];
         },
         set_current_survey(survey: Survey | undefined) {
-            if (this.surveys && survey != undefined) {
+            if (survey != undefined) {
                 const idx = this.surveys.indexOf(survey);
                 if (this.survey_idx == idx) {
                     this.survey_idx = undefined;
@@ -139,35 +139,35 @@ export const useProjectStore = defineStore('projectStore', {
 			await this.get_cropper_models();
 		},
         clear_state() {
-			this.schemas = undefined;
+			this.schemas = [];
 			this.schema_idx = undefined;
-			this.labels = undefined;
+			this.labels = [];
 			this.label_idx = undefined;
-			this.models = undefined;
+			this.models = [];
 			this.model_idx = undefined;
-			this.herd_units = undefined;
+			this.herd_units = [];
 			this.herd_unit_idx = undefined;
-			this.surveys = undefined;
+			this.surveys = [];
 			this.survey_idx = undefined;
         },
 		clear_herd_units() {
-			this.herd_units = undefined;
+			this.herd_units = [];
 			this.herd_unit_idx = undefined;
 		},
 		clear_models() {
-			this.models = undefined;
+			this.models = [];
 			this.model_idx = undefined;
 		},
 		clear_surveys() {
-			this.surveys = undefined;
+			this.surveys = [];
 			this.survey_idx = undefined;
 		},
 		clear_schemas() {
-			this.schemas = undefined;
-			this.schema_idx = undefined
+			this.schemas = [];
+			this.schema_idx = undefined;
 		},
 		clear_labels() {
-			this.labels = undefined;
+			this.labels = [];
 			this.label_idx = undefined;
 		}
     }

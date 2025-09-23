@@ -6,7 +6,7 @@ export default defineComponent({
     name: 'Project-Selector',
     setup() {
         const project_store = useProjectStore();
-        if (!project_store.projects) project_store.get_projects();
+        if (project_store.projects.length == 0) project_store.get_projects();
         return { project_store};
     },
 })
@@ -22,7 +22,9 @@ export default defineComponent({
                 <p> External ID </p> 
             </div>
 			<figure>
-				<button class="Entry" v-for="project in project_store.projects" @click="project_store.set_current_project(project)" :class="{Selected: project_store.CurrentProject?.uuid == project.uuid}">
+				<button class="Entry" v-for="project in project_store.projects" 
+				@click="project_store.set_current_project(project)" 
+				:class="{Selected: project_store.CurrentProject?.uuid == project.uuid}">
 					<p> {{ project.name }} </p> 
                     <p> {{ project.created.toLocaleString('en-US', { 
                         year: 'numeric', 

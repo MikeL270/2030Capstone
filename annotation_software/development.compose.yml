@@ -4,19 +4,20 @@ services:
       context: .
       dockerfile: development.prongapi.containerfile
     environment:
-      ROOT: "${ROOT}"
-      HERD_UNIT: "${HERD_UNIT}"
-      CROP_FOLDER: "${CROP_FOLDER}"
-      IMAGES: "${CROP_FOLDER}"
-      SECRET_KEY: "${SECRET_KEY}"
-      VALKEY_HOST: "${VALKEY_HOST}"
-      SESSION_REDIS: "${SESSION_REDIS}"
-      VALKEY_PASS: "${VALKEY_PASS}"
-      AWS_ENDPOINT_URL_S3: "${AWS_ENDPOINT_URL_S3}"
-      DB_HOST: "${DB_HOST}"
-      DB_USER: "${DB_USER}"
-      DB_PASS: "${DB_PASS}" 
-      DB_NAME: "testing"
+      APPLICATION_URL: http://testing.lancecomputer.com:5173
+      ROOT: ${ROOT}
+      HERD_UNIT: ${HERD_UNIT}
+      CROP_FOLDER: ${CROP_FOLDER}
+      IMAGES: ${CROP_FOLDER}
+      SECRET_KEY: ${SECRET_KEY}
+      VALKEY_HOST: ${VALKEY_HOST}
+      SESSION_REDIS: ${SESSION_REDIS}
+      VALKEY_PASS: ${VALKEY_PASS}
+      AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3}
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS} 
+      DB_NAME: testing
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:

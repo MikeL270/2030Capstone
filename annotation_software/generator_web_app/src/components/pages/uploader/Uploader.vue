@@ -102,18 +102,21 @@ export default defineComponent({
 					const img = new window.Image();
 					const imageBitmap = await createImageBitmap(file);
 
+					// Create key
+					const image_key = `images/survey/${survey_id}/herd_unit/${herd_unit_id}/image/${file.name}`;
+
 					// Create Image object in database
 					const image = await createImage(
 						project_id,
 						survey_id,
 						herd_unit_id,
 						file.name,
+						image_key,
 						imageBitmap.height,
 						imageBitmap.width
 					);
-					// Create key
 					if (image == undefined) throw new Error(`failed to create image!`);
-					const image_key = `images/survey/${survey_id}/herd_unit/${herd_unit_id}/image/${image.name}`;
+				
 
 					// Instantiate list to hold Parts
 					const part_list = [];
@@ -300,6 +303,7 @@ export default defineComponent({
 		width: 100%;
 		height: 100%;
 		gap: 2%;
+		
 	}
 	#Upload-DropZone {
 		height: 100%;
@@ -311,6 +315,7 @@ export default defineComponent({
 		border-radius: 8px;
 		box-shadow: 0 8px 12px 4px var(--color-background);
 		border: solid 1px var(--color-background);
+		max-width: 60vw;
 		label {
 			width: 100%;
 			height: 100%;
@@ -326,7 +331,7 @@ export default defineComponent({
 		}
 	}
 	#Uploader-Context {
-		width: 30%;
+		width: 30vw !important;
 		height: 100%;
 		display: flex;
 		flex-direction: column;
@@ -399,7 +404,8 @@ export default defineComponent({
 		overflow-x: scroll;
 		overflow-y: hidden;
 		scrollbar-color: var(--color-text) transparent;
-		height: 30vh;
+		max-height: 25vh;
+		height: 100%;
 		gap: 5px;
 		width: 98%;
 		border: 1px solid var(--color-background);

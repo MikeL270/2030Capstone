@@ -22,6 +22,9 @@ export default defineComponent({
 			this.$router.push({name: 'auto-cropper', params: { projects: 'projects', uuid: this.project_store.CurrentProject.uuid }})
 		}
 	},
+	unmounted() {
+		this.current_crumb = 0
+	},
 	data() {
 		return {
 			current_crumb: crumb_num,

@@ -4,32 +4,28 @@ services:
       context: .
       dockerfile: production.prongapi.containerfile
     environment:
-      SECRET_KEY: "${SECRET_KEY}"
-      VALKEY_HOST: "${VALKEY_HOST}"
-      VALKEY_PASS: "${VALKEY_PASS}"
-      AWS_ENDPOINT_URL_S3: "${AWS_ENDPOINT_URL_S3}"
-      DB_HOST: "${DB_HOST}"
-      DB_USER: "${DB_USER}"
-      DB_PASS: "${DB_PASS}" 
-      DB_NAME: "${DB_NAME}"
+      APPLICATION_URL: ${APPLICATION_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      VALKEY_HOST: ${VALKEY_HOST}
+      VALKEY_PASS: ${VALKEY_PASS}
+      AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-    volumes:
-      - ${DATA_PATH}:/data
-    ports:
-      - "8000:8000"
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS} 
+      DB_NAME: ${DB_NAME}
+      SESSION_REDIS: ${SESSION_REDIS}
+    # ports:
+    #   - "8000:8000"
     networks: 
       - pronghorn_app_network 
   valkey:
     container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
-    mem_limit: 256M
-    cpus: 0.25
     healthcheck:
       test: valkey-cli ping || exit 1
     restart: always
-    ports:
-      - "6379:6379"
     command: valkey-server --requirepass ${VALKEY_PASS}
     networks: 
       - pronghorn_app_network 
@@ -38,9 +34,14 @@ services:
       context: .
       dockerfile: production.prongwebapp.containerfile
     ports:
-      - "6900:6900"
+      - "80:80"
+      - "443:443"
+      # - "6900:6900"
     networks: 
       - pronghorn_app_network
+    volumes:
+      - nginx_conf:/etc/nginx/
+      - nginx_certs:/etc/ssl/
 
   # Postgres database, uncomment if not using external database host
   # db:
@@ -59,9 +60,10 @@ services:
   #     - "5432:5432"
   #   user: "999:999"
 
+volumes:
+  nginx_conf:
+  nginx_certs:
 
 networks: 
   pronghorn_app_network:
     driver: bridge
-
-    

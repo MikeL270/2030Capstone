@@ -57,7 +57,7 @@ export default defineComponent({
 					...currentQuery,
 					schema: undefined,
 				}
-				this.project_store.labels = undefined;
+				this.project_store.labels = [];
 				this.project_store.label_idx = undefined;
 				this.$router.push({query: newQuery});
 			}

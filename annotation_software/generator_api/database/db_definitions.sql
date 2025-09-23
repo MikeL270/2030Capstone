@@ -43,7 +43,6 @@ CREATE TABLE core.predictions (
 	box_bx integer NOT NULL,
 	box_by integer NOT NULL,
 	created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
 );
 
@@ -190,6 +189,7 @@ CREATE TABLE projectmanagement.models (
 CREATE TABLE projectmanagement.surveys (
 	survey_id serial PRIMARY KEY,
 	survey_year integer NOT NULL,
+	survey_date timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	name varchar(50),
 	additional_info text,
 	created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,

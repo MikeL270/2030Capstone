@@ -44,6 +44,7 @@ export class Box implements Box_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface HerdUnit_intf {
+	herd_unit_id: number;
     name: string;
     created: Date;
     modified: Date;
@@ -51,6 +52,7 @@ export interface HerdUnit_intf {
 }
 
 export class HerdUnit implements HerdUnit_intf {
+	herd_unit_id: number;
     name: string;
     created: Date;
     modified: Date;
@@ -58,6 +60,7 @@ export class HerdUnit implements HerdUnit_intf {
 
     
     constructor(herdunit: HerdUnit_intf) {
+		this.herd_unit_id = herdunit.herd_unit_id;
         this.name = herdunit.name;
         this.created = new Date(herdunit.created);
         this.modified = new Date(herdunit.modified);
@@ -68,6 +71,10 @@ export class HerdUnit implements HerdUnit_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Image_intf {
+	image_id: number;
+	herd_unit_id: number;
+	survey_id: number;
+	img_key: string;
 	name: string;
 	in_training: boolean;
 	crops_generated: number;
@@ -79,6 +86,10 @@ export interface Image_intf {
 }
 
 export class Image implements Image_intf {
+	image_id: number;
+	herd_unit_id: number;
+	survey_id: number;
+	img_key: string;
     name: string;
 	in_training: boolean;
 	crops_generated: number;
@@ -89,6 +100,10 @@ export class Image implements Image_intf {
 	uuid: string;
   
     constructor(img: Image_intf) {
+		this.image_id = img.image_id;
+		this.herd_unit_id = img.herd_unit_id;
+		this.survey_id = img.survey_id;
+		this.img_key = img.img_key;
         this.name = img.name;
 		this.in_training = img.in_training;
 		this.crops_generated = img.crops_generated;
@@ -103,6 +118,9 @@ export class Image implements Image_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Prediction_intf { 
+	pred_id: number;
+	image_id: number;
+	model_id: number;
     dimensions: Box;
     score: number;
     label: number;
@@ -112,6 +130,9 @@ export interface Prediction_intf {
 }
 
 export class Prediction implements Prediction_intf {
+	pred_id: number;
+	image_id: number;
+	model_id: number;
     dimensions: Box;
     score: number;
     label: number;
@@ -120,6 +141,9 @@ export class Prediction implements Prediction_intf {
 	uuid: string;
 
     constructor(pred: Prediction_intf) {
+		this.pred_id = pred.pred_id;
+		this.image_id = pred.image_id;
+		this.model_id = pred.model_id;
         this.dimensions = new Box(pred.dimensions);
         this.score = pred.score;
         this.label = pred.label;    
@@ -132,26 +156,32 @@ export class Prediction implements Prediction_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Annotation_intf {
+	annotation_id: number;
+	label_id: number;
+	herd_unit_id: number;
 	dimensions: Box;
 	score: number;
-    label: number;
 	created: Date;
 	modified: Date;
 	uuid: string;
 }
 
 export class Annotation implements Annotation_intf {
+	annotation_id: number;
+	label_id: number;
+	herd_unit_id: number;
 	dimensions: Box;
 	score: number;
-    label: number;
 	created: Date;
 	modified: Date;
 	uuid: string;
 
 	constructor (annotation: Annotation_intf) {
+		this.annotation_id = annotation.annotation_id;
+		this.label_id = annotation.label_id;
+		this.herd_unit_id = annotation.herd_unit_id;
 		this.dimensions = new Box(annotation.dimensions);
         this.score = annotation.score;
-        this.label = annotation.label;    
 		this.created = new Date(annotation.created);
 		this.modified = new Date(annotation.modified);
 		this.uuid = annotation.uuid;
@@ -188,7 +218,8 @@ export class Crop implements Crop_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface PredictionCrop_intf {
-    image_id: string;
+    image_id: number;
+	pred_id: number;
     name: string;
     score: number;
     label: number;
@@ -199,7 +230,8 @@ export interface PredictionCrop_intf {
 }
 
 export class PredictionCrop implements PredictionCrop_intf {
-    image_id: string;
+    image_id: number;
+	pred_id: number;
     name: string;
     score: number;
     label: number;
@@ -212,6 +244,7 @@ export class PredictionCrop implements PredictionCrop_intf {
     
     constructor(predcrop: PredictionCrop_intf, url: string) { 
         this.image_id = predcrop.image_id;
+		this.pred_id = predcrop.pred_id;
         this.name = predcrop.name;
         this.score = predcrop.score;
         this.label = predcrop.label;
@@ -310,6 +343,7 @@ export class Organization implements Organization_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Project_intf {
+	project_id: number;
     name: string;
     created: Date;
     modified: Date;
@@ -317,12 +351,14 @@ export interface Project_intf {
 }
 
 export class Project implements Project_intf {
+	project_id: number;
     name: string;
     created: Date;
     modified: Date;
     uuid: string;
 
     constructor(Proj: Project_intf) {
+		this.project_id = Proj.project_id;
         this.name = Proj.name;
         this.created = new Date(Proj.created);
         this.modified = new Date(Proj.modified);
@@ -356,26 +392,32 @@ export class Schema implements Schema_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Label_intf {
+	label_id: number;
     label: number;
     name: string;
     image_link: string;
+	color: string;
     created: Date;
     modified: Date;
     uuid: string;
 }
 
 export class Label implements Label_intf {
+	label_id: number;
     label: number;
     name: string;
     image_link: string;
+	color: string;
     created: Date;
     modified: Date;
     uuid: string;
 
     constructor(lbl: Label_intf) {
+		this.label_id = lbl.label_id;
         this.label = lbl.label;
         this.name = lbl.name;
         this.image_link = lbl.image_link;
+		this.color = lbl.color;
         this.created = new Date(lbl.created);
         this.modified = new Date(lbl.modified);
         this.uuid = lbl.uuid;
@@ -385,7 +427,7 @@ export class Label implements Label_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Survey_intf {
-    survey_year: number;
+    survey_date: Date;
     name: string;
     additional_info: string;
     created: Date;
@@ -394,7 +436,7 @@ export interface Survey_intf {
 }
 
 export class Survey implements Survey_intf {
-    survey_year: number;
+    survey_date: Date;
     name: string;
     additional_info: string;
     created: Date;
@@ -402,7 +444,7 @@ export class Survey implements Survey_intf {
     uuid: string;
 
     constructor(srvy: Survey_intf) {
-        this.survey_year = srvy.survey_year;
+        this.survey_date = new Date(srvy.survey_date);
         this.name = srvy.name;
         this.additional_info = srvy.additional_info;
         this.created = new Date(srvy.created);

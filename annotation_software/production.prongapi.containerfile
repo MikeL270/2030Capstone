@@ -35,4 +35,4 @@ WORKDIR /app
 
 COPY ./generator_api .
 
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:8000", "cg_api:app"]
+CMD ["gunicorn", "-w", "8", "-b", "0.0.0.0:8000", "cg_api:app"]

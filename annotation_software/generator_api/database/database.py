@@ -1,7 +1,7 @@
 # Psycopg3 database abstraction layer for crop generator_api
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: August 2, 2025
+# Updated: September 22, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import os 
@@ -12,8 +12,8 @@ import psycopg.sql as sql
 from psycopg_pool import ConnectionPool
 from psycopg.rows import class_row, dict_row
 from functools import wraps
-from typing import Callable, Any
-import datetime
+from typing import Callable, Any, Optional
+from datetime import datetime
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -35,11 +35,12 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	def close_pool(self):
-		self._pool.close()
+		if self._pool:
+			self._pool.close()
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-	def connect(fn: Callable[..., Any]) -> Callable[..., Any]:
+	def connect(fn: Callable[..., Any]) -> Callable[..., Any]: #type: ignore
 		''' Wrapper function for handling connection context
 		
 		Args: 
@@ -57,10 +58,12 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	
 	@connect
-	def _bootstrap(self, cursor: psycopg.cursor) -> bool:
+	def _bootstrap(self, cursor: psycopg.Cursor) -> bool:
 			try:
 				with open(os.path.join(os.path.dirname(__file__), 'db_definitions.sql')) as script:
-					cursor.execute(script.read())
+					sql_script = script.read()
+					# pyright: ignore[reportArgumentType]
+					cursor.execute(sql_script) #type: ignore
 			except Exception as e: 
 				print(e)
 				return False
@@ -102,9 +105,9 @@ class Database:
 		query = sql.SQL('SELECT * FROM usermanagement.organizations WHERE {id_field} = %s; ')
 		match organization_ids:
 			case list() if isinstance(organization_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), organization_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [(org_id,) for org_id in organization_ids])
 			case list() if isinstance(organization_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), organization_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(org_id,) for org_id in organization_ids])
 			case int():
 				cursor.execute(query.format(id_field = sql.Identifier('organization_id')), (organization_ids,))
 			case UUID():
@@ -136,7 +139,7 @@ class Database:
 		match organization_id:
 			case Organization():
 				cursor.execute(query.format(
-					augmented_field = sql.SQL(f"name = '{organization_id.name}', logo_url = '{organization_id.logo_url}'"),
+					augmented_field = sql.SQL(f"name = '{organization_id.name}', logo_url = '{organization_id.logo_url}'"), #type: ignore
 					id_field = sql.Identifier('organization_id')
 				), (organization_id.organization_id,))
 			case int():
@@ -174,9 +177,9 @@ class Database:
 		query = sql.SQL(' DELETE FROM usermanagement.organizations WHERE {id_field} = %s ')
 		match organization_ids:
 			case list() if isinstance(organization_ids[0], Organization):
-				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [org.organization_id for org in organization_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [(org.organization_id,) for org in organization_ids])
 			case list() if isinstance(organization_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), organization_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [(org_id,) for org_id in organization_ids])
 			case list() if isinstance(organization_ids[0], UUID):
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), organization_ids)
 			case Organization():
@@ -229,11 +232,11 @@ class Database:
 		query = sql.SQL(' SELECT * FROM usermanagement.roles WHERE {id_field} = %s; ')
 		match role_ids:
 			case list() if isinstance(role_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), role_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [(role_id,) for role_id in role_ids])
 			case list() if isinstance(role_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), role_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(role_id,) for role_id in role_ids])
 			case list() if isinstance(role_ids[0], str):
-				cursor.executemany(query.format(id_field = sql.Identifier('name')), role_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('name')), [(role_id,) for role_id in role_ids])
 			case int():
 				cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_ids,))
 			case UUID():
@@ -288,13 +291,13 @@ class Database:
 		query = sql.SQL(' DELETE FROM usermanagement.roles WHERE {id_field} = %s; ') 
 		match role_ids:
 			case list() if isinstance(role_ids[0], Role):
-				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [role.role_id for role in role_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [(role.role_id,) for role in role_ids])
 			case list() if isinstance(role_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), role_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [(role_id,) for role_id in role_ids])
 			case list() if isinstance(role_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), role_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(role_id,) for role_id in role_ids])
 			case list() if isinstance(role_ids[0], str):
-				cursor.executemany(query.format(id_field = sql.Identifier('role')), role_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('role')), [(role_id,) for role_id in role_ids])
 			case Role():
 				cursor.execute(query.format(id_field = sql.Identifier('role_id')), (role_ids.role_id,))
 			case int():
@@ -347,11 +350,11 @@ class Database:
 			if roles:
 				self._add_roles_user(user, roles)
 				role_objs = self._get_user_roles(user)
-				user.roles = [role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
+				if role_objs:
+					user.roles = [role for role in role_objs]
 			if organizations:
 				self._add_user_organizations(user.user_id, organizations)
 		return user
-
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
@@ -360,20 +363,22 @@ class Database:
 		
 		'''  
 		cursor.row_factory = class_row(User)
-		query = sql.SQL("SELECT * FROM usermanagement.users WHERE {id_field} = %s")
+		query = sql.SQL('SELECT * FROM usermanagement.users WHERE {id_field} = %s')
 		match user_ids:
 			case list() if isinstance(user_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), user_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [(usr_id,) for usr_id in user_ids])
 			case list() if isinstance(user_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), user_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(usr_id,) for usr_id in user_ids])
 			case list() if isinstance(user_ids[0], str):
-				cursor.executemany(query.format(id_field = sql.Identifier('external_auth_id')), user_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('external_auth_id')), [(usr_id,) for usr_id in user_ids])
 			case int():
 				cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_ids,))
 			case UUID():
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (user_ids,))
 			case str():
 				cursor.execute(query.format(id_field = sql.Identifier('external_auth_id')), (user_ids,))
+			case _:
+				raise TypeError('user_ids must be an int, uuid, str, or a list consisting of one of the three')
 		try:
 			users = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone() 
 		except psycopg.errors.ProgrammingError as e:
@@ -397,7 +402,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _login_user(self, cursor: psycopg.Cursor[datetime.datetime], user_id: User | int | UUID) -> datetime.datetime | None:
+	def _login_user(self, cursor: psycopg.Cursor[datetime], user_id: User | int | UUID) -> datetime:
 		''' Internal helper function, do not call directly
 		
 		'''
@@ -406,15 +411,17 @@ class Database:
 			case User():
 				cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_id.user_id,))
 			case int():
-				cursor.execute(query.format(id_field = sql.identifier('user_id')), (user_id,))
+				cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_id,))
 			case UUID():
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (user_id,))
 			case _:
 				raise TypeError('user_id must be a User, int, uuid, or a list consisting of ONE of the two')
-		last_login: datetime.datetime = cursor.fetchone()[0]
-		return last_login if isinstance(last_login, datetime.datetime) else None
+		last_login = cursor.fetchone()
+		if last_login is None:
+			raise Exception('Could not log user in')
+		return last_login
 	
-	def login_user(self, user_id: User | int | UUID) -> datetime.datetime | None:
+	def login_user(self, user_id: User | int | UUID) -> datetime:
 		''' Set a user's last login 
 		
 		'''
@@ -476,9 +483,9 @@ class Database:
 			case list() if isinstance(user_ids[0], User):
 				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [user.user_id for user in user_ids])
 			case list() if isinstance(user_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), user_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [(user_id,) for user_id in user_ids])
 			case list() if isinstance(user_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), user_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(user_id,) for user_id in user_ids])
 			case User():
 				cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_ids.user_id,))
 			case int():
@@ -708,12 +715,12 @@ class Database:
 
 	# Project Management - labels
 	@connect 
-	def _create_label(self, cursor: psycopg.Cursor[Label], name: str, label: int, image_link: str | None = None) -> Label | None:
+	def _create_label(self, cursor: psycopg.Cursor[Label], name: str, label: int, color: str | None = None, image_link: str | None = None) -> Label | None:
 		''' Internal helper function, do not call directly
 		
 		'''
 		cursor.row_factory = class_row(Label)
-		cursor.execute(sql.SQL(' INSERT INTO projectmanagement.labels (name, label, image_link) VALUES (%s, %s, %s) RETURNING *; '), (name, label, image_link))
+		cursor.execute(sql.SQL(' INSERT INTO projectmanagement.labels (name, label, color, image_link) VALUES (%s, %s, %s) RETURNING *; '), (name, label, color, image_link))
 		lbl = cursor.fetchone()
 		return  lbl if isinstance(lbl, Label) else None 
 	
@@ -730,21 +737,25 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_label(self, cursor: psycopg.Cursor[Label], label_id: int | UUID) -> Label | None:
+	def _get_label(self, cursor: psycopg.Cursor, label_ids: int | UUID | list[int | UUID]) -> Label | None:
 		''' Internal helper function, do not call directly
 		
 		'''
 		cursor.row_factory = class_row(Label)
 		query = sql.SQL(' SELECT * FROM projectmanagement.labels WHERE {id_field} = %s; ')
-		match label_id:
+		match label_ids:
+			case list() if isinstance(label_ids[0], int):
+				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [(label_id,) for label_id in label_ids])
+			case list() if isinstance(label_ids[0], UUID):
+				cursor.executemany(query.format(id_ifeld = sql.Identifier('uuid')), [(label_id,) for label_id in label_ids])
 			case int():
-				cursor.execute(query.format(id_field = sql.Identifier('label_id')), (label_id,))
+				cursor.execute(query.format(id_field = sql.Identifier('label_id')), (label_ids,))
 			case UUID():
-				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (label_id,))
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (label_ids,))
 			case _:
 				raise TypeError('label_id MUST be an integer or a UUID')
-		label = cursor.fetchone()
-		return label if isinstance(label, Label) else None
+		labels = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
+		return labels if isinstance(labels, list) and all(isinstance(lbl , Label) for lbl in labels) else labels if isinstance(labels, Label) else None
 	
 	def get_label(self, label_id: int | UUID):
 		''' Query the database for a label  
@@ -758,17 +769,17 @@ class Database:
 
 	@connect
 	def _update_label(self, cursor: psycopg.Cursor[Label], label_id: Label | int | UUID, name: str | None = None, 
-					  label: int | None = None, image_link: str | None = None) -> bool:
+					  label: int | None = None, color: str | None = None, image_link: str | None = None) -> bool:
 		''' Internal helper function, do not call directly
 		
 		'''
 		query = sql.SQL(''' UPDATE projectmanagement.labels SET {augmented_field}, modified = CURRENT_TIMESTAMP  
 							WHERE {id_field} = %s; ''')
-		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['name', 'label,' 'image_link']) and value is not None])
+		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['name', 'label,' 'image_link', 'color']) and value is not None])
 		match label_id:
 			case Label():
 				cursor.execute(query.format(
-					augmented_field = sql.SQL(f"label = '{label_id.label}', name = '{label_id.name}', image_link = '{label_id.image_link}'"),
+					augmented_field = sql.SQL(f"label = '{label_id.label}', name = '{label_id.name}', color = '{label_id.color}', image_link = '{label_id.image_link}'"),
 					id_field = sql.Identifier('label_id')
 				), (label_id.label_id))
 			case int():
@@ -807,11 +818,11 @@ class Database:
 		query = sql.SQL(' DELETE FROM projectmanagement.labels WHERE {id_field} = %s; ')
 		match label_ids:
 			case list() if isinstance(label_ids[0], Label):
-				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [label.label_id for label in label_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [(label.label_id,) for label in label_ids])
 			case list() if isinstance(label_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), label_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [(label_id,) for label_id in label_ids])
 			case list() if isinstance(label_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), label_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(label_id,) for label_id in label_ids])
 			case Label():
 				cursor.execute(query.format(id_field = sql.Identifier('label_id')), (label_ids.label_id,))
 			case int():
@@ -918,11 +929,11 @@ class Database:
 		query = sql.SQL(' DELETE FROM projectmanagement.herd_units WHERE {id_field} = %s; ')
 		match herd_unit_ids:
 			case list() if isinstance(herd_unit_ids[0], HerdUnit):
-				cursor.executemany(query.format(id_field = sql.Identifier('herd_unit_id')), [herd_unit.herd_unit_id for herd_unit in herd_unit_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('herd_unit_id')), [(herd_unit.herd_unit_id,) for herd_unit in herd_unit_ids])
 			case list() if isinstance(herd_unit_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('herd_unit_id')), herd_unit_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('herd_unit_id')), [(hu_id,) for hu_id in herd_unit_ids])
 			case list() if isinstance(herd_unit_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), herd_unit_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(hu_id,) for hu_id in herd_unit_ids])
 			case HerdUnit():
 				cursor.execute(query.format(id_field = sql.Identifier('herd_unit_id')), (herd_unit_ids.herd_unit_id,))
 			case int():
@@ -1028,11 +1039,11 @@ class Database:
 		query = sql.SQL(' DELETE FROM projectmanagement.models WHERE {id_field} = %s; ')
 		match model_ids:
 			case list() if isinstance(model_ids[0], HerdUnit):
-				cursor.executemany(query.format(id_field = sql.Identifier('model_id')), [model.model_id for model in herd_unit_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('model_id')), [(model.model_id,) for model in herd_unit_ids])
 			case list() if isinstance(model_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('model_id')), model_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('model_id')), [(model_id,) for model_id in model_ids])
 			case list() if isinstance(model_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), model_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(model_id,) for model_id in model_ids])
 			case Model():
 				cursor.execute(query.format(id_field = sql.Identifier('model_id')), (model_ids.model_id,))
 			case int():
@@ -1056,24 +1067,24 @@ class Database:
 	# Project Management - Surveys
 
 	@connect
-	def _create_survey(self, cursor: psycopg.Cursor[Survey], survey_year: int, name: str, additional_info: str) -> Survey | None:
+	def _create_survey(self, cursor: psycopg.Cursor[Survey], survey_date: datetime, name: str, additional_info: str) -> Survey | None:
 		''' Internal helper function, do not call directly
 		
 		'''
 		cursor.row_factory = class_row(Survey)
-		cursor.execute(sql.SQL(' INSERT into projectmanagement.surveys (survey_year, name, additional_info) VALUES (%s, %s, %s) RETURNING *; '), (survey_year, name, additional_info))
+		cursor.execute(sql.SQL(' INSERT into projectmanagement.surveys (survey_date, name, additional_info) VALUES (%s, %s, %s) RETURNING *; '), (survey_date, name, additional_info))
 		survey = cursor.fetchone()
 		return survey if isinstance(survey, Survey) else None
 	
-	def create_survey(self, survey_year: int, name: str, additional_info: str | None = None) -> Survey | None:
+	def create_survey(self, survey_date: datetime, name: str, additional_info: str | None = None) -> Survey | None:
 		''' Insert a new survey object into the database
 
 		Args:
-			survey_year: the year of the survey
+			survey_date: the year of the survey
 			name: the survey name 
 			additional_info: any information that may be important regarding the survey (can be null)
 		'''
-		return self._create_survey(survey_year=survey_year, name=name, additional_info=additional_info)
+		return self._create_survey(survey_date=survey_date, name=name, additional_info=additional_info)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1105,17 +1116,17 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _update_survey(self, cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID, survey_year: int | None = None, name: str | None = None, additional_info: str | None = None) -> bool:
+	def _update_survey(self, cursor: psycopg.Cursor[Survey], survey_id: Survey | int | UUID, survey_date: datetime | None = None, name: str | None = None, additional_info: str | None = None) -> bool:
 		''' Internal helper function, do not call directly
 		
 		'''
 		query = sql.SQL(''' UPDATE projectmanagement.surveys SET {augmented_field}, modified = CURRENT_TIMESTAMP
 							WHERE {id_field} = %s; ''')
-		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['survey_year', 'name', 'additional_info',]) and value is not None])
+		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['survey_date', 'name', 'additional_info',]) and value is not None])
 		match survey_id:
 			case Survey():
 				cursor.execute(query.format(
-					augmented_field = sql.SQL(f"survey_year = '{survey_id.survey_year}', name = '{survey_id.name}', additional_info = '{survey_id.additional_info}'"),
+					augmented_field = sql.SQL(f"survey_date = '{survey_id.survey_date}', name = '{survey_id.name}', additional_info = '{survey_id.additional_info}'"),
 					id_field = sql.Identifier('survey_id')
 				), (survey_id.survey_id))
 			case int():
@@ -1133,16 +1144,16 @@ class Database:
 		return True if cursor.rowcount > 0 else False
 		
 
-	def update_survey(self, survey_id: Survey | int | UUID, survey_year: int | None = None, name: str | None = None, additional_info: str | None = None):
-		''' Augment a survey in the database by providing a modified Survey object or a valid id and a new name, and or survey_year, and or additional_info
+	def update_survey(self, survey_id: Survey | int | UUID, survey_date: datetime | None = None, name: str | None = None, additional_info: str | None = None):
+		''' Augment a survey in the database by providing a modified Survey object or a valid id and a new name, and or survey_date, and or additional_info
 		
 		Args:
 			survey_id: either a Survey object, a database id, or a universally unique identifier 
-			survey_year: the integer value representing the survey in models
+			survey_date: the date the survey was conducted
 			name: the new name for the survey
 			additional_info: a link to an additional info regarding the survey
 		'''
-		return self._update_survey(survey_id = survey_id, survey_year = survey_year, name = name, additional_info = additional_info)
+		return self._update_survey(survey_id = survey_id, survey_date = survey_date, name = name, additional_info = additional_info)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1154,11 +1165,11 @@ class Database:
 		query = sql.SQL(' DELETE FROM projectmanagement.surveys WHERE {id_field} = %s; ')
 		match survey_ids:
 			case list() if isinstance(survey_ids[0], Survey):
-				cursor.executemany(query.format(id_field = sql.Identifier('survey_id')), [survey.survey_id for survey in survey_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('survey_id')), [(survey.survey_id,) for survey in survey_ids])
 			case list() if isinstance(survey_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('survey_id')), survey_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('survey_id')), [(survey_id,) for survey_id in survey_ids])
 			case list() if isinstance(survey_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), survey_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(survey_id,) for survey_id in survey_ids])
 			case Survey():
 				cursor.execute(query.format(id_field = sql.Identifier('survey_id')), (survey_ids.survey_id,))
 			case int():
@@ -1181,22 +1192,22 @@ class Database:
 	# Core - Images	
 
 	@connect
-	def _create_image(self, cursor: psycopg.Cursor, name: str, herd_unit_id: int | UUID, survey_id: int | UUID, image_length: int, image_width: int) -> Image | None:
+	def _create_image(self, cursor: psycopg.Cursor, name: str, herd_unit_id: int | UUID, survey_id: int | UUID, img_key: str, image_length: int, image_width: int) -> Image | None:
 		'''
 		
 		'''
 		cursor.row_factory = class_row(Image)
 		herd_unit_id = herd_unit_id if isinstance(herd_unit_id, int) else self._get_herd_unit(herd_unit_id).herd_unit_id
 		survey_id = survey_id if isinstance(survey_id, int) else self._get_survey(survey_id).survey_id
-		cursor.execute(sql.SQL(' INSERT INTO core.images (herd_unit_id, survey_id, name, image_length_px, image_width_px) VALUES (%s, %s, %s, %s, %s) RETURNING *; '), (herd_unit_id, survey_id, name, image_length, image_width))
+		cursor.execute(sql.SQL(' INSERT INTO core.images (herd_unit_id, survey_id, name, img_key, image_length_px, image_width_px) VALUES (%s, %s, %s, %s, %s, %s) RETURNING *; '), (herd_unit_id, survey_id, name, img_key, image_length, image_width))
 		image = cursor.fetchone()	
 		return image if isinstance(image, Image) else None 
 
-	def create_image(self, name: str, herd_unit_id: int | UUID, survey_id: int | UUID, image_length: int, image_width: int) -> Image | None:
+	def create_image(self, name: str, herd_unit_id: int | UUID, survey_id: int | UUID, img_key: str, image_length: int, image_width: int) -> Image | None:
 		'''
 		
 		'''
-		return self._create_image(name = name, herd_unit_id = herd_unit_id, survey_id=survey_id, image_length = image_length, image_width = image_width)
+		return self._create_image(name = name, herd_unit_id = herd_unit_id, survey_id=survey_id, img_key = img_key, image_length = image_length, image_width = image_width)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1225,14 +1236,15 @@ class Database:
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
+	#Important!: Not fully implemented
 	@connect 
-	def _update_image(self, cursor: psycopg.Cursor, image_id: Image | int | UUID) -> bool:
-		'''
+	def _update_image(self, cursor: psycopg.Cursor, image_id: Image | int | UUID, name: str, img_key: str) -> bool:
+		''' Not fully implemented, do
 		
 		'''
 		query = sql.SQL(''' UPDATE core.images SET {augmented_field}, modified = CURRENT_TIMESTAMP
 							WHERE {id_field} = %s; ''')
-		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value).format(sql.Identifier(key)) for key, value, in locals().items() if key in set(['name', 'image_length_px', 'image_width_px', 'herd_unit_id']) and value is not None)])
+		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value).format(sql.Identifier(key)) for key, value, in locals().items() if key in set(['name', 'img_key', 'image_length_px', 'image_width_px', 'herd_unit_id', 'survey_id']) and value is not None)])
 		match image_id:
 			case Image():
 				cursor.execute(query.format(
@@ -1262,20 +1274,236 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Core - Predictions
 
+	@connect
+	def _create_prediction(self, cursor: psycopg.Cursor[Prediction], image_id: Image | int | UUID, model_id: Model | int | UUID, 
+						   label: int, score: float, box_tx: int, box_ty: int, box_bx: int, box_by: int, returning: bool) -> Optional[Prediction]:
+		'''
+		
+		'''
+		cursor.row_factory = class_row(Prediction)
+		image = self._get_image(image_id) if image_id is not isinstance(image_id, Image) else image_id
+		model = self._get_model(model_id) if model_id is not isinstance(model_id, Model) else model_id
+		cursor.execute(sql.SQL(''' INSERT INTO core.predictions (image_id, model_id, label, score, box_tx, box_ty, 
+								   box_bx, box_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), 
+								   (image.image_id, model.model_id, score, label, box_tx, box_ty, box_bx, box_by))
+		if returning:
+			prediction = cursor.fetchone()
+			return prediction
+
+	def create_prediction(self, image_id: Image | int | UUID, model_id: Model | int | UUID, 
+						   label: int, score: float, box_tx: int, box_ty: int, box_bx: int, box_by: int, returning: bool) -> Optional[Prediction]:		   
+		'''
+		
+		'''
+		return self._create_prediction(image_id = image_id, model_id = model_id, label = label, score = score, box_tx = box_tx, box_ty = box_ty,
+									   box_bx = box_bx, box_by = box_by, returning = returning)
+
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect
+	def _get_prediction(self, cursor: psycopg.Cursor, prediction_ids: int | UUID | list[int | UUID]) -> Prediction | list[Prediction] | None:
+		'''
+		
+		'''
+		cursor.row_factory = class_row(Prediction)
+		query = sql.SQL('SELECT * FROM core.predictions WHERE {id_field} = %s')
+		match prediction_ids:
+			case list() if isinstance(prediction_ids[0], int):
+				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(prediction_id,) for prediction_id in prediction_ids])
+			case list() if isinstance(prediction_ids[0], UUID):
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(prediction_id,) for prediction_id in prediction_ids])
+			case int():
+				cursor.execute(query.format(id_field = sql.Identifier('pred_id')), (prediction_ids,))
+			case UUID():
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (prediction_ids,))
+			case _:
+				raise TypeError('prediction_ids must either an int, uuid, or list consisting of one of the two')
+		return cursor.fetchall() if cursor.row_count > 1 else cursor.fetchone()
+	
+	def get_prediction(self, prediction_ids: int | UUID | list[int | UUID]) -> Prediction | list[Prediction] | None:
+		'''
+		
+		'''
+		return self._get_prediction(prediction_ids = prediction_ids)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
 	# Core - Annotations
 
 	@connect
 	def _create_annotation(self, cursor: psycopg.Cursor, label_id: Label | int | UUID, image_id: Image | int | UUID,
-						  herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: int) -> Annotation | Prediction:
+						  herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID, returning: bool) -> Annotation | None:
+		'''
+		
+		
+		'''
+		cursor.row_factory = class_row(Annotation)
+		user = self._get_user(user_id) if not isinstance(user_id, User) else user_id
+		cursor.execute(sql.SQL(''' INSERT INTO core.annotations (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, created_by_user_id),
+						 		   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, user.user_id))
+		if returning:
+			annotation = cursor.fetchone()
+			return annotation if isinstance(annotation, Annotation) else None
+
+	def create_annotation(self, label_id: Label | int | UUID, image_id: Image | int | UUID,
+						  herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID) -> Annotation | None:
 		'''
 		
 		'''
+		return self._create_annotation(label_id = label_id, image_id = image_id, herd_unit_id = herd_unit_id, box_tx = box_tx, box_ty = box_ty, box_bx = box_bx, box_by = box_by, user_id = user_id )
 
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect
+	def _insert_annotations(self, cursor: psycopg.Cursor, annotations: list[Annotation] | Annotation, user_id: User | int | UUID) -> list[int]:
+		'''
+		
+		'''
+		user = self._get_user(user_id) if not isinstance(user_id, User) else user_id
+		query = sql.SQL(''' INSERT INTO core.annotations (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, created_by_user_id)
+						 		   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING annotation_id; ''')
+		match annotations:
+			case list() if isinstance(annotations[0], Annotation):
+				ids = []
+				for annot in annotations:
+					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.top_left[0], annot.dimensions.top_left[1], 
+						   			   annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
+					ids.append(cursor.fetchone()[0])
+				return ids if len(ids) > 1 else ids[0]
+			case Annotation():
+				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.top_left[0], annotations.dimensions.top_left[1], 
+						   			   annotations.dimensions.bottom_right[0], annotations.dimensions.bottom_right[1], user.user_id))
+				annot_ids = cursor.fetchall() 
+				ids = [annot_id[0] for annot_id in annot_ids]
+				return ids if len(ids) > 1 else ids[0]
+			case _:
+				raise TypeError('annotations must be of type Annotation or a list consisting of Annotation objects')
+	
+	def insert_annotations(self, annotations: list[Annotation] | Annotation, user_id: User | int | UUID) -> list[int]:
+		'''
+		 
+		'''
+		return self._insert_annotations(annotations = annotations, user_id = user_id)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect
+	def _get_annotation(self, cursor: psycopg.Cursor, annotation_ids: int | UUID | list[int | UUID]) -> Annotation | list[Annotation] | None:
+		'''
+		 
+		''' 
+		cursor.row_factory = class_row(Annotation)
+		query = sql.SQL(''' SELECT * FROM core.annotations WHERE {id_field} = ANY(%s); ''')
+		match annotation_ids:
+			case list() if isinstance(annotation_ids[0], int):
+				cursor.execute(query.format(id_field = sql.Identifier('annotation_id')), (annotation_ids,))
+			case list() if isinstance(annotation_ids[0], UUID):
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (annotation_ids,))
+			case int():
+				cursor.execute(query.format(id_field = sql.Identifier('annotation_id')), ([annotation_ids],))
+			case UUID():
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), ([annotation_ids],))
+			case _: 
+				raise TypeError('annotation_ids must be of type int or uuid or a list consisting of one of the two')
+		annotations = cursor.fetchall()
+		return annotations if isinstance(annotations, list) and all(isinstance(annot, Annotation) for annot in annotations) else annotations if isinstance(annotations, Annotation) else None
+
+	def get_annotation(self, annotation_ids: int | UUID | list[int | UUID]) -> Annotation | list[Annotation] | None:
+		'''
+		   
+		'''
+		return self._get_annotation(annotation_ids = annotation_ids)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Core - reviewed_area
 
+	@connect
+	def _create_reviewed_area(self, cursor: psycopg.Cursor, image_id: Image | int | UUID, name: str, area_tx: int, area_ty: int, area_bx: int, area_by: int,
+						   	  user: User | int | UUID, returning: bool) -> ReviewedArea | None:
+		'''
+		
+		'''
+		cursor.fow_factory = class_row(ReviewedArea)
+		cursor.execute(sql.SQL('''INSERT INTO core.reviewed_area (image_id, name, area_tx, area_ty, area_bx, area_by, 
+								  reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
+						 		  %s, %s, %s, %s, %s, %s, %s)'''), (image_id, name, area_tx, area_ty, area_bx, area_by, 
+								  abs(area_ty - area_by), abs(area_tx - area_bx), user.user_id))
+		if returning:
+			reviewed_area = cursor.fetchone()
+			return reviewed_area if isinstance(reviewed_area, ReviewedArea) else None
+
+	def create_reviewed_area(self, image_id: Image | int | UUID, name: str, area_tx: int, area_ty: int, area_bx: int, area_by: int,
+						   	  user: User | int | UUID, returning: bool) -> ReviewedArea | None:
+		'''
+		
+		'''
+		return self._create_reviewed_area(image_id = image_id, name = name, area_tx = area_tx, area_ty = area_ty, area_bx = area_bx,
+										  area_by = area_by, user = user, returning = returning)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect
+	def _insert_reviewed_areas(self, cursor: psycopg.Cursor, reviewed_areas: list[ReviewedArea]) -> bool:
+		'''
+		
+		'''
+		query = sql.SQL(''' INSERT INTO core.reviewed_area (image_id, name, area_tx, area_ty, area_bx, area_by, 
+								  reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
+						 		  %s, %s, %s, %s, %s, %s, %s) RETURNING reviewed_area_id; ''')
+		match reviewed_areas:
+			case list() if isinstance(reviewed_areas[0], ReviewedArea):
+				ids = []
+				for ra in reviewed_areas:
+					cursor.execute(query, (ra.image_id, ra.name, ra.dimensions.top_left[0], ra.dimensions.top_left[1], 
+						   			   ra.dimensions.bottom_right[0], ra.dimensions.bottom_right[1], ra.reviewed_area_length_px, 
+									   ra.reviewed_area_width_px, 0))
+					ids.append(cursor.fetchone()[0])
+				return ids if len(ids) > 1 else ids[0]
+			case ReviewedArea():
+				cursor.execute(query, (reviewed_areas.image_id, reviewed_areas.name, reviewed_areas.dimensions.top_left[0], reviewed_areas.dimensions.top_left[1], 
+						   			   reviewed_areas.dimensions.bottom_right[0], reviewed_areas.dimensions.bottom_right[1], reviewed_areas.reviewed_area_length_px, 
+									   reviewed_areas.reviewed_area_width_px, 0))
+				ra_ids = cursor.fetchall()
+				ids = [ra_id[0] for ra_id in ra_ids]
+				return ids if len(ids) > 1 else ids[0]
+			case _:
+				raise TypeError('reviewed_areas must be of type ReviewedArea or a list consisting of ReviewedAreas')
+	 
+	def insert_reviewed_areas(self, reviewed_areas: list[ReviewedArea] | ReviewedArea) -> bool:
+		'''
+		
+		'''
+		return self._insert_reviewed_areas(reviewed_areas = reviewed_areas)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect
+	def _get_reviewed_area(self, cursor: psycopg.Cursor, reviewed_area_ids: int | ReviewedArea | UUID | list[int | ReviewedArea | UUID]) -> ReviewedArea | None:
+		'''
+		
+		'''
+		cursor.row_factory = class_row(ReviewedArea)
+		#Note: Cannot use select * due to discrepency in how length / width are handeled
+		query = sql.SQL(' SELECT reviewed_area_id, image_id, name, area_tx, area_ty, area_bx, area_by, reviewed_by_user_id, created, modified, uuid FROM core.reviewed_area WHERE {id_field} = %s ')
+		match reviewed_area_ids:
+			case list() if isinstance(reviewed_area_ids[0], int):
+				cursor.executemany(query.format(id_field = sql.Identifier('reviewed_area_id')), reviewed_area_ids)
+			case list() if isinstance(reviewed_area_ids[0], UUID):
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), reviewed_area_ids)
+			case int():
+				cursor.execute(query.format(id_field = sql.Identifier('reviewed_area_id')), (reviewed_area_ids,))
+			case UUID(): 
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (reviewed_area_ids,))
+			case _:
+				raise TypeError('reviewed_area_ids must be an int, ReviewedArea, UUID, or a list consisting of one of the three')
+		reviewed_areas = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
+		return reviewed_areas if isinstance(reviewed_areas, list) and all(isinstance(ra, ReviewedArea) for ra in reviewed_areas) else reviewed_areas if isinstance(reviewed_areas, ReviewedArea) else None
+
+	def get_reviewed_area(self, reviewed_area_ids: int | ReviewedArea | UUID | list[int | ReviewedArea | UUID]) -> ReviewedArea | None:
+		'''
+		
+		'''
+		return self._get_reviewed_area(reviewed_area_ids = reviewed_area_ids)
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Relationship Management - usermanagement <-> usermanagement: users <-> roles
 
@@ -1325,7 +1553,7 @@ class Database:
 				cursor.execute(query, (user_id,))
 			case _:
 				user = self._get_user(user_id)
-				cursor.execute(query, (user_id.user_id,))
+				cursor.execute(query, (user.user_id,))
 		roles = cursor.fetchall()
 		return roles[0] if len(roles) == 1 and isinstance(roles[0], Role) else roles if all(isinstance(role, Role) for role in roles) else None
 
@@ -1353,7 +1581,7 @@ class Database:
 				cursor.executemany(query, [(user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
 			case _:
 				user = self._get_user(user_id)
-				cursor.executemany(query, [(user_id.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, roles_objs.role_id))
+				cursor.executemany(query, [(user.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user.user_id, roles_objs.role_id))
 		return True if cursor.rowcount > 0 else False
 				
 	def remove_roles_user(self, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
@@ -1384,7 +1612,7 @@ class Database:
 				cursor.executemany(query, [(user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id, org_objs.organization_id))
 			case _:
 				user = self.get_user(user_id)
-				cursor.executemany(query, [(user_id.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id.user_id, org_objs.organization_id))
+				cursor.executemany(query, [(user.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user.user_id, org_objs.organization_id))
 		return True if cursor.rowcount > 0 else False
 	
 	def add_user_organizations(self, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
@@ -1440,7 +1668,7 @@ class Database:
 				cursor.execute(query, (user_id,))
 			case _:
 				user = self._get_user(user_id)
-				cursor.execute(query, (user_id.user_id))
+				cursor.execute(query, (user.user_id))
 		orgs = cursor.fetchall()
 		return orgs[0] if len(orgs) == 1 and isinstance(orgs[0], Organization) else orgs if all(isinstance(org, Organization) for org in orgs) else None
 	
@@ -1471,7 +1699,7 @@ class Database:
 
 	def remove_organization_users(self, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
 		'''
-		
+		 
 		'''
 		self._remove_organization_users(organization_id = organization_id, user_ids = user_ids)
 
@@ -1592,7 +1820,7 @@ class Database:
 		'''
 		
 		'''
-		query = sql.SQL(''' INSERT INTO projectmanagement.projects_schemas (project_id, schema_id) VALUES (%s, %s); ''')
+		query = sql.SQL(' INSERT INTO projectmanagement.projects_schemas (project_id, schema_id) VALUES (%s, %s); ')
 		schema_objs = schema_ids if isinstance(schema_ids, Schema) or (isinstance(schema_ids, list) and isinstance(schema_ids[0], Schema)) else self._get_schema()
 		match project_id:
 			case Project():
@@ -1704,7 +1932,7 @@ class Database:
 		cursor.row_factory = class_row(Survey)
 		project = self._get_project(project_id) if not isinstance(project_id, Project) else project_id
 		query = sql.SQL('''
-			SELECT surveys.survey_id, survey_year, name, additional_info, created, modified, uuid from projectmanagement.surveys AS surveys
+			SELECT surveys.survey_id, survey_date, name, additional_info, created, modified, uuid from projectmanagement.surveys AS surveys
 			JOIN projectmanagement.projects_surveys AS projects_surveys ON projects_surveys.survey_id = surveys.survey_id 
 			WHERE projects_surveys.project_id = %s; ''')
 		cursor.execute(query, (project.project_id,))
@@ -1799,6 +2027,36 @@ class Database:
 		
 		'''
 		return self._get_schema_labels(schema_id = schema_id)
+	
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Relationship Management - core <-> core: reviewed_area <-> annotations
+
+	@connect
+	def _add_reviewed_area_annotations(self, cursor: psycopg.Cursor, reviewed_area_id: ReviewedArea | int | UUID, annotation_ids: Annotation | int | UUID | list[Annotation | int | UUID]) -> bool:
+		'''
+		
+		'''
+		query = sql.SQL(' INSERT INTO core.annotations_reviewed_area (annotation_id, reviewed_area_id) VALUES (%s, %s); ')
+		reviewed_area = self._get_reviewed_area(reviewed_area_id) if not isinstance(reviewed_area_id, ReviewedArea) else reviewed_area_id
+		if isinstance(annotation_ids, list):
+			annotations = self._get_annotation(annotation_ids) if not isinstance(annotation_ids[0], Annotation) else annotation_ids
+		else:
+			annotations = self._get_annotation(annotation_ids) if not isinstance(annotation_ids, Annotation) else annotation_ids
+		match annotations:
+			case list() if isinstance(annotations[0], Annotation):
+				cursor.executemany(query, [(annotation.annotation_id, reviewed_area.reviewed_area_id) for annotation in annotations]) #type: ignore
+			case Annotation():
+				cursor.execute(query, (annotations.annotation_id, reviewed_area.reviewed_area_id))
+			case _:
+				raise TypeError('reveiwed_area_id or annotation_ids are of an unexpected type')
+		return True 
+	 
+	def add_reviewed_area_annotations(self, reviewed_area_id: ReviewedArea | int | UUID, annotation_ids: Annotation | int | UUID | list[Annotation | int | UUID]) -> bool:
+		'''
+		 
+		'''
+		return self._add_reviewed_area_annotations(reviewed_area_id = reviewed_area_id, annotation_ids = annotation_ids)
+
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Access Control - User Can Access
 
@@ -1814,13 +2072,15 @@ class Database:
 			return False # A user cannot access a project that does not exist
 		cursor.execute(query, (user.user_id, project.project_id))
 		response = cursor.fetchone()
+		if response is None:
+			raise Exception('No response from db')
 		return response[0]
 	
 	def check_user_can_access_project(self, user_id: User |int | UUID, project_id: Project | int | UUID) -> bool:
 		'''
 		
 		'''
-		return self._check_user_in_project(user_id = user_id, project_id = project_id)
+		return self._check_user_can_access_project(user_id = user_id, project_id = project_id)
 			
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Functionality - Get Batch of images
@@ -1864,11 +2124,13 @@ class Database:
 				  	I.uuid,
                     json_agg(
                         json_build_object(
+				  			'pred_id', P.pred_id,
+							'image_id', P.image_id,
+				  			'model_id', P.model_id,
 							'dimensions', json_build_object('top_left', json_build_array(P.box_tx, P.box_ty), 'bottom_right', json_build_array(P.box_bx, P.box_by)),
                             'score', P.score,
                             'label', P.label,
 				  			'created', P.created,
-							'modified', P.modified,
 				  			'uuid', P.uuid
                         )
                         ORDER BY P.score DESC
@@ -1887,7 +2149,6 @@ class Database:
 		ids = []
 		for row in results['json_agg']:
 			ids.append((user.user_id, row['image_id']))
-			del row['image_id']
 		cursor.executemany(sql.SQL('UPDATE core.images SET opened_by_user_id = %s WHERE image_id = %s'), ids)
 		return results['json_agg']
 
@@ -1916,7 +2177,7 @@ class Database:
 			case UUID():
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (image_id,))
 			case _:
-				raise TypError('image_id must be of type Image, int, or UUID')
+				raise TypeError('image_id must be of type Image, int, or UUID')
 		return True if cursor.rowcount > 0 else False
 
 	def close_image(self, image_id: Image | int | UUID) -> bool:
@@ -1938,13 +2199,13 @@ class Database:
 			case list() if isinstance(pred_ids[0], int):
 				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, pred_id) for pred_id in pred_ids])
 			case list() if isinstance(pred_ids[0], Prediction):
-				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, pred.prediction_id) for pred in pred_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, pred.pred_id) for pred in pred_ids])
 			case list() if isinstance(pred_ids[0], UUID):
 				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(user_id, uuid) for uuid in pred_ids])
 			case _:
 				raise TypeError('pred_ids must be a list of ints, Predictions, or UUIDS')
 		return True if cursor.rowcount > 0 else False
-	
+	 
 	def set_predictions_reviewed(self, pred_ids: list[Prediction | int | UUID], user_id: int) -> bool:
 		'''
 		
@@ -1952,798 +2213,54 @@ class Database:
 		return self._set_predictions_reviewed(pred_ids = pred_ids, user_id = user_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-# class Database(ABC): # Abstract class for all database types
-#     _conn: Any
-#     _cursor: Any
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def __init__(self, root: os.PathLike):
-#         self.schema = {}
-#         # TODO: rework how this works
-#         self.herd_units_forward = {}
-#         self.herd_units_reverse = {}
-#         self.models_forward = {}
-#         self.models_reverse = {}
-#         self.root = root
+	# Functionality - Close previously opened images
 
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     @abstractmethod 
-#     def connect(self):
-#         pass
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     @abstractmethod
-#     def get_auto_increment_column(self):
-#         pass
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def get_placeholder(self):
-#         pass
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def create_tables(self):
-#         if self._conn is None:
-#             self.connect()
-#         auto_increment_column = self.get_auto_increment_column()
+	@connect
+	def _set_user_open_images_closed(self, cursor: psycopg.Cursor, user_id: User | int | UUID) -> bool:
+		'''
+		
+		'''
+		query = sql.SQL(' UPDATE core.images SET opened_by_user_id = 0 WHERE opened_by_user_id = %s; ')
+		match user_id:
+			case User():
+				cursor.execute(query, (user_id.user_id,))
+			case int():
+				cursor.execute(query, (user_id,))
+			case UUID():
+				user = self._get_user(user_id)
+				cursor.execute(query, (user.user_id,))
+		return True if cursor.rowcount > 0 else False
 	
-#         # Create Models table
-#         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Models (
-#                         ModelId {auto_increment_column},
-#                         ModelName CHAR(19) NOT NULL UNIQUE
-#                     )''')
-
-#          # Create HerdUnit table
-#         self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS HerdUnits (
-#                         HerdUnitID SERIAL NOT NULL PRIMARY KEY,
-#                         HerdUnitName VARCHAR(6) NOT NULL UNIQUE
-#                     )''')
-
-#         # Create Images table
-#         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Images ( 
-#                         ImageId {auto_increment_column},
-#                         HerdUnitID INT,
-#                         Name CHAR(50) NOT NULL UNIQUE,
-#                         InTraining SMALLINT NOT NULL CHECK (InTraining IN (0, 1)),
-#                         Reviewed SMALLINT NOT NULL CHECK (Reviewed IN (0, 1)),
-#                         'Error' SMALLINT NOT NULL CHECK ('Error' IN (0, 1)),
-#                         OPEN SMALLINT NOT NULL CHECK (OPEN IN (0, 1)),
-#                         CropsGen INTEGER,
-#                         FOREIGN KEY (HerdUnitID) REFERENCES HerdUnits (HerdUnitID)
-#                     )''')
-
-#         # Create Predictions table
-#         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Predictions (
-#                         PredId {auto_increment_column},
-#                         ModelId INTEGER,
-#                         ImageId INTEGER,
-#                         BoxTx SMALLINT,
-#                         BoxTy SMALLINT,
-#                         BoxBx SMALLINT,
-#                         BoxBy SMALLINT, 
-#                         Score FLOAT,
-#                         Label SMALLINT,
-#                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId),
-#                         FOREIGN KEY (ModelId) REFERENCES Models (ModelId)
-#                     )''')
-
-#         # Create Crops table
-#         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Crops (
-#                         CropId {auto_increment_column},
-#                         ImageId INTEGER NOT NULL,
-#                         ModelId INTEGER NOT NULL,
-#                         CropName VARCHAR(58) NOT NULL UNIQUE,
-#                         InLabelBox INTEGER NOT NULL CHECK (InLabelBox IN (0, 1)),
-#                         CropTx SMALLINT,
-#                         CropTy SMALLINT,
-#                         CropBx SMALLINT,
-#                         CropBy SMALLINT,
-#                         Created DATE,
-#                         globalKey CHAR(36) UNIQUE,
-#                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId),
-#                         FOREIGN KEY (ModelId) REFERENCES Models (ModelId)
-#                     )''')
-
-#         # Create CropPredictions table
-#         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS CropPredictions (
-#                         CropPredId {auto_increment_column},
-#                         CropId INTEGER,
-#                         PredId INTEGER,
-#                         ImageId INTEGER,
-#                         BoxTx INTEGER,
-#                         BoxTy INTEGER,
-#                         BoxBx INTEGER,
-#                         BoxBy INTEGER,
-#                         FOREIGN KEY (CropId) REFERENCES Crops (CropId),
-#                         FOREIGN KEY (PredId) REFERENCES Predictions (PredId),
-#                         FOREIGN KEY (ImageId) REFERENCES Images (ImageId)
-#                     )''') 
-
-#         # Create Annotations table
-#         self._cursor.execute(f'''CREATE TABLE IF NOT EXISTS Annotations (
-#                         AnnotationId {auto_increment_column},
-#                         CropID INT,
-#                         BoxTx SMALLINT,
-#                         BoxTy SMALLINT,
-#                         BoxBx SMALLINT,
-#                         BoxBy SMALLINT,
-#                         FOREIGN KEY (CropID) REFERENCES Crops (CropID)
-#                     )''')
-
-#         # Create Training table
-#         self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS Training (
-#                         ModelId INT,
-#                         CropID INT,
-#                         FOREIGN KEY (ModelId) REFERENCES Models (ModelId),
-#                         FOREIGN KEY (CropId) REFERENCES CROPS (CropId),
-#                         PRIMARY KEY (Modelid, Cropid)
-#                     )''')
+	def set_user_open_images_closed(self, user_id: User | int | UUID) -> bool:
+		'''
 		
-#         # Crete Schema table
-#         self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS Schema (
-#                              SchemaId {auto_increment_column},
-#                              label INT NOT NULL,
-#                              name VARCHAR(30) NOT NULL,
-#                              imagelink VARCHAR(1000)
-#                     )''')
-
-#         # Create user management schema
-#         self._cursor.execute('''CREATE SCHEMA IF NOT EXISTS UserManagement;''')
-
-#         #Create user table
-#         self._cursor.execute(f''' CREATE TABLE IF NOT EXISTS UserManagement.Users (
-#                              UserId {auto_increment_column},
-#                             uuid UUID UNIQUE NOT NULL,
-#                             userName VARCHAR(20) UNIQUE NOT NULL,
-#                              ExternalAuthId VARCHAR(255) UNIQUE NOT NULL,
-#                              ExternalAuthProvider VARCHAR(50) NOT NULL,
-#                              Status VARCHAR(20) NOT NULL DEFAULT 'active',
-#                              Role VARCHAR(50) NOT NULL DEFAULT 'user',
-#                              Created date,
-#                              Updated date,
-#                              LastLogin TIMESTAMP WITHOUT TIME ZONE,
-#                              locale VARCHAR(10)
-#                              )''')
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#  
-#     def create_indexes(self):
-#         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_reviewed ON Images (ReviewLed);')
-#         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_predictions_imageid ON Predictions (ImageId);')
-#         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_crops_imageid ON Crops (ImageId);')
-#         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_croppreds_cropid ON CropPredictions (CropId)')
-#         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_herdunit_herdunitid ON HerdUnits (herdunitid)')
-#         self._cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_modelid on Models (modelid)')
-		
-#         self.commit()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def commit(self):
-#         self.close()
-#         self._conn.commit()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def query(self, query: str, params=None):
-#         if not self._cursor:
-#             print('no cursor')
-#             self.connect()
-#         query = query.replace('?', self.get_placeholder()) #type: ignore
-#         self._cursor.execute(query, params or ())
-#         if 'select' in query.strip().lower():
-#             return self._cursor.fetchall()
-#         else:
-#             return self._cursor.rowcount
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     #User management methods
-#     def get_user(self, external_id: str):
-#         print("I was called")
-#         query = '''
-#             SELECT UserId, ExternalAuthId, Status, Role, Created, Updated, Locale, uuid, userName 
-#             FROM usermanagement.users
-#             WHERE ExternalAuthId = ?
-#         '''
-
-#         rows = self.query(query, (external_id,))
-#         if len(rows) == 0:
-#             return
-#         return {
-#             'db_id': rows[0][0],
-#             'external_auth_id': rows[0][1],
-#             'status': rows[0][2],
-#             'role': rows[0][3],
-#             'created': rows[0][4],
-#             'updated': rows[0][5],
-#             'locale' : rows[0][6],
-#             'uuid' : rows[0][7],
-#             'userName': rows[0][8]
-#         }
-
-#     def set_last_login(self, db_id: int):
-#         query = '''
-#             UPDATE usermanagement.users
-#             SET LastLogin =  ?
-#             WHERE userid = ?'''
-#         self.query(query, (datetime.now().strftime('%Y%m%d %H%M%S'), db_id))
-#         self.commit()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def lastrowid(self) -> int:
-#         return self._cursor.lastrowid
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def rollback(self):
-#         self._conn.rollback()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def close(self):
-#         if self._conn:
-#             self._conn.close
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def get_herd_units(self):
-#         query = '''
-#             SELECT * FROM herdunits
-#         '''
-#         rows = self.query(query,())
-
-#         for id, name in rows:
-#             self.herd_units_forward[id] = name
-#             self.herd_units_reverse[name] = id
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def insert_herd_unit(self, herd_unit_name):
-#         query = '''
-#             INSERT INTO HerdUnits (HerdUnitName)
-#             VALUES (?)
-#             ON CONFLICT(HerdUnitName) DO NOTHING
-#         '''      
-#         self.query(query, (herd_unit_name,))
-#         self.commit()
-#         self.get_herd_units()
-#  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#   
-#     def get_models(self):
-#         query = '''
-#             SELECT * FROM models
-#         '''
-#         rows = self.query(query,())
-#         for id, name in rows:
-#             self.models_forward[id] = name
-#             self.models_reverse[name] = id
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def insert_model(self, model_name):
-#         query = '''
-#             INSERT INTO Models (ModelName)
-#             VALUES (?)
-#             ON CONFLICT(ModelName) DO NOTHING
-#         ''' 
-#         self.query(query, (model_name,))   
-#         self.commit()
-#         self.get_models()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def resolve_herd_unit(self, herd_unit: int | str):
-#         return self.herd_units_forward[herd_unit] if type(herd_unit) is int else self.herd_units_reverse[herd_unit]
-
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def resolve_model(self, model: int | str):
-#         return self.models_forward[model] if type(model) is int else self.models_reverse[model]
-
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def resolve_label(self, label: int | str):
-#         return self.labels_forward[label] if type(label) is int else self.labels_reverse[label]
-
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def set_open(self, image_id: int):
-#         query = '''
-#             UPDATE Images
-#             SET Open = 1
-#             WHERE ImageId = ?
-#         '''
-#         self.query(query, (image_id,))
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def set_closed(self, image_id: int):
-#         query = '''
-#             UPDATE Images
-#             SET Open = 0
-#             WHERE ImageId = ?
-#         '''
-#         self.query(query, (image_id,))
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def set_all_closed(self):
-#         query = '''
-#             UPDATE Images
-#             Set Open = 0
-#             WHERE Open = 1'''
-#         self.query(query, ())
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def set_reviewed(self, image_id: int):
-#         query = '''
-#             UPDATE Images
-#             SET Reviewed = 1
-#             WHERE ImageId = ?
-#         '''
-#         self.query(query, (image_id,))
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def get_schema(self):
-#         query = '''SELECT * FROM Schema'''
-#         rows = self.query(query, ())
-#         for row in rows:
-#             self.schema[row[2]] = {
-#                 'label': row[1],
-#                 'image_link': row[3]
-#             }
-
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def update_training(self, image_names: list, modelId):
-#         for name in image_names:
-#             query = '''
-#                 SELECT CropId, imageID
-#                 FROM Crops
-#                 WHERE CropName = ?
-#             '''
-#             ids = self.query(query, (name,))
-#             if len(ids) == 0:
-#                 continue
-#             query = ''' 
-#                 INSERT INTO TRAINING (CropId, ModelId)
-#                 VALUES (?, ?)
-#                 ON CONFLICT (CropId, ModelId) DO NOTHING
-#             '''
-#             self.query(query, (ids[0][0], modelId))
-#             query = '''
-#                     UPDATE Images
-#                     SET intraining = 1 
-#                     WHERE Imageid = ?
-#             '''
-#             self.query(query, (ids[0][1],))
-#             self.commit()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def insert_manual_crops(self, train_json_path: str, model_id: int):
-#         prefix = len('high-altitude-pronghorn-survey-')
-#         suffix = len('_crop_xx')
-#         CURRENT_TIMESTAMP = datetime.date.today().strftime('%Y-%m-%d')
-
-#         with open(train_json_path) as f:
-#             train_json = json.load(f)
-
-#         for image_info in train_json['images']:
-#             query = '''
-#                 SELECT ImageId 
-#                 FROM Images
-#                 WHERE Name = ?
-#             '''
-#             image_id = self.query(query, (os.path.splitext(image_info['file_name'])[0][prefix:-suffix],))[0][0]
-#             query = '''
-#                 INSERT INTO Crops (ImageId, modelId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
-#                 Values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-#                 ON CONFLICT(CropName) DO NOTHING
-#             '''
-#             self.query(query, (image_id, model_id, os.path.splitext(image_info['file_name'])[0][prefix:], 1, 0, 0, 0, 0, CURRENT_TIMESTAMP, str(uuid4()),))
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def populate_images(self, images: dict['str', Image], model_id: int, 
-#                                    herd_id: int, insert_images: bool, insert_predictions: bool):  
-		
-	  
-#         image_count = len(images)
+		'''
+		return self._set_user_open_images_closed(user_id = user_id)
 	
-#         for num, image_dict in enumerate(images):
-#             # add max score to image table, insert score based on prediction values
-#             # /\ I have no clue what this talking about -ML 4/22/2025
-#             print(f'inserting image {num}/{image_count}')
-#             if insert_images:   
-#                 query = '''
-#                     INSERT INTO Images (Name, HerdUnitID, InTraining, Reviewed, "Error", CropsGen, Open)
-#                     VALUES (?, ?, ?, ?, ?, ?, ?)
-#                 '''
-#                 try:
-#                     self.query(query, (image_dict['image'].name, image_dict['image'].herd_unit.id, 1 if image_dict['image'].in_training == True else 0, 0, 0, 0, 0))
-#                 except Exception as e: #TODO: Replace with generic exception
-#                     print(e)
-#                     continue
-#             image_id = self.lastrowid()
-	
-#             if insert_predictions:
-#                 print(f'inserting {len(image_dict['predictions'])} predictions...')
-#                 for pred in image_dict['predictions']:
-					
-#                     # Prediction level IOU would most likely be less efficient than comparing individual crops
-#                     points = pred.dimensions.get_points()
-#                     query = '''
-#                         INSERT INTO Predictions (ImageId, ModelId, BoxTx, BoxTy, BoxBx, BoxBy, Score, Label)
-#                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-#                     '''
-#                     try: 
-#                         self.query(query, (image_id, pred.model.id, points[0], points[1], points[2], points[3], pred.score, pred.label)) #type: ignore
-#                     except Exception as e: #TODO: replace with more generic catch
-#                         print('Prediction Already in database...')
-					
-#         # Async await commit from other workers 
-#         self.commit() 
-#         self.close() 
-#         print("done")
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def insert_to_database(self, images: dict[Image, Prediction], herd_unit: HerdUnit, model: Model, bootstrap: bool=False, 
-#                            insert_images: bool=True, insert_predictions: bool=True):
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Functionality  - Get Images by survey
+
+	@connect 
+	def _get_survey_images(self, cursor: psycopg.Cursor, survey_id: Survey | int | UUID) -> list[Image] | Image | None:
+		'''
 		
-#         # Cache the model_id and herd_unit_id
-#         model_id = model.id
-#         herd_unit_id = herd_unit.id
+		'''
+		cursor.row_factory = class_row(Image)
+		query = sql.SQL(' SELECT * FROM core.images WHERE survey_id = %s; ')
+		match survey_id:
+			case Survey():
+				cursor.execute(query, (survey_id.survey_id,))
+			case int():
+				cursor.execute(query, (survey_id,))
+			case UUID():
+				survey = self._get_survey(survey_id)
+				cursor.execute(query, (survey.survey_id,))
+			case _:
+				raise TypeError('survey_id must be of type Survey, int, or UUID')
+		return cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
+
+	def get_survey_images(self, survey_id: Survey | int | UUID) -> list[Image] | Image | None:
+		'''
 		
-#         self.populate_images(images,model_id, herd_unit_id, insert_images, insert_predictions)
-
-#         # # Actual row insertion uses multiple processes to greatly speed up data insertion
-#         # process_count = max(1, cpu_count())
-#         # print(f'Inserting into the database on {process_count} threads...')
-#         # total_images = len(images)
-#         # chunk_size = (total_images + process_count - 1) // process_count # Size of each block of
-#         # pool = Pool(processes = process_count)
-#         # tasks = []
-
-#         # # delegate chunks of total images to threads evenly
-#         # for i in range(process_count):
-#         #     start = i * chunk_size
-#         #     end = (i + 1) * chunk_size if i != process_count - 1 else total_images
-			
-#         #     tasks.append((images[start:end], model_id, herd_unit_id, insert_images, insert_predictions))
-			
-#         # pool.starmap(self.concurrent_populate_images, tasks)
-#         # pool.close()
-#         # pool.join()
-
-#         # #TODO: Go and update these methods BEFORE TESTING 
-#         # if bootstrap:
-#         #     self.insert_manual_crops(model_id)
-#         # #self.update_training(model_id)
-#         # #self.create_indexes()
-#         # self.commit()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def insert_full(self, images: dict[Image, Prediction], herd_unit: HerdUnit, model: Model):
-#         self.insert_to_database(images, herd_unit, model, bootstrap=False, insert_images=True, insert_predictions=True,)
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def insert_new_images(self):
-#         self.insert_to_database(bootstrap=False, insert_images=True, insert_predictions=False)
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def insert_new_preds(self):
-#         self.insert_to_database(bootstrap=False, insert_images=False, insert_predictions=False)
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def bootstrap_database(self):
-#         ''' Populate a SQL database with image names and predictions
-
-#             Returns None, populate tables in a database
-#         '''
-#         # First part is single threaded for simplicity purposes
-#         self.create_tables()     
-#         self.insert_to_database(bootstrap=True, insert_images=True, insert_predictions=True)
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def retrieve_batch(self, batch_size: int, desired_class: int, min_confidence: float,
-#                     herd_unit_id: str, model_id: str) -> dict[Image, list[Prediction]]:
-		
-#         batch = {}
-	
-#         rows = self.get_pred_and_images(batch_size, desired_class, min_confidence, herd_unit_id, model_id)
-
-#         for img in rows:
-#             img_id =img['imageid']
-#             self.set_open(img_id)
-		
-#             batch[img_id] = {}
-#             image = Image(
-#                 db_id = img_id,
-#                 name = img['name'],
-#                 herd_unit = HerdUnit(herd_unit_id, self.resolve_herd_unit(herd_unit_id), '2024'), #TODO: change with parameter passed with function cal,l
-#                 in_training = True if img['intraining'] == 1 else False,
-#                 local_path = os.path.join(self.root, 'Images', self.resolve_herd_unit(herd_unit_id)),
-#                 )
-#             batch[img_id]['image'] = image
-#             batch[img_id]['predictions'] = []
-
-#             for pred in img['predictions']:
-#                 batch[img_id]['predictions'].append(
-#                     Prediction(
-#                         db_id = pred['PredId'],
-#                         dimensions = Box(
-#                             top_left = (pred['BoxTx'], pred['BoxTy']),
-#                             bottom_right = (pred['BoxBx'], pred['BoxBy'])
-#                         ),
-#                         score = pred['Score'],
-#                         label = pred['Label'],
-#                         model = Model(model_id, self.resolve_model(model_id))
-#                         )
-#                 )
-#         self.commit()
-#         return batch
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def close_batch(self, batch: Dict[str, Union[Image, List[Prediction]]]):
-#         for image_id in batch.keys():
-#             self.set_closed(image_id)
-#         self.commit()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def interrupt_handler(self, signum, frame):
-#         usr_input = input(f"Interrupt signal: {signum} in {frame} recieved | IMPORTANT DON'T SAVE IF THERE WAS A PROBLEM | Save work? (Y or N): ")
-#         if usr_input in set(['y', 'Y', 'yes', 'Yes', 's', 'S', 'Save', 'save']):
-#             try:
-#                 self.commit() 
-#                 self.close() 
-#             except Exception as e:
-#                 print(f'Exception {e} encountered')
-#                 os.exit()
-#         else:    
-#             self.rollback() 
-#             self.close() 
-#             os.exit()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def setup_interrupt_handler(self):
-#         ''' Gracefully handle ^C interrupts regarding the database
-		
-#         '''
-#         signal.signal(signal.SIGINT, self.interrupt_handler)
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def upload_crops(self, crops: dict[str, Union[Crop, list[Prediction]]]) -> int:
-#         CURRENT_TIMESTAMP = datetime.now()
-#         for crop_id in crops:
-#             num_crops = 0
-#             model_id = crops[crop_id]['predictions'][0].model.id
-#             crop = crops[crop_id]['crop']
-#             predictions = crops[crop_id]['predictions']
-#             points = crop.crop_dimensions.get_points()
-#             query = '''
-#                 INSERT INTO Crops (ModelID, ImageId, CropName, InLabelBox, CropTx, CropTy, CropBx, CropBy, Created, GlobalKey)
-#                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-#             '''
-
-#             self.query(query, (model_id, crop.image_id, crop.name, 0, points[0], points[1], points[2], points[3], CURRENT_TIMESTAMP, str(uuid4()))) 
-#             num_crops += 1
-
-#             for pred in predictions:
-#                 points = pred.dimensions.get_points()
-#                 query = '''
-#                     INSERT INTO CropPredictions (CropId, PredId, ImageId, BoxTx, BoxTy, BoxBx, BoxBy)
-#                     VALUES (?, ?, ?, ?, ?, ?, ?)
-#                 '''
-#                 self.query(query, (crop.id, pred.id, crop.image_id, points[0], points[1], points[2], points[3])) #type: ignore
-			
-#         self.commit() 
-
-#  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def upload_to_labelbox(self, batch_size, desired_class: int, save_folder: str):
-#         #TODO: update to use new data structures and derive save folder from image object to reduce number of args because you 
-#         # (michael lance) are terrible at python
-#         global uploading
-#         if uploading:
-#             return 
-#         uploading = True
-#         client = lb.Client(os.environ.get('API_KEY'))
-#         project = client.get_project(os.environ.get('PROJECT_ID'))
-#         dataset = client.get_dataset(os.environ.get('DATASET_ID'))
-
-#         data_rows = []
-#         global_keys = []
-#         row_ids = []
-#         labels = []
-
-#         query = '''
-#             SELECT C.CropId, C.CropName, C.GlobalKey
-#             FROM Crops C 
-#             WHERE C.InLabelBox = 0
-#             LIMIT 50
-#             '''
-#         crops = base.query(query,(batch_size,)) #type: ignore
-		
-#         if len(crops) == 0: #type: ignore
-#             print('No valid crops to upload, please approve predictions first!') #type: ignore
-#             return
-#         else:
-#             print(f'\n{len(crops)} valid crops not yet uploaded to labelbox, working!') #type: ignore
-
-#         for crop_info in crops: #type: ignore
-#             data_rows.append({
-#                 'row_data': f'{save_folder}/{crop_info[1]}.jpg',
-#                 'global_key': crop_info[2],
-#                 'external_id': crop_info[1]
-#             })
-#             query = '''
-#                 UPDATE Crops 
-#                 SET InLabelBox = 1 
-#                 WHERE CropId = ?
-#                 '''
-#             self.query(query, (crop_info[0],))
-#             global_keys.append(crop_info[2])
-#             query = '''
-#                 SELECT CP.BoxTx, BoxTy, BoxBx, BoxBy
-#                 FROM CropPredictions CP
-#                 WHERE ? = CP.CropId
-#             '''
-#             crop_preds = self.query(query,(crop_info[0],)) 
-#             for pred_info in crop_preds: #type: ignore 
-#                 labels.append(
-#                     Label(
-#                         data = {'global_key': crop_info[2]}, #type: ignore
-#                         annotations = [
-#                             ObjectAnnotation(
-#                                 name = self.class_labels_forward[desired_class],
-#                                 value = Rectangle(
-#                                     start = Point(x = pred_info[0], y = pred_info[1]),
-#                                     end = Point( x = pred_info[2], y = pred_info[3])
-#                                 )
-#                             )
-#                         ]
-#                     ) 
-#                 )
-#         # determine chunk_size from number of data_rows
-#         num_data_rows = len(data_rows)
-#         # Multiprocessing configuration
-#         process_count = max(1, cpu_count())
-
-#         if num_data_rows < process_count:
-#             process_count = num_data_rows
-
-#         print(f'Uploading to labelbox on {process_count} threads...')
-
-#         chunk_size = (num_data_rows + process_count - 1) // process_count 
-#         pool = Pool(processes = process_count)
-#         tasks = []
-
-#         for i in range(process_count):
-#             start = i * chunk_size
-#             end = (i + 1) * chunk_size if i != process_count - 1 else num_data_rows
-
-#             tasks.append((data_rows, start, end, dataset))
-
-#         pool.starmap(self.concurrent_upload, tasks)
-#         print('got here')
-#         pool.close()
-#         pool.join()
-#         base.commit() #type: ignore
-#         # Request data rows associated with global_ids we generated for labelbox shenannigans
-#         res = client.get_data_row_ids_for_global_keys(global_keys)
-		
-#         # loop over the dict to append the actual ids to a list that is useful to us
-#         for id in res['results']:
-#             row_ids.append(id)
-		
-#         project.create_batch(
-#             name = f'high-altitude-pronghorn-survey-{str(uuid4())}', # add model name to batch
-#             data_rows = row_ids, #type_ignore
-#             priority = 5,
-#         )
-#     # Upload MAL label for this data row in project
-#         lb.MALPredictionImport.create_from_objects(
-#             client = client, 
-#             project_id = project.uid, #type: ignore 
-#             name='mal_job'+str(uuid4()), 
-#             predictions=labels
-#         )
-#         print('Upload complete!')
-#         uploading = False
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def concurrent_upload(data_rows, start, end, dataset):
-#         task = dataset.create_data_rows(data_rows[start:end])
-#         task.wait_until_done()
-#         if task.errors:
-#             print(task.errors)
-
-# #---------------------------------------------------------------------------------------------------------------------------#
-#     #TODO: Update sqlite class to work with updated features, eg: write get_pred_and_images method
-# class SQLite(Database):
-#     def __init__(self, db_config: dict):
-#         try: 
-#             import sqlite3
-#             self._sqlite3 = sqlite3
-#         except ImportError:
-#             raise RuntimeError("sqlite3 module missing.")
-		
-#         self._db_name = db_config['database']
-#         self._conn = None
-#         self._cursor = None
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#             
-#     def connect(self):
-#         self._conn = self.sqlite3.connect(self._db_name)
-#         self._cursor = self._conn.cursor()
-#         self._cursor.execute('PRAGMA journal_mode = WAL;')
-#         self._cursor.execute('PRAGMA cache_size = -20000;')
-#         self._cursor.execute('PRAGMA synchronous = NORMAL;')
-#         self._cursor.execute('PRAGMA temp_store = MEMORY;')
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def get_auto_increment_column(self) -> str:
-#         return 'INTEGER PRIMARY KEY'
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#    
-#     def get_placeholder(self) -> str:
-#         return '?'
-	
-# #---------------------------------------------------------------------------------------------------------------------------#
-
-# class Postgres(Database):
-#     def __init__(self, db_config: dict, root: os.PathLike):
-#         try: 
-#             import psycopg
-#             self._psycopg = psycopg
-#         except ImportError:
-#             raise RuntimeError("psycopg not installed. Please install it with 'pip install psycopg[binary]'")
-
-#         super().__init__(root)
-#         self._config = db_config
-#         self._conn = None
-#         self._cursor = None
-#         self._dict_cursor = None
-#         self._pooled_conn = None
-
-#         self.connect()
-#         self.get_herd_units()
-#         self.get_models()
-#         #self.get_schema()
-#         self.close()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def connect(self):
-#         try:
-#             self._conn = self._psycopg.connect(**self._config) #type: ignore
-#             self._cursor = self._conn.cursor()
-#             self._dict_cursor = self._conn.cursor(row_factory=self._psycopg.rows.dict_row)
-#         except (Exception, self._psycopg.DatabaseError) as error:
-#             print(error)
-		
-		
-#         #self.set_all_closed()
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def get_auto_increment_column(self) -> str:
-#         return 'SERIAL NOT NULL PRIMARY KEY'
-
-#     def get_placeholder(self) -> str:
-#         return '%s'
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     def lastrowid(self) -> int:
-#         self._cursor.execute('SELECT LASTVAL()')
-#         return self._cursor.fetchone()[0]
-#  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     #TODO: Make abstract function in base class   
-#     def get_pred_and_images(self, batch_size: int, desired_class: int, min_confidence: float, herd_unit_id: str, model_id: str) -> dict:
-#         ''' Query batch_size Images and associated predictions above a minimum score from the database
-		
-#         Args:
-#             batch_size: number of images that will consist a batch 
-#             desired_class: integer id of desired class object derived from labelbox ontology
-#             min_confidence: minimum confidence for fetched predictions
-#             herd
-			
-#         Returns true if image_name is origin of one of the training images.
-#         '''
-
-	   
-#         print('Querying database...')
-#         query = '''
-#             WITH SelectedImageIds AS (
-#                 SELECT DISTINCT I.ImageId
-#                 FROM Images I
-#                 INNER JOIN Predictions P ON I.ImageId = P.ImageId
-#                 WHERE I.HerdUnitId = %s
-#                     AND I.Reviewed = %s
-#                     AND I.Open = 0
-#                     AND P.Label = %s
-#                     AND P.Score > %s
-#                 LIMIT ?
-#             )
-#             SELECT json_agg(row_to_json(img_preds))
-#             FROM (
-#                 SELECT
-#                     I.ImageId,
-#                     I.Name,
-#                     I.InTraining,
-#                     json_agg(
-#                         json_build_object(
-#                             'PredId', P.PredId,
-#                             'BoxTx', P.BoxTx,
-#                             'BoxTy', P.BoxTy,
-#                             'BoxBx', P.BoxBx,
-#                             'BoxBy', P.BoxBy,
-#                             'Score', P.Score,
-#                             'Label', P.Label
-#                         )
-#                         ORDER BY P.Score DESC
-#                     ) AS predictions
-#                 FROM Images I
-#                 INNER JOIN Predictions P ON I.ImageId = P.ImageId
-#                 WHERE I.ImageId IN (SELECT ImageId FROM SelectedImageIds)
-#                     AND P.Label = %s
-#                     AND P.Score > %s
-#                     AND P.ModelId = %s
-#                 GROUP BY I.ImageId, I.Name, I.InTraining
-#             ) AS img_preds;
-#         '''
-#         rows = self.query(query, (herd_unit_id, 0, desired_class, min_confidence, batch_size, desired_class, min_confidence, model_id,)) #type: ignore
-		
-#         if type(rows) == 'None':
-#             raise BatchError("Database returned empty, please adjust your parameters!")
-#         else:
-#             return rows[0][0]
-
-# #---------------------------------------------------------------------------------------------------------------------------#
-# # Custom Exceptions
-
-# class  BatchError(Exception):
-#     def __init__(self, message):
-#         self.message = message
-#         super().__init__(self.message)
+		'''
+		return self._get_survey_images(survey_id = survey_id)
