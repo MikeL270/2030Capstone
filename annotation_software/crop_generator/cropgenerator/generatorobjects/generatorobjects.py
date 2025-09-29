@@ -336,7 +336,9 @@ class Image(CgOBJ):
 	def serve(self, img_format: str):
 		if self.image:
 			_, self.img_encoded = cv2.imencode(img_format, self.get_image()) #type: ignore
-			return self.img_encoded.tobytes()
+		else:
+			raise Exception(f'{self.name} has no image data')
+		return self.img_encoded.tobytes()
 		
 	def serialize(self) -> dict:
 		return {

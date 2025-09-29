@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
     libsqlite3-dev \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /venv
@@ -28,7 +30,4 @@ ENV PATH="/root/.local/bin/:$PATH"
 
 RUN /bin/bash -c "uv venv api_env && source api_env/bin/activate && uv pip install --no-cache-dir -r requirements.txt"
 
-
 EXPOSE 5000
-
-CMD ["/bin/bash", "-c", "source  api_env/bin/activate && python -u cg_api.py"]

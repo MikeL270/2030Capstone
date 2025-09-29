@@ -9,8 +9,8 @@ import { Box, Image, Prediction, Crop, PredictionCrop, Project, Organization, Us
 import type { Prediction_intf, User_intf, Image_intf, PredictionCrop_intf } from '@/types/generatorobjects.ts';
 import { useToast } from 'vue-toastification'
 
-const api_url: URL = new URL('https://pronghorn-count.arcc.uwyo.edu/api/v1'); //"production"
-//const api_url: URL = new URL('http://testing.lancecomputer.com:5000/api/v1');
+//const api_url: URL = new URL('https://pronghorn-count.arcc.uwyo.edu/api/v1'); //"production"
+const api_url: URL = new URL('http://testing.lancecomputer.com:5000/api/v1');
 //const api_url: URL = new URL('http://testing.lancecomputer.com:8000/api/v1');
 const uh_oh: string = 'status: ';
 
