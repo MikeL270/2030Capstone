@@ -1,19 +1,35 @@
 # Psycopg3 database abstraction layer for crop generator_api
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: September 22, 2025
+# Updated: October 2, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
-import os 
+from datetime import datetime
+from functools import wraps
+import os
+from typing import Any, Callable, Optional, cast, Union, List
 from uuid import UUID
-from cropgenerator.generatorobjects import *
+
+from cropgenerator.generatorobjects import (
+	Annotation,
+	HerdUnit,
+	Image,
+	Label,
+	Model,
+	Organization,
+	Prediction,
+	PredictionCrop,
+	Project,
+	ReviewedArea,
+	Role,
+	Schema,
+	Survey,
+	User,
+)
 import psycopg
+from psycopg.rows import class_row, dict_row
 import psycopg.sql as sql
 from psycopg_pool import ConnectionPool
-from psycopg.rows import class_row, dict_row
-from functools import wraps
-from typing import Callable, Any, Optional
-from datetime import datetime
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -177,7 +193,7 @@ class Database:
 		query = sql.SQL(' DELETE FROM usermanagement.organizations WHERE {id_field} = %s ')
 		match organization_ids:
 			case list() if isinstance(organization_ids[0], Organization):
-				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [(org.organization_id,) for org in organization_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [(cast(Organization, org).organization_id,) for org in organization_ids])
 			case list() if isinstance(organization_ids[0], int):
 				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [(org_id,) for org_id in organization_ids])
 			case list() if isinstance(organization_ids[0], UUID):
@@ -291,7 +307,7 @@ class Database:
 		query = sql.SQL(' DELETE FROM usermanagement.roles WHERE {id_field} = %s; ') 
 		match role_ids:
 			case list() if isinstance(role_ids[0], Role):
-				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [(role.role_id,) for role in role_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [(cast(Role, role).role_id,) for role in role_ids])
 			case list() if isinstance(role_ids[0], int):
 				cursor.executemany(query.format(id_field = sql.Identifier('role_id')), [(role_id,) for role_id in role_ids])
 			case list() if isinstance(role_ids[0], UUID):
@@ -305,7 +321,7 @@ class Database:
 			case UUID():
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (role_ids,))
 			case str():
-				cursor.execute(query.format(id_field = sql.Composable('role')), (role_ids,))
+				cursor.execute(query.format(id_field = sql.Identifier('role')), (role_ids,))
 			case _:
 				raise TypeError('role_id must be a Role, int, uuid, string, or a list consisting of ONE of the three')
 		return True if cursor.rowcount > 0 else False
@@ -352,25 +368,19 @@ class Database:
 				role_objs = self._get_user_roles(user)
 				if role_objs:
 					user.roles = [role for role in role_objs]
-			if organizations:
-				self._add_user_organizations(user.user_id, organizations)
+			# if organizations:
+			# 	self._add_user_organizations(user.user_id, organizations)
 		return user
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_user(self, cursor: psycopg.Cursor[User], user_ids: int | UUID | str | list[int | UUID | str]) -> User | None:
+	def _get_user(self, cursor: psycopg.Cursor[User], user_ids: int | UUID | str ) -> User:
 		''' Internal helper function, do not call directly
 		
 		'''  
 		cursor.row_factory = class_row(User)
 		query = sql.SQL('SELECT * FROM usermanagement.users WHERE {id_field} = %s')
 		match user_ids:
-			case list() if isinstance(user_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [(usr_id,) for usr_id in user_ids])
-			case list() if isinstance(user_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(usr_id,) for usr_id in user_ids])
-			case list() if isinstance(user_ids[0], str):
-				cursor.executemany(query.format(id_field = sql.Identifier('external_auth_id')), [(usr_id,) for usr_id in user_ids])
 			case int():
 				cursor.execute(query.format(id_field = sql.Identifier('user_id')), (user_ids,))
 			case UUID():
@@ -379,25 +389,22 @@ class Database:
 				cursor.execute(query.format(id_field = sql.Identifier('external_auth_id')), (user_ids,))
 			case _:
 				raise TypeError('user_ids must be an int, uuid, str, or a list consisting of one of the three')
-		try:
-			users = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone() 
-		except psycopg.errors.ProgrammingError as e:
-			return None
-		return users if isinstance(users, list) and all(isinstance(user, User) for user in users) else users if isinstance(users, User) else None
+		user = cursor.fetchone()
+		if user is None:
+			raise Exception('User not found')
+		return user
 		
-	def get_user(self, user_ids: int | UUID | str | list[int | UUID | str]) -> User | None:
+	def get_user(self, user_ids: int | UUID | str) -> User:
 		''' Query the database for a user
 		
 		Args:
 			user_id: The user's unique database id 
 		'''
 		user = self._get_user(user_ids = user_ids)
-		if isinstance(user, User):
-			role_objs = self._get_user_roles(user)
-			user.roles = [role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
-			return user
-		else:
-			return None
+		role_objs = self._get_user_roles(user)
+		user.roles = [role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
+		return user
+		
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -441,7 +448,7 @@ class Database:
 		match user_id:
 			case User():
 				cursor.execute(query.format(
-					augmented_field = sql.SQL(f"username = '{user_id.username}', external_auth_id = '{user_id.external_auth_id}', external_auth_provider = '{user_id.external_auth_provider}', status = '{user_id.status}', locale = '{user_id.locale}'"),
+					augmented_field = sql.SQL(f"username = '{user_id.username}', external_auth_id = '{user_id.external_auth_id}', external_auth_provider = '{user_id.external_auth_provider}', status = '{user_id.status}', locale = '{user_id.locale}'"), #type: ignore
 					id_field = sql.Identifier('user_id')
 				), (user_id.user_id,))
 			case int():
@@ -481,7 +488,7 @@ class Database:
 		query = sql.SQL(' DELETE FROM usermanagement.users WHERE {id_field} = %s')
 		match user_ids:
 			case list() if isinstance(user_ids[0], User):
-				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [user.user_id for user in user_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [(cast(User, user).user_id,) for user in (user_ids)])
 			case list() if isinstance(user_ids[0], int):
 				cursor.executemany(query.format(id_field = sql.Identifier('user_id')), [(user_id,) for user_id in user_ids])
 			case list() if isinstance(user_ids[0], UUID):
@@ -508,16 +515,18 @@ class Database:
 
 	# Project Management - Projects
 	@connect
-	def _create_project(self, cursor: psycopg.Cursor[Project], name: str, ) -> Project | None:
+	def _create_project(self, cursor: psycopg.Cursor[Project], name: str, ) -> Project:
 		''' Internal helper function, do not call directly
 		
 		'''   
 		cursor.row_factory = class_row(Project)        
 		cursor.execute(sql.SQL(' INSERT INTO projectmanagement.projects (name) VALUES (%s) RETURNING *; '), (name,))
 		project = cursor.fetchone()
-		return project if isinstance(project, Project) else None
+		if project is None:
+			raise Exception('Failed to create project')
+		return project 
 	
-	def create_project(self, name:str) -> Project | None:
+	def create_project(self, name:str) -> Project:
 		''' Insert a new project object into the database
 
 		Args:
@@ -572,7 +581,7 @@ class Database:
 				raise TypeError('project_id MUST be an integer, UUID or Project type, and name must be a string')
 		return True if cursor.rowcount > 0 else False
 
-	def update_project(self, project_id: Project | int | UUID, name: str=None) -> bool:
+	def update_project(self, project_id: Project | int | UUID, name: str | None=None) -> bool:
 		''' Augment a project in the database by providing either a modified Project object or a valid id and a new name
 		
 		Args:
@@ -737,25 +746,24 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_label(self, cursor: psycopg.Cursor, label_ids: int | UUID | list[int | UUID]) -> Label | None:
+	def _get_label(self, cursor: psycopg.Cursor[Label], label_ids: int | UUID) -> Label:
 		''' Internal helper function, do not call directly
 		
 		'''
 		cursor.row_factory = class_row(Label)
 		query = sql.SQL(' SELECT * FROM projectmanagement.labels WHERE {id_field} = %s; ')
 		match label_ids:
-			case list() if isinstance(label_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [(label_id,) for label_id in label_ids])
-			case list() if isinstance(label_ids[0], UUID):
-				cursor.executemany(query.format(id_ifeld = sql.Identifier('uuid')), [(label_id,) for label_id in label_ids])
 			case int():
 				cursor.execute(query.format(id_field = sql.Identifier('label_id')), (label_ids,))
 			case UUID():
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (label_ids,))
 			case _:
 				raise TypeError('label_id MUST be an integer or a UUID')
-		labels = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
-		return labels if isinstance(labels, list) and all(isinstance(lbl , Label) for lbl in labels) else labels if isinstance(labels, Label) else None
+
+		label = cursor.fetchone()
+		if label is None:
+			raise Exception('Labels not found')
+		return label
 	
 	def get_label(self, label_id: int | UUID):
 		''' Query the database for a label  
@@ -779,9 +787,9 @@ class Database:
 		match label_id:
 			case Label():
 				cursor.execute(query.format(
-					augmented_field = sql.SQL(f"label = '{label_id.label}', name = '{label_id.name}', color = '{label_id.color}', image_link = '{label_id.image_link}'"),
+					augmented_field = sql.SQL(f"label = '{label_id.label}', name = '{label_id.name}', color = '{label_id.color}', image_link = '{label_id.image_link}'"), #type: ignore
 					id_field = sql.Identifier('label_id')
-				), (label_id.label_id))
+				), (label_id.label_id,))
 			case int():
 				cursor.execute(query.format(
 					augmented_field = kw_augmented_field,
@@ -818,7 +826,7 @@ class Database:
 		query = sql.SQL(' DELETE FROM projectmanagement.labels WHERE {id_field} = %s; ')
 		match label_ids:
 			case list() if isinstance(label_ids[0], Label):
-				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [(label.label_id,) for label in label_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [(cast(Label, label).label_id,) for label in label_ids])
 			case list() if isinstance(label_ids[0], int):
 				cursor.executemany(query.format(id_field = sql.Identifier('label_id')), [(label_id,) for label_id in label_ids])
 			case list() if isinstance(label_ids[0], UUID):
@@ -956,16 +964,18 @@ class Database:
 	# Project Management - Models
 	
 	@connect
-	def _create_model(self, cursor: psycopg.Cursor[Model], name: str) -> Model | None:
+	def _create_model(self, cursor: psycopg.Cursor[Model], name: str) -> Model:
 		''' Internal helper function, do not call directly
 		
 		'''
 		cursor.row_factory=class_row(Model)
 		cursor.execute(' INSERT into projectmanagement.models (name) VALUES (%s)  RETURNING *; ', (name,))
 		model = cursor.fetchone()
-		return model if isinstance(model, Model) else None
+		if model is None:
+			raise Exception('Failed to create model')
+		return model 
 
-	def create_model(self, name: str) -> Model | None:
+	def create_model(self, name: str) -> Model:
 		''' Insert a new model object into the database
 
 		Args:
@@ -1126,9 +1136,9 @@ class Database:
 		match survey_id:
 			case Survey():
 				cursor.execute(query.format(
-					augmented_field = sql.SQL(f"survey_date = '{survey_id.survey_date}', name = '{survey_id.name}', additional_info = '{survey_id.additional_info}'"),
+					augmented_field = sql.SQL(f"survey_date = '{survey_id.survey_date}', name = '{survey_id.name}', additional_info = '{survey_id.additional_info}'"), #type: ignore
 					id_field = sql.Identifier('survey_id')
-				), (survey_id.survey_id))
+				), (survey_id.survey_id,))
 			case int():
 				cursor.execute(query.format(
 					augmented_field = kw_augmented_field,
@@ -1192,7 +1202,7 @@ class Database:
 	# Core - Images	
 
 	@connect
-	def _create_image(self, cursor: psycopg.Cursor, name: str, herd_unit_id: int | UUID, survey_id: int | UUID, img_key: str, image_length: int, image_width: int) -> Image | None:
+	def _create_image(self, cursor: psycopg.Cursor[Image], name: str, herd_unit_id: int | UUID, survey_id: int | UUID, img_key: str, image_length: int, image_width: int) -> Image | None:
 		'''
 		
 		'''
@@ -1212,7 +1222,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_image(self, cursor: psycopg.Cursor, image_id: int | UUID) -> Image | Image | None:
+	def _get_image(self, cursor: psycopg.Cursor[Image], image_id: int | UUID) -> Image:
 		'''
 		
 		'''
@@ -1226,9 +1236,11 @@ class Database:
 			case _:
 				raise TypeError('image_ids must be an int, or uuid or a list')
 		image = cursor.fetchone()
+		if image is None:
+			raise Exception('Could not find image')
 		return image 
 	
-	def get_image(self, image_id: int | UUID) -> Image | None:
+	def get_image(self, image_id: int | UUID) -> Image:
 		'''
 		
 		'''
@@ -1244,13 +1256,13 @@ class Database:
 		'''
 		query = sql.SQL(''' UPDATE core.images SET {augmented_field}, modified = CURRENT_TIMESTAMP
 							WHERE {id_field} = %s; ''')
-		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value).format(sql.Identifier(key)) for key, value, in locals().items() if key in set(['name', 'img_key', 'image_length_px', 'image_width_px', 'herd_unit_id', 'survey_id']) and value is not None)])
+		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value).format(sql.Identifier(key)) for key, value, in locals().items() if key in set(['name', 'img_key', 'image_length_px', 'image_width_px', 'herd_unit_id', 'survey_id']) and value is not None)]) # type: ignore
 		match image_id:
 			case Image():
 				cursor.execute(query.format(
-					augmented_field = sql.SQL(f"name = '{image_id.name}', herd_unit_id = '{image_id.herd_unit_id}', image_length_px = '{image_id.image_length_px}', image_width_px = '{image_id.image_width_px}'"),
+					augmented_field = sql.SQL(f"name = '{image_id.name}', herd_unit_id = '{image_id.herd_unit_id}', image_length_px = '{image_id.image_length_px}', image_width_px = '{image_id.image_width_px}'"), # type: ignore
 					id_field = sql.Identifier('image_id')
-				), (image_id.image_id))
+				), (image_id.image_id,))
 			case int():
 				cursor.execute(query.format(
 					augmented_field = kw_augmented_field,
@@ -1260,7 +1272,7 @@ class Database:
 				cursor.execute(query.format(
 					augmented_field = kw_augmented_field,
 					id_field = sql.Identifier('uuid')
-				), (image_id))
+				), (image_id,))
 			case _:
 				raise TypeError('image_id must be an Image, int, or UUID')
 		return True if cursor.rowcount > 0 else False
@@ -1285,7 +1297,7 @@ class Database:
 		model = self._get_model(model_id) if model_id is not isinstance(model_id, Model) else model_id
 		cursor.execute(sql.SQL(''' INSERT INTO core.predictions (image_id, model_id, label, score, box_tx, box_ty, 
 								   box_bx, box_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), 
-								   (image.image_id, model.model_id, score, label, box_tx, box_ty, box_bx, box_by))
+								   (cast(Image, image).image_id, cast(Model, model).model_id, score, label, box_tx, box_ty, box_bx, box_by))
 		if returning:
 			prediction = cursor.fetchone()
 			return prediction
@@ -1301,7 +1313,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_prediction(self, cursor: psycopg.Cursor, prediction_ids: int | UUID | list[int | UUID]) -> Prediction | list[Prediction] | None:
+	def _get_prediction(self, cursor: psycopg.Cursor[Prediction], prediction_ids: int | UUID | list[int | UUID]) -> Prediction | list[Prediction] | None:
 		'''
 		
 		'''
@@ -1318,7 +1330,7 @@ class Database:
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (prediction_ids,))
 			case _:
 				raise TypeError('prediction_ids must either an int, uuid, or list consisting of one of the two')
-		return cursor.fetchall() if cursor.row_count > 1 else cursor.fetchone()
+		return cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
 	
 	def get_prediction(self, prediction_ids: int | UUID | list[int | UUID]) -> Prediction | list[Prediction] | None:
 		'''
@@ -1331,7 +1343,7 @@ class Database:
 	# Core - Annotations
 
 	@connect
-	def _create_annotation(self, cursor: psycopg.Cursor, label_id: Label | int | UUID, image_id: Image | int | UUID,
+	def _create_annotation(self, cursor: psycopg.Cursor[Annotation], label_id: Label | int | UUID, image_id: Image | int | UUID,
 						  herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID, returning: bool) -> Annotation | None:
 		'''
 		
@@ -1368,7 +1380,7 @@ class Database:
 				for annot in annotations:
 					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.top_left[0], annot.dimensions.top_left[1], 
 						   			   annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
-					ids.append(cursor.fetchone()[0])
+					ids.append(cursor.fetchone())
 				return ids if len(ids) > 1 else ids[0]
 			case Annotation():
 				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.top_left[0], annotations.dimensions.top_left[1], 
@@ -1388,7 +1400,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_annotation(self, cursor: psycopg.Cursor, annotation_ids: int | UUID | list[int | UUID]) -> Annotation | list[Annotation] | None:
+	def _get_annotation(self, cursor: psycopg.Cursor[Annotation], annotation_ids: int | UUID | list[int | UUID]) -> Annotation | list[Annotation] | None:
 		'''
 		 
 		''' 
@@ -1418,16 +1430,16 @@ class Database:
 	# Core - reviewed_area
 
 	@connect
-	def _create_reviewed_area(self, cursor: psycopg.Cursor, image_id: Image | int | UUID, name: str, area_tx: int, area_ty: int, area_bx: int, area_by: int,
+	def _create_reviewed_area(self, cursor: psycopg.Cursor[ReviewedArea], image_id: Image | int | UUID, name: str, area_tx: int, area_ty: int, area_bx: int, area_by: int,
 						   	  user: User | int | UUID, returning: bool) -> ReviewedArea | None:
 		'''
 		
 		'''
-		cursor.fow_factory = class_row(ReviewedArea)
+		cursor.row_factory = class_row(ReviewedArea)
 		cursor.execute(sql.SQL('''INSERT INTO core.reviewed_area (image_id, name, area_tx, area_ty, area_bx, area_by, 
 								  reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
 						 		  %s, %s, %s, %s, %s, %s, %s)'''), (image_id, name, area_tx, area_ty, area_bx, area_by, 
-								  abs(area_ty - area_by), abs(area_tx - area_bx), user.user_id))
+								  abs(area_ty - area_by), abs(area_tx - area_bx), cast(User, user).user_id))
 		if returning:
 			reviewed_area = cursor.fetchone()
 			return reviewed_area if isinstance(reviewed_area, ReviewedArea) else None
@@ -1443,7 +1455,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _insert_reviewed_areas(self, cursor: psycopg.Cursor, reviewed_areas: list[ReviewedArea]) -> bool:
+	def _insert_reviewed_areas(self, cursor: psycopg.Cursor, reviewed_areas: list[ReviewedArea]) -> int | list[int]:
 		'''
 		
 		'''
@@ -1457,7 +1469,7 @@ class Database:
 					cursor.execute(query, (ra.image_id, ra.name, ra.dimensions.top_left[0], ra.dimensions.top_left[1], 
 						   			   ra.dimensions.bottom_right[0], ra.dimensions.bottom_right[1], ra.reviewed_area_length_px, 
 									   ra.reviewed_area_width_px, 0))
-					ids.append(cursor.fetchone()[0])
+					ids.append(cursor.fetchone())
 				return ids if len(ids) > 1 else ids[0]
 			case ReviewedArea():
 				cursor.execute(query, (reviewed_areas.image_id, reviewed_areas.name, reviewed_areas.dimensions.top_left[0], reviewed_areas.dimensions.top_left[1], 
@@ -1469,7 +1481,7 @@ class Database:
 			case _:
 				raise TypeError('reviewed_areas must be of type ReviewedArea or a list consisting of ReviewedAreas')
 	 
-	def insert_reviewed_areas(self, reviewed_areas: list[ReviewedArea] | ReviewedArea) -> bool:
+	def insert_reviewed_areas(self, reviewed_areas: list[ReviewedArea] | ReviewedArea) -> int | list[int]:
 		'''
 		
 		'''
@@ -1478,7 +1490,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_reviewed_area(self, cursor: psycopg.Cursor, reviewed_area_ids: int | ReviewedArea | UUID | list[int | ReviewedArea | UUID]) -> ReviewedArea | None:
+	def _get_reviewed_area(self, cursor: psycopg.Cursor[ReviewedArea], reviewed_area_ids: int | ReviewedArea | UUID | list[int] | list[ReviewedArea] | list[UUID]) -> ReviewedArea:
 		'''
 		
 		'''
@@ -1487,17 +1499,19 @@ class Database:
 		query = sql.SQL(' SELECT reviewed_area_id, image_id, name, area_tx, area_ty, area_bx, area_by, reviewed_by_user_id, created, modified, uuid FROM core.reviewed_area WHERE {id_field} = %s ')
 		match reviewed_area_ids:
 			case list() if isinstance(reviewed_area_ids[0], int):
-				cursor.executemany(query.format(id_field = sql.Identifier('reviewed_area_id')), reviewed_area_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('reviewed_area_id')), [(ra_id,) for ra_id in reviewed_area_ids])
 			case list() if isinstance(reviewed_area_ids[0], UUID):
-				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), reviewed_area_ids)
+				cursor.executemany(query.format(id_field = sql.Identifier('uuid')),  [(ra_id,) for ra_id in reviewed_area_ids])
 			case int():
 				cursor.execute(query.format(id_field = sql.Identifier('reviewed_area_id')), (reviewed_area_ids,))
 			case UUID(): 
 				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (reviewed_area_ids,))
 			case _:
 				raise TypeError('reviewed_area_ids must be an int, ReviewedArea, UUID, or a list consisting of one of the three')
-		reviewed_areas = cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
-		return reviewed_areas if isinstance(reviewed_areas, list) and all(isinstance(ra, ReviewedArea) for ra in reviewed_areas) else reviewed_areas if isinstance(reviewed_areas, ReviewedArea) else None
+		reviewed_area  = cursor.fetchone()
+		if reviewed_area is None:
+			raise Exception('reviewed area does not exist')
+		return reviewed_area
 
 	def get_reviewed_area(self, reviewed_area_ids: int | ReviewedArea | UUID | list[int | ReviewedArea | UUID]) -> ReviewedArea | None:
 		'''
@@ -1516,12 +1530,12 @@ class Database:
 		roles_objs = role_ids if isinstance(role_ids, Role) or (isinstance(role_ids, list) and isinstance(role_ids[0], Role)) else self._get_role(role_ids)
 		match user_id:
 			case User():
-				cursor.executemany(query, [(user_id.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, roles_objs.role_id))
+				cursor.executemany(query, [(user_id.user_id, cast(Role, role).role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, roles_objs.role_id))
 			case int():
-				cursor.executemany(query, [(int(user_id), role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
+				cursor.executemany(query, [(int(user_id), cast(Role, role).role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
 			case UUID():
 				user = self.get_user(user_id)
-				cursor.executemany(query, [(user.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user.user_id, roles_objs.role_id))
+				cursor.executemany(query, [(user.user_id, cast(Role, role).role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user.user_id, roles_objs.role_id))
 			case _:
 				raise TypeError('user_id must be a User object, int, or uuidm, and role_ids must be a Role object, int, UUID, str, or a list consisting entirely of ONE of the four ')
 		return True if cursor.rowcount > 0 else False
@@ -1533,7 +1547,7 @@ class Database:
 			user_id: either a User object, a database id, or a universally unique identifier 
 			role_ids: either a Role object, a database id, or a universally unique identifier or a list consisting of ONE of the three
 		'''
-		return self._relate_user_roles(user_id = user_id, role_ids = role_ids)
+		return self._add_roles_user(user_id = user_id, role_ids = role_ids)
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1568,63 +1582,63 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _remove_roles_user(self, cursor: psycopg.Cursor, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
+	def _remove_roles_user(self, cursor: psycopg.Cursor, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role] | list[int] | list[UUID] | list[str]) -> bool:
 		''' Internal helper function, do not call directly
 		
 		'''
 		query = sql.SQL(' DELETE FROM usermanagement.users_roles WHERE user_id = %s AND role_id = %s; ')
-		roles_objs = role_ids if isinstance(role_ids[0], Role) else self._get_role(role_ids)
+		roles_objs = role_ids if isinstance(cast(list, role_ids)[0], Role) else self._get_role(role_ids)
 		match user_id:
 			case User():
-				cursor.executemany(query, [(user_id.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, roles_objs.role_id))
+				cursor.executemany(query, [(user_id.user_id, cast(Role, role).role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id.user_id, cast(Role, roles_objs).role_id))
 			case int():
-				cursor.executemany(query, [(user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, roles_objs.role_id))
+				cursor.executemany(query, [(user_id, cast(Role, role).role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user_id, cast(Role, roles_objs).role_id))
 			case _:
 				user = self._get_user(user_id)
-				cursor.executemany(query, [(user.user_id, role.role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user.user_id, roles_objs.role_id))
+				cursor.executemany(query, [(user.user_id, cast(Role, role).role_id) for role in roles_objs]) if isinstance(roles_objs, list) else cursor.execute(query, (user.user_id, cast(Role, roles_objs).role_id))
 		return True if cursor.rowcount > 0 else False
 				
 	def remove_roles_user(self, user_id: User | int | UUID, role_ids: Role | int | UUID | str | list[Role | int | UUID | str]) -> bool:
 		''' Remove a user from a role 
 		
 		'''
-		self._remove_roles_user(user_id = user_id, role_ids = role_ids)
+		return self._remove_roles_user(user_id = user_id, role_ids = role_ids)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Relationship Management - usermanagement <-> usermanagement: users <-> organizations
 
-	@connect
-	def _add_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
-		''' Internal helper function, do not call directly
+	# @connect
+	# def _add_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID, orgs: list[int] | list[UUID] | Role | int | UUID) -> bool:
+	# 	''' Internal helper function, do not call directly
 		
-		'''
-		query = sql.SQL("INSERT INTO usermanagement.organizations_users (user_id, organization_id) VALUES (%s, %s)")
+	# 	'''
+	# 	query = sql.SQL("INSERT INTO usermanagement.organizations_users (user_id, organization_id) VALUES (%s, %s)")
 	   
-		match orgs:
-			case list() if all(isinstance(org, Organization) for org in orgs):
-				org_objs = orgs
-			case _:
-				org_objs = self.get_organization(orgs)
-		match user_id:
-			case User():
-				cursor.executemany(query, [(user_id.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id.user_id, org_objs.organization_id))
-			case int():
-				cursor.executemany(query, [(user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id, org_objs.organization_id))
-			case _:
-				user = self.get_user(user_id)
-				cursor.executemany(query, [(user.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user.user_id, org_objs.organization_id))
-		return True if cursor.rowcount > 0 else False
+	# 	match orgs:
+	# 		case list() if all(isinstance(org, Organization) for org in orgs):
+	# 			org_objs = orgs
+	# 		case _:
+	# 			org_objs = self.get_organization(orgs)
+	# 	match user_id:
+	# 		case User():
+	# 			cursor.executemany(query, [(user_id.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id.user_id, org_objs.organization_id))
+	# 		case int():
+	# 			cursor.executemany(query, [(user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user_id, org_objs.organization_id))
+	# 		case _:
+	# 			user = self.get_user(user_id)
+	# 			cursor.executemany(query, [(user.user_id, org.organization_id) for org in org_objs]) if isinstance(org_objs, list) else cursor.execute(query, (user.user_id, org_objs.organization_id))
+	# 	return True if cursor.rowcount > 0 else False
 	
-	def add_user_organizations(self, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
-		'''
+	# def add_user_organizations(self, user_id: User | int | UUID, orgs: list[Role | int | UUID ] | Role | int | UUID) -> bool:
+	# 	'''
 		
-		'''
-		return self._add_user_organizations(user_id = user_id, orgs = orgs)
+	# 	'''
+	# 	return self._add_user_organizations(user_id = user_id, orgs = orgs)
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_organization_users(self, cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID ) -> list[User] | User | None:
+	def _get_organization_users(self, cursor: psycopg.Cursor[User], organization_id: Organization | int | UUID ) -> list[User] | User | None:
 		''' Internal helper function, do not call directly
 		
 		''' 
@@ -1653,10 +1667,11 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_user_organizations(self, cursor: psycopg.Cursor, user_id: User | int | UUID) -> list[Organization] | Organization | None:
+	def _get_user_organizations(self, cursor: psycopg.Cursor[Organization], user_id: User | int | UUID) -> list[Organization]:
 		'''
 		
 		'''
+		cursor.row_factory = class_row(Organization)
 		query = sql.SQL('''
 			SELECT organizations.organization_id, name, created, modified, logo_url, uuid FROM usermanagement.organizations 
 			AS organizations JOIN usermanagement.organization_users as org_users on org_users.organization_id = organizations.organization_id
@@ -1670,9 +1685,11 @@ class Database:
 				user = self._get_user(user_id)
 				cursor.execute(query, (user.user_id))
 		orgs = cursor.fetchall()
-		return orgs[0] if len(orgs) == 1 and isinstance(orgs[0], Organization) else orgs if all(isinstance(org, Organization) for org in orgs) else None
+		if orgs is None:
+			raise Exception('User has no organizations')
+		return orgs
 	
-	def get_user_organizations(self, user_id: User | int | UUID) -> list[Organization] | Organization | None:
+	def get_user_organizations(self, user_id: User | int | UUID) -> list[Organization]:
 		'''
 		
 		'''
@@ -1680,54 +1697,54 @@ class Database:
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-	@connect
-	def _remove_organization_users(self, cursor: psycopg.Cursor, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
-		''' Internal helper function, do not call directly
+	# @connect
+	# def _remove_organization_users(self, cursor: psycopg.Cursor, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+	# 	''' Internal helper function, do not call directly
 		
-		'''
-		query = sql.SQL(' DELETE FROM usermanagement.organizations_users where organization_id = %s AND user_id = %s ')
-		users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
-		match organization_id:
-			case Organization():
-				cursor.executemany(query, [(organization_id.organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id.organization_id, users_objs.user_id))
-			case int():
-				cursor.executemany(query, [(organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id, users_objs.user_id))
-			case _:
-				org = self._get_organization(organization_id)
-				cursor.executemany(query, [(org.organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (org.organization_id, users_objs.user_id))
-		return True if cursor.rowcount > 0 else False 
+	# 	'''
+	# 	query = sql.SQL(' DELETE FROM usermanagement.organizations_users where organization_id = %s AND user_id = %s ')
+	# 	users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
+	# 	match organization_id:
+	# 		case Organization():
+	# 			cursor.executemany(query, [(organization_id.organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id.organization_id, users_objs.user_id))
+	# 		case int():
+	# 			cursor.executemany(query, [(organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (organization_id, users_objs.user_id))
+	# 		case _:
+	# 			org = self._get_organization(organization_id)
+	# 			cursor.executemany(query, [(org.organization_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (org.organization_id, users_objs.user_id))
+	# 	return True if cursor.rowcount > 0 else False 
 
-	def remove_organization_users(self, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
-		'''
+	# def remove_organization_users(self, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+	# 	'''
 		 
-		'''
-		self._remove_organization_users(organization_id = organization_id, user_ids = user_ids)
+	# 	'''
+	# 	self._remove_organization_users(organization_id = organization_id, user_ids = user_ids)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Relationship Management - projectmanagement <-> usermanagement: projects <-> users
 
-	@connect
-	def _add_user_project(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
-		'''
+	# @connect
+	# def _add_user_project(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
+	# 	'''
 		
-		'''
-		query = sql.SQL(''' INSERT INTO projectmanagement.projects_users (project_id, user_id) VALUES (%s, %s); ''')
-		user_objs = user_ids if isinstance(user_ids, User) or (isinstance(user_ids, list) and isinstance(user_ids[0], User)) else self._get_user(user_ids)
-		match project_id:
-			case Project():
-				cursor.executemany(query, [(project_id.project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id.project_id, user_objs.user_id))
-			case int():
-				cursor.executemany(query, [(project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id, user_objs.user_id))
-			case _:
-				project = self._get_project(project_id)
-				cursor.execute(query, [(project.project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project.project_id, user_objs.user_id))
-		return True if cursor.rowcount > 0 else None
+	# 	'''
+	# 	query = sql.SQL(''' INSERT INTO projectmanagement.projects_users (project_id, user_id) VALUES (%s, %s); ''')
+	# 	user_objs = user_ids if isinstance(user_ids, User) or (isinstance(user_ids, list) and isinstance(user_ids[0], User)) else self._get_user(user_ids)
+	# 	match project_id:
+	# 		case Project():
+	# 			cursor.executemany(query, [(project_id.project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id.project_id, user_objs.user_id))
+	# 		case int():
+	# 			cursor.executemany(query, [(project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project_id, user_objs.user_id))
+	# 		case _:
+	# 			project = self._get_project(project_id)
+	# 			cursor.execute(query, [(project.project_id, user.user_id) for user in user_ids]) if isinstance(user_objs, list) else cursor.execute(query, (project.project_id, user_objs.user_id))
+	# 	return True if cursor.rowcount > 0 else None
 	
-	def add_user_project(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
-		'''
+	# def add_user_project(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[User | int | UUID]) -> bool:
+	# 	'''
 		
-		'''
-		return self._add_user_project(project_id = project_id, user_ids = user_ids)
+	# 	'''
+	# 	return self._add_user_project(project_id = project_id, user_ids = user_ids)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1761,7 +1778,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_user_projects(self, cursor: psycopg.Cursor, user_id: User | int | UUID) -> list[Project] | None:
+	def _get_user_projects(self, cursor: psycopg.Cursor[Project], user_id: User | int | UUID) -> list[Project]:
 		'''
 		
 		'''
@@ -1779,9 +1796,11 @@ class Database:
 				user = self._get_user(user_id)
 				cursor.execute(query, (user.user_id,))
 		projects = cursor.fetchall()
+		if projects is None:
+			raise Exception('User has no projects')
 		return projects 
 
-	def get_user_projects(self, user_id: User | int | UUID) -> list[Project] | None:
+	def get_user_projects(self, user_id: User | int | UUID) -> list[Project]:
 		'''
 		
 		'''
@@ -1789,59 +1808,59 @@ class Database:
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-	@connect 
-	def _remove_project_users(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
-		'''
+	# @connect 
+	# def _remove_project_users(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+	# 	'''
 		
-		'''
-		query = sql.SQL(' DELETE FROM projectmanagement.projects_users where project_id = %s AND user_id = %s ')
-		users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
-		match project_id:
-			case Project():
-				cursor.executemany(query, [(project_id.project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id.project_id, users_objs.user_id))
-			case int():
-				cursor.executemany(query, [(project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id, users_objs.user_id))
-			case _:
-				project = self._get_project(project_id)
-				cursor.executemany(query, [(project.project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (project.project_id, users_objs.user_id))
-		return True if cursor.rowcount > 0 else False 
+	# 	'''
+	# 	query = sql.SQL(' DELETE FROM projectmanagement.projects_users where project_id = %s AND user_id = %s ')
+	# 	users_objs = user_ids if isinstance(user_ids[0], User) else self._get_user(user_ids)
+	# 	match project_id:
+	# 		case Project():
+	# 			cursor.executemany(query, [(project_id.project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id.project_id, users_objs.user_id))
+	# 		case int():
+	# 			cursor.executemany(query, [(project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else cursor.execute(query, (project_id, users_objs.user_id))
+	# 		case _:
+	# 			project = self._get_project(project_id)
+	# 			cursor.executemany(query, [(project.project_id, user.user_id) for user in users_objs]) if isinstance(users_objs, list) else  cursor.execute(query, (project.project_id, users_objs.user_id))
+	# 	return True if cursor.rowcount > 0 else False 
 
-	def remove_project_users(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
-		'''
+	# def remove_project_users(self, project_id: Project | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
+	# 	'''
 		
-		'''
-		self._remove_project_users(project_id = project_id, user_ids = user_ids)
+	# 	'''
+	# 	self._remove_project_users(project_id = project_id, user_ids = user_ids)
 	
 	 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Relationship Management - projectmanagement <-> projectmanagement: projects <-> schemas
 
-	@connect
-	def _add_schema_project(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, schema_ids: Schema | int | UUID | list[int | UUID]) -> bool:
-		'''
+	# @connect
+	# def _add_schema_project(self, cursor: psycopg.Cursor, project_id: Project | int | UUID, schema_ids: Schema | int | UUID | list[int | UUID]) -> bool:
+	# 	'''
 		
-		'''
-		query = sql.SQL(' INSERT INTO projectmanagement.projects_schemas (project_id, schema_id) VALUES (%s, %s); ')
-		schema_objs = schema_ids if isinstance(schema_ids, Schema) or (isinstance(schema_ids, list) and isinstance(schema_ids[0], Schema)) else self._get_schema()
-		match project_id:
-			case Project():
-				cursor.executemany(query, [(project_id.project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project_id.project_id, schema_objs.schema_id))
-			case int():
-				cursor.executemany(query, [(project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project_id, schema_objs.schema_id))
-			case _:
-				project = self._get_project(project_id)
-				cursor.execute(query, [(project.project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project.project_id, schema_objs.user_id))
-		return True if cursor.rowcount > 0 else None
+	# 	'''
+	# 	query = sql.SQL(' INSERT INTO projectmanagement.projects_schemas (project_id, schema_id) VALUES (%s, %s); ')
+	# 	schema_objs = schema_ids if isinstance(schema_ids, Schema) or (isinstance(schema_ids, list) and isinstance(schema_ids[0], Schema)) else self._get_schema()
+	# 	match project_id:
+	# 		case Project():
+	# 			cursor.executemany(query, [(project_id.project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project_id.project_id, schema_objs.schema_id))
+	# 		case int():
+	# 			cursor.executemany(query, [(project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project_id, schema_objs.schema_id))
+	# 		case _:
+	# 			project = self._get_project(project_id)
+	# 			cursor.execute(query, [(project.project_id, schema.schema_id) for schema in schema_ids]) if isinstance(schema_objs, list) else cursor.execute(query, (project.project_id, schema_objs.user_id))
+	# 	return True if cursor.rowcount > 0 else None
 
-	def add_schema_project(self, project_id: Project | int | UUID, schema_ids: Schema | int | UUID | list[int | UUID]) -> bool:
-		'''
+	# def add_schema_project(self, project_id: Project | int | UUID, schema_ids: Schema | int | UUID | list[int | UUID]) -> bool:
+	# 	'''
 		
-		'''
-		return self._add_schema_project(project_id = project_id, schema_ids = schema_ids)
+	# 	'''
+	# 	return self._add_schema_project(project_id = project_id, schema_ids = schema_ids)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_project_schemas(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[Schema] | None:
+	def _get_project_schemas(self, cursor: psycopg.Cursor[Schema], project_id: Project | int | UUID) -> list[Schema] | None:
 		'''
 		
 		'''
@@ -1852,7 +1871,7 @@ class Database:
 			WHERE projects_schemas.project_id =  %s; ''')
 		match project_id:
 			case Project():
-				cursor.execute(query, (project_id.project_id))
+				cursor.execute(query, (cast(Project, project_id).project_id,))
 			case int():
 				cursor.execute(query, (project_id,))
 			case _:
@@ -1871,7 +1890,7 @@ class Database:
 	# Relationship Management - projectmanagement <-> projectmanagement: projects <-> herdunits
 	
 	@connect 
-	def _get_project_herd_units(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[HerdUnit] | None:
+	def _get_project_herd_units(self, cursor: psycopg.Cursor[HerdUnit], project_id: Project | int | UUID) -> list[HerdUnit]:
 		'''
 		
 		'''
@@ -1889,9 +1908,11 @@ class Database:
 				project = self._get_project(project_id)
 				cursor.execute(query, (project.project_id,))
 		herd_units = cursor.fetchall()
+		if herd_units is None:
+			raise Exception('Project has no associated herd units')
 		return herd_units
 
-	def get_project_herd_units(self, project_id: Project | int | UUID) -> list[HerdUnit] | None:
+	def get_project_herd_units(self, project_id: Project | int | UUID) -> list[HerdUnit]:
 		'''
 		
 		'''
@@ -1901,7 +1922,7 @@ class Database:
 	# Relationship Management - projectmanagement <-> projectmanagement: surveys <-> herdunits
 
 	@connect
-	def _get_cropping_herd_units(self, cursor: psycopg.Cursor, survey_id: Survey | int | UUID) -> list[HerdUnit] | None:
+	def _get_cropping_herd_units(self, cursor: psycopg.Cursor[HerdUnit], survey_id: Survey | int | UUID) -> list[HerdUnit]:
 		'''
 		
 		'''
@@ -1913,9 +1934,11 @@ class Database:
 			WHERE surveys_herd_units.survey_id = %s; ''')
 		cursor.execute(query, (survey.survey_id,))
 		herd_units = cursor.fetchall()
+		if herd_units is None:
+			raise Exception('No herd units found')
 		return herd_units
 
-	def get_cropping_herd_units(self, survey_id: Survey | int | UUID) -> list[HerdUnit] | None:
+	def get_cropping_herd_units(self, survey_id: Survey | int | UUID) -> list[HerdUnit]:
 		'''
 		
 		'''
@@ -1925,7 +1948,7 @@ class Database:
 	# Relationship Management - projectmanagement <-> projectmanagement: projects <-> surveys
 
 	@connect 
-	def _get_project_surveys(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[Survey] | None:
+	def _get_project_surveys(self, cursor: psycopg.Cursor[Survey], project_id: Project | int | UUID) -> list[Survey]:
 		'''
 		
 		'''
@@ -1937,9 +1960,11 @@ class Database:
 			WHERE projects_surveys.project_id = %s; ''')
 		cursor.execute(query, (project.project_id,))
 		surveys = cursor.fetchall()
+		if surveys is None:
+			raise Exception('Could not find surveys for project')
 		return surveys
 				
-	def get_projects_surveys(self, project_id: Project | int | UUID) -> list[Survey] | None:
+	def get_projects_surveys(self, project_id: Project | int | UUID) -> list[Survey]:
 		'''
 		
 		'''
@@ -1949,7 +1974,7 @@ class Database:
 	# Relationship Management - projectmanagement <-> projectmanagement: projects <-> models
 	
 	@connect
-	def _get_project_models(self, cursor: psycopg.Cursor, project_id: Project | int | UUID) -> list[Model] | None:
+	def _get_project_models(self, cursor: psycopg.Cursor[Model], project_id: Project | int | UUID) -> list[Model]:
 		'''
 		
 		'''
@@ -1966,9 +1991,11 @@ class Database:
 				project = self._get_project(project_id)
 				cursor.execute(query, (project.project_id,))
 		models = cursor.fetchall()
+		if models is None:
+			raise Exception('Project has no models')
 		return models
 	
-	def get_project_models(self, project_id: Project | int | UUID) -> list[Model] | None:
+	def get_project_models(self, project_id: Project | int | UUID) -> list[Model]:
 		'''
 		
 		'''
@@ -1978,7 +2005,7 @@ class Database:
 	# Relationship Management - projectmanagement <-> projectmanagement: schemas, herdunits, and surveys 
 
 	@connect
-	def _get_cropping_models(self, cursor: psycopg.Cursor, survey_id: Schema | int | UUID, herd_unit_id: HerdUnit | int | UUID, schema_id: Schema | int | UUID) -> list[Model] | None:
+	def _get_cropping_models(self, cursor: psycopg.Cursor[Model], survey_id: Schema | int | UUID, herd_unit_id: HerdUnit | int | UUID, schema_id: Schema | int | UUID) -> list[Model]:
 		'''
 		
 		'''
@@ -1993,9 +2020,11 @@ class Database:
 				  			WHERE surveys_models.survey_id = %s AND herd_units_models.herd_unit_id = %s AND models.schema_id = %s; ''')
 		cursor.execute(query, (survey.survey_id, herd_unit.herd_unit_id, schema.schema_id))
 		models = cursor.fetchall()
+		if models is None:
+			raise Exception('Could not find models for selection')
 		return models
 
-	def get_cropping_models(self, survey_id: Schema | int | UUID, herd_unit_id: HerdUnit | int | UUID, schema_id: Schema | int | UUID) -> list[Model] | None:
+	def get_cropping_models(self, survey_id: Schema | int | UUID, herd_unit_id: HerdUnit | int | UUID, schema_id: Schema | int | UUID) -> list[Model]:
 		'''
 		
 		'''
@@ -2005,7 +2034,7 @@ class Database:
 	# Relationship Management - projectmanagement <-> projectmanagement: schemas <-> labels
 
 	@connect
-	def _get_schema_labels(self, cursor: psycopg.Cursor, schema_id: Schema | int | UUID) -> list[Label] | None:
+	def _get_schema_labels(self, cursor: psycopg.Cursor[Label], schema_id: Schema | int | UUID) -> list[Label]:
 		'''
 		
 		'''
@@ -2013,16 +2042,18 @@ class Database:
 		query = sql.SQL(' SELECT * FROM projectmanagement.labels WHERE schema_id = %s; ')
 		match schema_id:
 			case Schema():
-				cursor.execute(query (schema_id.schema_id,))
+				cursor.execute(query, (schema_id.schema_id,))
 			case int():
 				cursor.execute(query, (schema_id,))
 			case _:
 				schema = self._get_schema(schema_id)
 				cursor.execute(query, (schema.schema_id,))
 		labels = cursor.fetchall() 
+		if labels is None:
+			raise Exception('Schema has no associated labels')
 		return labels 
 
-	def get_schema_labels(self, schema_id: Project | int | UUID) -> list[Label] | None:
+	def get_schema_labels(self, schema_id: Project | int | UUID) -> list[Label]:
 		'''
 		
 		'''
@@ -2032,7 +2063,7 @@ class Database:
 	# Relationship Management - core <-> core: reviewed_area <-> annotations
 
 	@connect
-	def _add_reviewed_area_annotations(self, cursor: psycopg.Cursor, reviewed_area_id: ReviewedArea | int | UUID, annotation_ids: Annotation | int | UUID | list[Annotation | int | UUID]) -> bool:
+	def _add_reviewed_area_annotations(self, cursor: psycopg.Cursor, reviewed_area_id: ReviewedArea | int | UUID, annotation_ids: Annotation | int | UUID | list[Annotation] | list[int] | list[UUID]) -> bool:
 		'''
 		
 		'''
@@ -2049,9 +2080,9 @@ class Database:
 				cursor.execute(query, (annotations.annotation_id, reviewed_area.reviewed_area_id))
 			case _:
 				raise TypeError('reveiwed_area_id or annotation_ids are of an unexpected type')
-		return True 
+		return True if cursor.rowcount > 0 else False
 	 
-	def add_reviewed_area_annotations(self, reviewed_area_id: ReviewedArea | int | UUID, annotation_ids: Annotation | int | UUID | list[Annotation | int | UUID]) -> bool:
+	def add_reviewed_area_annotations(self, reviewed_area_id: ReviewedArea | int | UUID, annotation_ids: Annotation | int | UUID | list[Annotation] | list[int] | list[UUID]) -> bool:
 		'''
 		 
 		'''
@@ -2086,8 +2117,8 @@ class Database:
 	# Functionality - Get Batch of images
 
 	@connect
-	def _get_batch(self, cursor: psycopg.Cursor, survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
-				   batch_size: int, label: int, score: float, model_id: Model | int | UUID, user_id: User | int | UUID) -> list[Image] | None:
+	def _get_batch(self, cursor: psycopg.Cursor[dict], survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
+				   batch_size: int, label: int, score: float, model_id: Model | int | UUID, user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 		
 		'''
@@ -2096,18 +2127,20 @@ class Database:
 		survey = self.get_survey(survey_id) if not isinstance(survey_id, Survey) else survey_id
 		user = self.get_user(user_id) if not isinstance(user_id, User) else user_id
 		model = self.get_model(model_id) if not isinstance(model_id, Model) else model_id
+		if not herd_unit or not survey or not user or not model:
+			raise Exception('Could not fetch batch')
 		query = sql.SQL('''
             WITH SelectedImageIds AS (
                 SELECT DISTINCT I.image_id, I.herd_unit_id, I.survey_id
                 FROM core.images I
                 INNER JOIN core.predictions P ON I.image_id = P.image_id
                 WHERE I.herd_unit_id = %s
-				  	AND I.survey_id = %s
-				  	AND I.opened_by_user_id = 0
-				  	AND P.model_id = %s
-                  	AND P.reviewed_by_user_id = 0  
-				  	AND P.label = %s
-                    AND P.score > %s
+					AND I.survey_id = %s
+					AND I.opened_by_user_id = 0
+					AND P.model_id = %s
+					AND P.reviewed_by_user_id = 0  
+					AND P.label = %s
+					AND P.score > %s
                 LIMIT %s
             )
             SELECT json_agg(row_to_json(img_preds))
@@ -2146,15 +2179,17 @@ class Database:
         ''')
 		cursor.execute(query, (herd_unit.herd_unit_id, survey.survey_id, model.model_id, label, score, batch_size, label, score, model.model_id))
 		results = cursor.fetchone()
+		if results is None:
+			raise Exception('Failed to fetch batch')
 		ids = []
-		for row in results['json_agg']:
+		for row in cast(dict, results)['json_agg']: 
 			ids.append((user.user_id, row['image_id']))
 		cursor.executemany(sql.SQL('UPDATE core.images SET opened_by_user_id = %s WHERE image_id = %s'), ids)
-		return results['json_agg']
+		return cast(dict, results)['json_agg']
 
 	def get_batch(self,survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
 				   batch_size: int, label: int, score: float, model_id: Model | int | UUID, 
-				   user_id: User | int | UUID) -> dict[str] | None:
+				   user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 
 		'''
@@ -2199,7 +2234,7 @@ class Database:
 			case list() if isinstance(pred_ids[0], int):
 				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, pred_id) for pred_id in pred_ids])
 			case list() if isinstance(pred_ids[0], Prediction):
-				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, pred.pred_id) for pred in pred_ids])
+				cursor.executemany(query.format(id_field = sql.Identifier('pred_id')), [(user_id, cast(Prediction, pred).pred_id) for pred in pred_ids])
 			case list() if isinstance(pred_ids[0], UUID):
 				cursor.executemany(query.format(id_field = sql.Identifier('uuid')), [(user_id, uuid) for uuid in pred_ids])
 			case _:
@@ -2241,7 +2276,7 @@ class Database:
 	# Functionality  - Get Images by survey
 
 	@connect 
-	def _get_survey_images(self, cursor: psycopg.Cursor, survey_id: Survey | int | UUID) -> list[Image] | Image | None:
+	def _get_survey_images(self, cursor: psycopg.Cursor[Image], survey_id: Survey | int | UUID) -> list[Image] | Image:
 		'''
 		
 		'''
@@ -2257,10 +2292,92 @@ class Database:
 				cursor.execute(query, (survey.survey_id,))
 			case _:
 				raise TypeError('survey_id must be of type Survey, int, or UUID')
-		return cursor.fetchall() if cursor.rowcount > 1 else cursor.fetchone()
+		images = cursor.fetchall()
+		if images is None:
+			raise Exception('Survey has no Images')
+		return images
 
-	def get_survey_images(self, survey_id: Survey | int | UUID) -> list[Image] | Image | None:
+	def get_survey_images(self, survey_id: Survey | int | UUID) -> list[Image]:
 		'''
 		
 		'''
 		return self._get_survey_images(survey_id = survey_id)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Functionality - Get crops and annotations
+
+	@connect
+	def _get_reviewed_area_batch(self, cursor: psycopg.Cursor[dict], user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
+				   batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
+		''' Fetch a batch of reviewed areas and their associated annotations that have yet to be reviewed.
+
+		'''
+		cursor.row_factory = dict_row
+		herd_unit = self.get_herd_unit(herd_unit_id) if not isinstance(herd_unit_id, HerdUnit) else herd_unit_id
+		survey = self.get_survey(survey_id) if not isinstance(survey_id, Survey) else survey_id
+		user = self.get_user(user_id) if not isinstance(user_id, User) else user_id
+		if not herd_unit or not survey or not user:
+			raise Exception('Could not fetch batch')
+
+		query = sql.SQL('''
+			WITH SelctedReviewedAreaIds AS (
+				SELECT DISTINCT RA.reviewed_area_id, RA.image_id
+				FROM core.reviewed_areas RA
+				INNER JOIN core.images I ON RA.image_id = I.image_id
+				WHERE I.herd_unit_id = %s
+					AND I.survey_id = %s
+					AND I.opened_by_user_id = 0
+				LIMIT %s
+			)
+			SELECT json_agg(row_to_json(ra_annotations))
+			FROM (
+				SELECT
+					RA.reviewed_area_id,
+					RA.image_id,
+					RA.name,
+					RA.area_tx,
+					RA.area_ty,
+					RA.area_bx,
+					RA.area_by,
+					RA.reviewed_area_lenth_px,
+					RA.reviewed_area_width_px,
+					RA.created,
+					RA.modified,
+					RA.uuid,
+					json_agg(
+						json_build_object(
+							'annotation_id', A.annotation_id,
+							'label_id', A.label_id,
+							'image_id', A.image_id,
+							'herd_unit_id', A.herd_unit_id,
+							'dimensions', json_build_object('top_left', json_build_array(A.box_tx, A.box_ty), 'bottom_right', json_build_array(A.box_bx, A.box_by)),
+							'created_by_user_id', A.created_by_user_id,
+							'created', A.created,
+							'modified', A.modifed,
+							'uuid', A.uuid
+							)
+					) AS annotations
+				FROM core.reviewed_areas
+				INNER JOIN core.annotations_reviewed_area RAA ON RA.reviwed_area_id = RAA.reveiwed_area_id 
+				INNER JOIN core.annotations ON RAA.annotation_id = A.annotation_id
+				WHERE RA.reviewed_area_id IN (SELECT reviewed_area_id FROM SelectedReviewedAreaIds)
+					AND A.created_by_user_id != %s
+				GROUP RA.image_id, RA.name
+			) AS ra_annotations;
+		''')
+		cursor.execute(query, (herd_unit.herd_unit_id, survey.survey_id, batch_size, user.user_id))
+		results = cursor.fetchone()
+		if results is None:
+			raise Exception('Failed to fetch batch')
+		ids = []
+		for row in cast(dict, results)['json_agg']:
+			ids.append((user.user_id, row['image_id']))
+		cursor.executemany(sql.SQL('UPDATE core.images SET opened_by_user_id = %s WHERE image_id = %s'), ids)
+		return cast(dict, results)['json_agg']
+	
+	def get_reviewed_area_batch(self, user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
+				   batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
+		'''
+
+		'''
+		return self._get_reviewed_area_batch(user_id=user_id, herd_unit_id=herd_unit_id, batch_size=batch_size, label_id=label_id, survey_id=survey_id)

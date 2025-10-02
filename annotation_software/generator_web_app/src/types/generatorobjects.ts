@@ -8,34 +8,39 @@ import { mean } from 'lodash';
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
+export interface coord {
+    x: number, 
+    y: number
+}
+
 export interface Box_intf {
-	top_left: number[];
-	bottom_right: number[];
+	top_left: coord;
+	bottom_right: coord;
 }
 
 export class Box implements Box_intf {
-    top_left: number[];
-    bottom_right: number[];
+    top_left: coord;
+    bottom_right: coord;
     constructor (box: Box_intf) {
         this.top_left = box.top_left;
         this.bottom_right = box.bottom_right;
     }
     get_center(): number[] {
-        let x = mean([this.top_left[0], this.bottom_right[0]]);
-        let y = mean([this.top_left[1], this.bottom_right[1]]);
+        let x = mean([this.top_left.x, this.bottom_right.x]);
+        let y = mean([this.top_left.y, this.bottom_right.y]);
         return [x, y];
     }
     get_points(): number[] {
-        return [this.top_left[0], this.top_left[1], this.bottom_right[0], this.bottom_right[1]];
+        return [this.top_left.x, this.top_left.y, this.bottom_right.x, this.bottom_right.y];
     }
 	get_width(): number {
-		return Math.abs(this.top_left[0] - this.bottom_right[0]);
+		return Math.abs(this.top_left.x - this.bottom_right.x);
 	}
 	get_height(): number {
-		return Math.abs(this.top_left[1] - this.bottom_right[1]);
+		return Math.abs(this.top_left.y - this.bottom_right.y);
 	}
 	serialize() {
-		return [this.top_left[0], this.top_left[1], this.bottom_right[0], this.bottom_right[1]];
+		return [this.top_left.x, this.top_left.y, this.bottom_right.x, this.bottom_right.y];
 		
 	}
 
@@ -190,27 +195,42 @@ export class Annotation implements Annotation_intf {
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export interface Crop_intf {
-    id: number,
+export interface ReviewedArea_intf {
+    reviewed_area_id: number,
     image_id: number,
     name: string,
     dimensions: Box,
+    created: Date,
+    modified: Date,
+    reviewed_area_length_px: number,
+    reviewed_area_width_px: number,
+    uuid: string,
     url: string,
 }
 
-export class Crop implements Crop_intf {
-    id: number;
+export class ReviewedArea implements ReviewedArea_intf {
+    reviewed_area_id: number;
     image_id: number;
     name: string;
     dimensions: Box;
+    created: Date;
+    modified: Date;
+    reviewed_area_length_px: number;
+    reviewed_area_width_px: number;
+    uuid: string;
     url: string;
 
-    constructor(crop: Crop_intf) {
+    constructor(crop: ReviewedArea_intf) {
         
-        this.id = crop.id;
+        this.reviewed_area_id = crop.reviewed_area_id;
         this.image_id = crop.image_id;
         this.name = crop.name;
-        this.dimensions = crop.dimensions;
+        this.dimensions = new Box(crop.dimensions);
+        this.created = new Date(crop.created);
+        this.modified = new Date(crop.modified);
+        this.reviewed_area_length_px = crop.reviewed_area_length_px;
+        this.reviewed_area_width_px = crop.reviewed_area_width_px;
+        this.uuid = crop.uuid;
         this.url = crop.url;
     }
 }

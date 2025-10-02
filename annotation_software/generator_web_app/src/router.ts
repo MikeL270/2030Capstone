@@ -40,6 +40,15 @@ const router = createRouter({
         requiresNoLayout: false,
       },
     },
+    {
+      path: '/crop-verifier/:projects?/:uuid?',
+      name: 'Crop-Verifier',
+      component: () => import('@/components/pages/crop_verification/Crop-Verify.vue'),
+      meta: {
+        requiresAuth: true,
+        requiresNoLayout: false,
+      }
+    },
     { 
       path: '/settings', 
       name: 'settings', 

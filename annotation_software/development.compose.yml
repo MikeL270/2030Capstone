@@ -20,18 +20,20 @@ services:
       DB_NAME: testing
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      FLASK_APP: /app/app.py
+      FLASK_DEBUG: 1 
     volumes:
       - ${DATA_PATH}:/data
-      - ./generator_api:/app
+      - ./annotation_api:/app
       - ./requirements.txt:/app/requirements.txt
       - ./crop_generator:/venv/crop_generator
     ports:
       - "5000:5000"
     command: >
-      /bin/bash -c "source /venv/api_env/bin/activate && python /app/cg_api.py"
+      /bin/bash -c "source /venv/api_env/bin/activate && uv run flask run -h 0.0.0.0 -p 5000"
     networks: 
       - dev_pronghorn_app_network
-  dev-valkey:
+  valkey:
     container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
     healthcheck:

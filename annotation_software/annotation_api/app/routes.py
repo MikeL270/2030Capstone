@@ -1,116 +1,29 @@
-# Attempt at RESTful CRUD API for crop generator and census server
-# Based on https://https://www.digitalocean.com/community/tutorials/create-a-rest-api-using-flask-on-ubuntu 
+# Attempt at RESTful CRUD app for crop generator and census server
+# Based on https://https://www.digitalocean.com/community/tutorials/create-a-rest-app-using-flask-on-ubuntu 
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: September 22, 2025
+# Updated: September 29, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-from flask import Flask, jsonify, request, Response, abort, session
-from flask_session import Session
-import redis
-from flask_cors import CORS
-from flask_caching import Cache
-from flask_login import LoginManager, login_user, logout_user, current_user, login_required
-from dotenv import load_dotenv 
-import os
-import io
-import cv2
-from cropgenerator import auto_crop, create_subcrop
-from cropgenerator.generatorobjects import CropgenJSONPRovider, Prediction
-import database as db
-import json
-import boto3
-from botocore.client import Config
-from boto3.s3.transfer import TransferConfig
-from uuid import UUID
 from datetime import datetime
+import io
+from uuid import UUID
+import cv2
+from flask import Response, abort, jsonify, request, session
+from cropgenerator import auto_crop, create_subcrop
+from cropgenerator.generatorobjects import Prediction, User, ReviewedArea, Annotation
+from app import app, login_manager, base, cache, pathfinder, BUCKET_NAME
+from typing import cast
+from flask_login import (
+	current_user,
+	login_required,
+	login_user,
+	logout_user,
+) 
 
-#---------------------------------------------------------------------------------------------------------------------------#
-# Configuration
 
-load_dotenv()
-
-db_config = {
-	'dbname': os.environ.get('DB_NAME'),
-	'user': os.environ.get('DB_USER'),              
-	'password': os.environ.get('DB_PASS'),    
-	'host': os.environ.get('DB_HOST'),           
-	'port': '5433'              
-}
-
-#---------------------------------------------------------------------------------------------------------------------------#
-# Flask Instantiation
-
-app = Flask(__name__)
-app.json_provider_class = CropgenJSONPRovider
-app.secret_key = os.environ.get('SECRET_KEY')
-app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
-app.config['SESSION_COOKIE_SECURE'] = True 
-app.config['SESSION_TYPE'] = 'redis'
-app.config['SESSION_PERMANENT'] = True
-app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_REDIS'] = redis.from_url(os.environ.get('SESSION_REDIS'))
-url = os.environ.get('APPLICATION_URL')
-
-server_session = Session(app)
-
-CORS(app, resources={
-	r'/api/*': {
-		'origins': [
-			url
-		],
-		'supports_credentials': True     
-	}
-})
-
-# Cache
-cache = Cache()
-
-cache_config={
-	'CACHE_TYPE': 'RedisCache',
-	'CACHE_DEFAULT_TIMEOUT': 300,
-	'CACHE_REDIS_HOST': os.environ.get('VALKEY_HOST'),
-	'CACHE_REDIS_PORT': 6379,
-	'CACHE_REDIS_PASSWORD': os.environ.get('VALKEY_PASS')
-}
- 
-cache.init_app(app, cache_config)
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-
-#Initialize image backend and database
-base = db.Database(db_config)
-
-#Initialize s3 object storage
-
-BUCKET_NAME = 'pronghorn-count' # Change to production bucket name
-
-from botocore.config import Config
-from boto3.s3.transfer import TransferConfig
-
-s3_config = Config(
-    signature_version='s3',  # s3v4 is the standard, s3 is an older version
-    s3={
-            'payload_signing_enabled': True,
-            'addressing_style': 'path',
-            'request_checksum_calculation': 'when_required',
-            'response_checksum_validation': 'when_required' 
-        }
-)
-
-pathfinder = boto3.client(
-    's3',
-    config=s3_config,
-    endpoint_url=os.environ.get('AWS_ENDPOINT_URL_S3')
-)
-
-transfer_config = TransferConfig(
-    use_threads=True,
-    multipart_threshold=16 * 1024 * 1024
-)  
 #---------------------------------------------------------------------------------------------------------------------------#
 # User session management
 
@@ -148,9 +61,11 @@ def check_auth():
 @app.route('/api/v1/users/get_current_user', methods = ['GET'])
 @login_required
 def get_user():
-	user = base.get_user(UUID(current_user.id))
-	return user.serialize(), 201
-
+	try:
+		user = base.get_user(UUID(current_user.id))
+	except Exception as e:
+		abort(500, e)
+	return cast(User, user).serialize(), 201
 @app.route('/api/v1/deauthenticate', methods=["POST"])
 @login_required
 def logout():
@@ -159,7 +74,7 @@ def logout():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # # Organization CRUD
-# @app.route('/api/v1/create/organization')
+# @app.route('/app/v1/create/organization')
 # @login_required
 # def create_organization():
 # 	pass
@@ -167,22 +82,22 @@ def logout():
 @app.route('/api/v1/request/organizations/all')
 @login_required
 def get_user_organizations():
-	organizations = base.get_user_organizations(current_user)
+	organizations = base.get_user_organizations(cast(User, current_user))
 	serialized_organizations = [organization.serialize() for organization in organizations] if organizations else None
 	return jsonify(serialized_organizations), 201 
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Role CRUD
-
+ 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Project CRUD
 
 @app.route('/api/v1/projects/create', methods = ['POST'])
 @login_required
 def create_project():
-	name = request.json.get('project_name') 
-	project = base.create_project(name = name, users = current_user)
-	return project.serialize(), 201
+	data = request.get_json()
+	project = base.create_project(name = data['name'],)
+	return project.serialize(), 201 
 
 @app.route('/api/v1/projects/request/<string:project_id>', methods=['GET'])
 @login_required
@@ -190,20 +105,16 @@ def get_project(project_id: str):
 	project = base.get_project(project_id = UUID(project_id))
 	if not project:
 		abort(404, 'project not found')
-	if base.check_user_in_project(current_user, project):
-		return project.serialize()
-	else:
-		abort(401, 'cannot access project!')
+	return project.serialize()
 	
-
 @app.route('/api/v1/request/projects/all')
 @login_required
 def get_all_projects():
-	projects = base.get_user_projects(current_user)
+	projects = base.get_user_projects(cast(User, current_user))
 	serialized_projects = [project.serialize() for project in projects] 
 	return jsonify(serialized_projects), 201
 
-# @app.route('/api/v1/projects/update/<string:project_id>', methods = ['PUT'])
+# @app.route('/app/v1/projects/update/<string:project_id>', methods = ['PUT'])
 # @login_required
 # def update_project(project_id: str):
 # 	pass
@@ -221,7 +132,7 @@ def get_project_schemas(project_id: str):
 #---------------------------------------------------------------------------------------------------------------------------#
 # Label CRUD
 
-# @app.route('/api/v1/create/label')
+# @app.route('/app/v1/create/label')
 # @login_required
 # def create_label():
 # 	pass
@@ -266,17 +177,18 @@ def create_model():
 	data = request.get_json()
 	try:
 		model = base.create_model(data['name'])
-		return model
 	except Exception as e:
 		abort(500, e)
-
+	return model.serialize(), 201
+	
 @app.route('/api/v1/request/projects/<string:project_id>/models/all', methods=['GET'])
 @login_required
 def get_project_models(project_id: str):
-	models = base.get_project_models(UUID(project_id))
+	try:
+		models = base.get_project_models(UUID(project_id))
+	except Exception as e:
+		abort(404, e)
 	serialized_models = [model.serialize() for model in models]
-	if serialized_models is None:
-		abort(404, 'No Models Found')
 	return jsonify(serialized_models), 201
 
 @app.route('/api/v1/request/surveys/<string:survey_id>/herd_units/<string:herd_unit_id>/schemas/<string:schema_id>/models/all', methods=['GET'])
@@ -314,7 +226,7 @@ def upload_image_to_db():
 		abort(500, 'Could not create Image')
 	return image.serialize(), 201
 
-# @app.route('/api/v1/get/image', methods=['GET'])
+# @app.route('/app/v1/get/image', methods=['GET'])
 # @login_required
 # def get_image():
 # 	'''
@@ -340,6 +252,8 @@ def create_prediction():
 		data['box_by'],
 		data['returning']
 	)
+	if prediction is None:
+		abort(500, 'could not create prediction')
 	return prediction.serialize(), 201
 
 
@@ -379,15 +293,15 @@ def get_presigned_url():
 def create_multipart_upload():
 	'''
 	Initiates a new multipart upload. The client calls this for each file 
-	to be uploaded. the API responds with a unique UploadId, which is required 
+	to be uploaded. the app responds with a unique UploadId, which is required 
 	for all subsequent chunk uploads for that file.
 	'''
    
-	image_key = request.json.get('image_key')
+	data = request.get_json()
 	try: 
 		response = pathfinder.create_multipart_upload(
 			Bucket = BUCKET_NAME,
-			Key = image_key,
+			Key = data['image_key'],
 			ContentType = 'image/jpeg',
 		)
 		upload_id = response['UploadId']
@@ -457,7 +371,7 @@ def get_batch():
 		int(data['label']),
 		float(data['score']),
 		UUID(data['model_id']),
-		current_user)
+		cast(User, current_user))
 	if img_batch is None:
 		abort(404, 'Cannot get batch')
 	
@@ -491,7 +405,7 @@ def create_prediction_crops():
 	if 'pred_crop_data' not in session:
 		session['pred_crop_data'] = []
 	
-	session['pred_crop_data'] + serialized_pred_crops
+	session['pred_crop_data'] + serialized_pred_crops #type: ignore
 	return json_pred_crop_data, 201
 
 @app.route('/api/v1/request/image/<string:image_id>/pred_crop/<string:pred_crop_id>', methods=['GET'])
@@ -538,38 +452,50 @@ def create_reviewed_area_and_annotations():
 	label_ids = { lbl['label'] : lbl['label_id'] for lbl in data['labels'] }
 	
 	# (re)Construct prediction objects from data in request
-	predictions = [Prediction(pred_id = pred['pred_id'], 
-						   	  image_id = pred['image_id'],
-							  model_id = pred['model_id'],
-							  label = pred['label'],
-							  score = pred['score'],
-							  box_tx = pred['dimensions']['top_left'][0],
-							  box_ty = pred['dimensions']['top_left'][1],
-							  box_bx = pred['dimensions']['bottom_right'][0],
-							  box_by = pred['dimensions']['bottom_right'][1],
-							  created = datetime.fromisoformat(pred['created'].replace("Z", "+00:00")),
-							  modified = datetime.fromisoformat(pred['modified'].replace("Z", "+00:00")),
-							  uuid = pred['uuid']) for pred in data['predictions']]
+	predictions = []
   
+	for pred in data['predictions']:
+		prediction = Prediction(
+			pred_id = pred['pred_id'], 
+			image_id = pred['image_id'],
+			model_id = pred['model_id'],
+			label = pred['label'],
+			score = pred['score'],
+			box_tx = pred['dimensions']['top_left'][0],
+			box_ty = pred['dimensions']['top_left'][1],
+			box_bx = pred['dimensions']['bottom_right'][0],
+			box_by = pred['dimensions']['bottom_right'][1],
+			created = datetime.fromisoformat(pred['created'].replace("Z", "+00:00")),
+			uuid = pred['uuid'],
+			reviewed_by_user_id = 0
+		)
+		predictions.append(prediction)
+
 	# Create reviewed area(s) from auto_crop() funchtion
 	reviewed_areas = auto_crop(image=image, predictions=predictions, labels_ids=label_ids)
 
-	#Create reviewed area and predictions objects  
+	#Create reviewed area and predictions objects
+	res_1 = False # init result as false to calm pyright down
 	for area_set in reviewed_areas: 
-		reviewed_area = area_set[0]
-		annotations = area_set[1] 
+		reviewed_area: ReviewedArea = cast(ReviewedArea, area_set[0])
+		annotations: Annotation = cast(Annotation, area_set[1] )
 		
-		reviewed_area_ids = base.insert_reviewed_areas(reviewed_area)
-		annotation_ids = base.insert_annotations(annotations, current_user)
-		res_1 = base.add_reviewed_area_annotations(reviewed_area_ids, annotation_ids)
+		reviewed_area_id = base.insert_reviewed_areas(reviewed_area)
+		annotation_ids = base.insert_annotations(annotations, cast(User, current_user))
+		res_1 = base.add_reviewed_area_annotations(cast(int, reviewed_area_id), annotation_ids)
 		
 		ra_key = f'reviewed_areas/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/reviewed_area/{reviewed_area.name}'
 		
-		#pathfinder.upload_fileobj(io.BytesIO(reviewed_area.serve('.JPG')), BUCKET_NAME, ra_key)
+		try:
+			img_bytes = reviewed_area.serve('.JPG')
+		except Exception as e:
+			abort(500, e)
+		
+
 		pathfinder.put_object(
 			Bucket=BUCKET_NAME,
 			Key=ra_key,
-			Body=io.BytesIO(reviewed_area.serve('.JPG')),
+			Body=io.BytesIO(img_bytes),  #type: ignore
 			ContentType='image/jpeg'
 		)
 
@@ -589,6 +515,28 @@ def close_crop_session():
 	except Exception as e:
 		abort(500, e)
 	return '', 201 
+
+#---------------------------------------------------------------------------------------------------------------------------#
+# Review area
+
+@app.route('/api/v1/create/reviewed_area_batch', methods=['POST'])
+@login_required
+def create_ra_batch():
+	'''
+
+	'''
+	data = request.get_json()
+	ra_batch = base.get_reviewed_area_batch(
+		cast(User, current_user),
+		data['herd_unit_id'],
+		data['batch_size'],
+		data['label_id'],
+		data['survey_id'],
+	)
+	if ra_batch is None:
+		abort(404, 'Cannot get batch')
+	
+	return ra_batch, 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Inference
@@ -619,9 +567,6 @@ def internal_service_error(error):
 	return f'500: {error.description}', 500
 
 #---------------------------------------------------------------------------------------------------------------------------#
+ 
 
-
-if __name__ == "__main__":
-	app.run(debug=True, host='0.0.0.0')
-
-	
+[print(route) for route in app.url_map.iter_rules()]   

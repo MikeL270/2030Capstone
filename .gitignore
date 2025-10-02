@@ -172,3 +172,5 @@ scratch.txt
 .stfolder
 *.env
 node_modules/
+.python-version
+pyright.config.json

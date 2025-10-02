@@ -16,8 +16,8 @@ services:
       DB_PASS: ${DB_PASS} 
       DB_NAME: ${DB_NAME}
       SESSION_REDIS: ${SESSION_REDIS}
-    # ports:
-    #   - "8000:8000"
+    ports:
+      - "8000:8000"
     networks: 
       - pronghorn_app_network 
   valkey:
@@ -34,9 +34,9 @@ services:
       context: .
       dockerfile: production.prongwebapp.containerfile
     ports:
-      - "80:80"
-      - "443:443"
-      # - "6900:6900"
+      # - "80:80"
+      # - "443:443"
+      - "6900:6900"
     networks: 
       - pronghorn_app_network
     volumes:

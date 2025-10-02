@@ -1,16 +1,17 @@
 // Methods for interacting with the version 1 of the crop generator API 
 // Author: Michael B. Lance
 // Created: April 20, 2025
-// Updated: September 11, 2025
+// Updated: October 2, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
-import { Box, Image, Prediction, Crop, PredictionCrop, Project, Organization, User, Schema,
-         Label, HerdUnit, Survey, Model } from '@/types/generatorobjects.ts';
-import type { Prediction_intf, User_intf, Image_intf, PredictionCrop_intf } from '@/types/generatorobjects.ts';
+import { Box, Image, Prediction, ReviewedArea, PredictionCrop, Project, Organization, User, Schema,
+         Label, HerdUnit, Survey, Model, Annotation } from '@/types/generatorobjects.ts';
+import type { Prediction_intf, User_intf, Image_intf, PredictionCrop_intf, ReviewedArea_intf, Annotation_intf } from '@/types/generatorobjects.ts';
+import { reverse } from 'lodash';
 import { useToast } from 'vue-toastification'
 
-const api_url: URL = new URL('https://pronghorn-count.arcc.uwyo.edu/api/v1'); //"production"
-//const api_url: URL = new URL('http://testing.lancecomputer.com:5000/api/v1');
+//const api_url: URL = new URL('https://pronghorn-count.arcc.uwyo.edu/api/v1'); //"production"
+const api_url: URL = new URL('http://testing.lancecomputer.com:5000/api/v1');
 //const api_url: URL = new URL('http://testing.lancecomputer.com:8000/api/v1');
 const uh_oh: string = 'status: ';
 
@@ -453,7 +454,7 @@ export async function getBatch(survey_id: string | undefined, herd_unit_id: stri
 			for (const pred of img['predictions']) {
 				preds.push(new Prediction(pred as Prediction_intf))
 			}
-			predictions.push(preds)
+			predictions.push(preds);
 		}
 		return [images as Image[], predictions as Prediction[][]];
 	} catch (error: any) {
@@ -572,224 +573,42 @@ export async function closeCropSession(): Promise<boolean> {
 	}
 
 }
+
 //---------------------------------------------------------------------------------------------------------------------------//
+ // Area reviewing
 
-// GET requests:
+ export async function getReviewedAreaBatch(herd_unit_id: string, label_id: string, survey_id: string, batch_size: number): Promise<[ReviewedArea[], Annotation[][]] | undefined> {
+	try {
+		const response = await fetch(`${api_url}/create/reviewed_area_batch`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				'herd_unit_id': herd_unit_id,
+				'label_id': label_id,
+				'survey_id': survey_id,
+				'batch_size': batch_size
+			}),
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`);
+		const resp = await response.json();
+		const reviewed_areas: ReviewedArea[] = [];
+		const annotations: Annotation[][] = [];
+		for (const ra of resp) {
+			reviewed_areas.push(new ReviewedArea(ra as ReviewedArea_intf));
+			const annots: Annotation[] = []
+			for (const annot of ra['annotations']) {
+				annots.push(new Annotation(annot as Annotation_intf))
+			}
+			annotations.push(annots);
+		}
+		return [reviewed_areas as ReviewedArea[], annotations as Annotation[][]];
 
-// export async function testApi(): Promise<string> {
-//     try {
-//         const response = await(fetch(`${api_url}/test`, {
-//             method: 'GET',
-//             credentials: 'include',
-//             headers: {
-//                 'Content-Type': 'application/json',
-//             },
-//         }));
-
-//         if (!response.ok) {
-//             throw new Error(`${uh_oh} ${response.status}`);
-//         }
-
-//         const data = await response.json();
-//         return data;
-//     } catch (error) {
-//         console.error("Error:", error);
-//         toast.error(`${error}`);
-//         throw error;
-//     }
-// };
-
-// export async function getBatch(batch_id: number): Promise<Batches> {
-// // Note: The api always returns a batch with its ID so Batches is always the return type
-//  try {
-//     const response = await(fetch(`${api_url}/batches/${batch_id}`, {
-//         method: 'GET',
-//         credentials: 'include',
-//         headers: {
-//              'Content-Type': 'application/json',
-//         },
-//     }));
-//     if (!response.ok) {
-//         throw new Error(` ${response.status}`);
-//     }
-//     const data = await response.json() as BatchesData;
-//     const batch = deserialize_batches(data);
-//     return batch;
-//  } catch (error) {
-//     console.error("Error: ", error);
-//     toast.error(`${error}`);;
-//     throw error;
-//  }
-// };
-
-// export async function getBatches(): Promise<Batches> {
-//     try { 
-//         const response = await fetch(`${api_url}/batches`, {
-//             method: 'GET',
-//             credentials: 'include',
-//             headers: {
-//                  'Content-Type': 'application/json',
-//             },
-//         }); 
-//         if (!response.ok) {
-//             throw new Error(` ${response.status}`);
-//         }
-//         const data = await response.json() as BatchData;
-//         const batches = deserialize_batch(data);   
-//         return batches;
-//     } catch (error) {
-//         console.error("Error: ", error);
-//         toast.error(`${error}`);;
-//         throw error;
-//     }
-// }
-
-// export async function getBatchIds(): Promise<number[]> {
-//     try {
-//        const response = await fetch(`${api_url}/batches/ids`, {
-//             method: 'GET',
-//             credentials: 'include',
-//             headers: {
-//                 'Content-Type': 'application/json',
-//             },
-//        });
-//        if (!response.ok) {
-//         throw new Error(` ${response.status}`)
-//        }
-//        const data: unknown = await response.json();
-//        return data as number[];
-//     } catch (error) {
-//         console.error("Error: ", error);
-//         toast.error(`${error}`);;
-//         throw error;
-//     }
-// }
-
-
-// //---------------------------------------------------------------------------------------------------------------------------//
-// // POST requests:
-
-// export async function createBatch(params: Record<string, number>): Promise<Batches> {
-//     // Note: The api always returns a batch with its ID so Batches is always the return type
-//     try {
-//         const response = await fetch(`${api_url}/images/create_batch`, {
-//             method: 'POST',
-//             credentials: 'include',
-//             headers: {
-//                 'Content-Type': 'application/json',
-//             },
-//             body: JSON.stringify(params),
-//         });
-
-//         if (!response.ok) {
-//             throw new Error(`${uh_oh} ${response.status}`)
-//         };
-
-//         const data = await response.json() as BatchesData;
-//         const batches = deserialize_batches(data);
-
-//         return batches;
-//     } catch (error: any) {
-//         console.error("There was an error fetching the data:", error);
-//         toast.error(`${error}`);
-//         throw error;
-//     }
-// }
-
-// export async function createPredCrops(batch_id:number, image_id: number): Promise<PredictionCrop[]> {
-//     try {
-//         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/create_pred_crops`, {
-//             method: 'POST',
-//             credentials: 'include',
-//             headers: {
-//                 'Content-Type': 'application/json',
-                 
-//             },
-//         }));
-//         if (!response.ok) {
-//             throw new Error(`${uh_oh} ${response.status}`);
-//         }
-//         const data = await response.json() as PredictionCrop_intf[];
-//         const crops = deserialize_pred_crops(data, batch_id, image_id);
-//         return crops;
-//     } catch (error: any) {
-//         console.error("Error", error);
-//         toast.error(`${error}`);;
-//         throw error;
-//     }
-//  }
-
-//  export async function createFullCrops(batch_id: number, image_id: number, crop_size: number): Promise<any> {
-    
-//     try {
-//         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/create_crops`, {
-//             method: 'POST',
-//             credentials: 'include',
-//             headers: {
-//                 'Content-Type': 'application/json',
-                 
-//             },
-//             body: JSON.stringify({'crop_size': crop_size}),
-//         }));
-//         if (!response.ok) {
-//             throw new Error(`${uh_oh} ${response.status}`)
-//         }
-//         const data = await response.json() as CropData;
-//         const crops = deserialize_crops(data);
-//         return crops;
-//     } catch (error: any) {
-//         console.error('Error', error);
-//     }
-//  }
-
-// //---------------------------------------------------------------------------------------------------------------------------//
-// // PUT requests
-
-// export async function approvePredictions(approved_predictions: number[], batch_id: number, image_id: number) : Promise<any> {
-//     try {
-//         const response = await(fetch(`${api_url}/batches/${batch_id}/images/${image_id}/approve_predictions`, {
-//             method: 'PUT',
-//             credentials: 'include',
-//             headers: {
-//                 'Content-Type': 'application/json',
-                 
-//             },
-//             body: JSON.stringify(approved_predictions),
-//         }));
-//         if (!response.ok) {
-//             throw new Error(`${uh_oh} ${response.status}`)
-//         }
-//     } catch (error: any) {
-//         console.error('Error', error);
-//     }
-// }
-
-// //---------------------------------------------------------------------------------------------------------------------------//
-
-// // Delete requests
-
-// export async function deleteBatch(batch_id: number) : Promise<any> {
-//     try {
-//         const response = await(fetch(`${api_url}/batches/${batch_id}`, {
-//             method: 'DELETE',
-//             credentials: 'include',
-//             headers: {
-                 
-//             },
-//         }));
-
-//         if (!response.ok) {
-
-//             throw new Error(`${uh_oh} ${response.status}`);
-//         }
-//         const data = await response.json();
-//         return data;
-//     } catch (error: any) {
-//         console.error("Error:", error);
-//         throw error;
-//     }
-// }
-
-// //---------------------------------------------------------------------------------------------------------------------------//
-
-// export default{};
+	} catch (error: any) {
+		console.error("There was an error fetching reviewed_areas:", error);
+        toast.error(`${error}`);
+		return undefined;
+	}
+ }

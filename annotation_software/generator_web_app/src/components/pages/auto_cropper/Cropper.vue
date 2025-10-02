@@ -1,10 +1,9 @@
 <script lang="ts">
-import { defineComponent, onMounted, ref } from "vue";
+import { defineComponent } from "vue";
 import { useAutoCropperStore } from "@/modules/stores/cropperStore";
 import { mapState } from "pinia";
 import { PredictionCrop } from "@/types/generatorobjects";
 import { useProjectStore } from "@/modules/stores/projectStore";
-import { setTextRange } from "typescript";
 
 export default defineComponent({
 	name: 'cropper',
@@ -72,9 +71,10 @@ export default defineComponent({
 		const label_color_hex = this.pstore.labels?.find((label) => label.label == predCrop.label)?.color;
 		ctx.strokeStyle = (label_color_hex != undefined) ? label_color_hex : 'white'
 		ctx.fillStyle = (label_color_hex != undefined) ? label_color_hex + '54' : '#ffffff54'
-		ctx.fillRect(box.top_left[0], box.top_left[1], box.get_width(), box.get_height());
-		ctx.rect(box.top_left[0], box.top_left[1], box.get_width(), box.get_height());
+		ctx.fillRect(box.top_left.x, box.top_left.y, box.get_width(), box.get_height());
+		ctx.rect(box.top_left.x, box.top_left.y, box.get_width(), box.get_height());
 		ctx.stroke();
+		ctx.closePath();
 	},
 	toggle_all_boxes() {
 		setTimeout(() => {
@@ -168,7 +168,7 @@ export default defineComponent({
 <template>
 	<div id="Cropper-Contianer">
 		<div id="Predictions-Container" v-if="!cstore.loading">
-			<div id="Predictions-Carosuel" v-if="!cstore.loading" :class="{Overflow : cstore.CurrentPredictionCrops. length > 2}">
+			<div id="Predictions-Carosuel" v-if="!cstore.loading" :class="{Overflow : cstore.CurrentPredictionCrops.length > 2}">
 				<div v-for="predCrop in cstore.CurrentPredictionCrops" 
 					:key="predCrop.uuid" 
 					class="Prediction-Object" 
@@ -285,8 +285,6 @@ export default defineComponent({
 		display: block;
 	}
 	.Prediction-Object canvas {
-		width: 100%;
-		height: 100%;
 		object-fit: cover;
 		display: none;
 		position: absolute;
@@ -295,7 +293,10 @@ export default defineComponent({
 	}
 
 	.Prediction-Object canvas.Visible {
+		width: 100%;
+		height: 100%;
 		display: block;
+		z-index: 999;
 	}
 	.Prediction-Object button {
 		display: flex;

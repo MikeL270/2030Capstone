@@ -1,7 +1,7 @@
 // cross component state management for autocropper functionality
 // Author: Michael B. Lance
 // Created: July 25, 2025
-// Updated: September 11, 2025
+// Updated: October 2, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { defineStore } from "pinia";
@@ -16,9 +16,9 @@ const pstore = useProjectStore();
 const prefstore = usePreferenceStore();
 
 interface batch {
-	'images': Image[];
-	'predictions': Prediction[][];
-	'prediction_crops': PredictionCrop[][];
+	images: Image[],
+	predictions: Prediction[][],
+	prediction_crops: PredictionCrop[][],
 }
 
 export const useAutoCropperStore = defineStore('autoCropperStore', {
