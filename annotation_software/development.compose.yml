@@ -4,50 +4,54 @@ services:
       context: .
       dockerfile: development.prongapi.containerfile
     environment:
-        SECRET_KEY: "${SECRET_KEY}"
-        VALKEY_HOST: "${VALKEY_HOST}"
-        VALKEY_PASS: "${VALKEY_PASS}"
-        AWS_ENDPOINT_URL_S3: "${AWS_ENDPOINT_URL_S3}"
-        DB_HOST: "${DB_HOST}"
-        DB_USER: "${DB_USER}"
-        DB_PASS: "${DB_PASS}" 
-        DB_NAME: "${DB_NAME}"
-        AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-        AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-        APPLICATION_URL: ${APPLICATION_URL}
+      APPLICATION_URL: http://testing.lancecomputer.com:5173
+      ROOT: ${ROOT}
+      HERD_UNIT: ${HERD_UNIT}
+      CROP_FOLDER: ${CROP_FOLDER}
+      IMAGES: ${CROP_FOLDER}
+      SECRET_KEY: ${SECRET_KEY}
+      VALKEY_HOST: ${VALKEY_HOST}
+      SESSION_REDIS: ${SESSION_REDIS}
+      VALKEY_PASS: ${VALKEY_PASS}
+      AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3}
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS} 
+      DB_NAME: testing
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ${DATA_PATH}:/data
       - ./generator_api:/app
       - ./requirements.txt:/app/requirements.txt
+      - ./crop_generator:/venv/crop_generator
     ports:
       - "5000:5000"
     command: >
       /bin/bash -c "source /venv/api_env/bin/activate && python /app/cg_api.py"
     networks: 
-      - pronghorn_app_network 
-  valkey:
+      - dev_pronghorn_app_network
+  dev-valkey:
     container_name: prong-valkey
     image: docker.io/valkey/valkey:8.1.1
     healthcheck:
       test: valkey-cli ping || exit 1
     restart: always
-    ports:
-      - "6379:6379"
     command: valkey-server --requirepass ${VALKEY_PASS}
     networks: 
-      - pronghorn_app_network 
+      - dev_pronghorn_app_network
   web-app-dev:
     build:
       context: .
       dockerfile: development.prongwebapp.containerfile
     volumes:
       - ./generator_web_app:/app
-      - /app/node_modules
+      - ./generator_web_app/node_modules:/app/node_modules
     ports:
       - "5173:5173"
     command: npm run dev -- --host 0.0.0.0
     networks: 
-      - pronghorn_app_network
+      - dev_pronghorn_app_network
 
   # Postgres database, uncomment if not using external database host
   # db:
@@ -68,5 +72,5 @@ services:
 
 
 networks: 
-  pronghorn_app_network:
+  dev_pronghorn_app_network:
     driver: bridge

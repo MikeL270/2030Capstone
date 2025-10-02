@@ -1,5 +1,5 @@
 <template>
     <div class="Page-Container">
-         <h2> Statistics </h2>
+         <h2 class="Utility-Title"> Statistics </h2>
     </div>
 </template>

@@ -5,7 +5,7 @@
 
 #---------------------------------------------------------------------------------------------------------------------------#
 from abc import ABC, abstractmethod 
-from ..generatorobjects.generatorobjects import Image, Crop, Prediction, Box, PredictionCrop
+from ..generatorobjects.generatorobjects import Image, ReviewedArea, Prediction, Box, PredictionCrop
 import os
 import numpy as np
 import math
@@ -17,13 +17,13 @@ import cv2
 class ImageBackend(ABC):
     
     @abstractmethod
-    async def evaluate_crop(self, crop: Crop, predictions: list[Prediction], class_name, draw_box:bool=False):
+    async def evaluate_crop(self, crop: ReviewedArea, predictions: list[Prediction], class_name, draw_box:bool=False):
         pass
     
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def evaluate_crops(self, crops: Dict[str, Union[Crop, List[Prediction]]], label:str):
+def evaluate_crops(self, crops: Dict[str, Union[ReviewedArea, List[Prediction]]], label:str):
     approved_crops = []
     for crop_num in crops.keys():
         crop = crops[crop_num]['crop']
@@ -109,7 +109,7 @@ class OpencvBackend(ImageBackend):
         if key in set([ord('n'), ord('N'), ord('0')]):
             return False
 
-    async def evaluate_crop(self, image: Crop, predictions: list[Prediction], desired_class: int, class_name, draw_box:bool=False):
+    async def evaluate_crop(self, image: ReviewedArea, predictions: list[Prediction], desired_class: int, class_name, draw_box:bool=False):
         crops = self.create_subcrop(image, predictions, desired_class, draw_box)
         
         if os.name == 'posix':

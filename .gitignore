@@ -3,6 +3,8 @@ models/
 .env
 .env[]Zone.Identifier
 .directory
+.directory
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -170,4 +172,5 @@ cython_debug/
 scratch.txt
 .stfolder
 *.env
+node_modules/
 node_modules/

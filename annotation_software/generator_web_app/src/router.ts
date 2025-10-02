@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Authenticate  from '@/components/Authenticate.vue';
-import { useUserStore } from '@/modules/userManagement';
+import { useUserStore } from '@/modules/stores/userStore';
 
 
 const router = createRouter({
@@ -9,13 +9,13 @@ const router = createRouter({
     
      { 
       path: '/authenticate', 
-      name: 'authenticator', 
+      name: 'authenticate', 
       component: Authenticate, 
       meta: {requiresNoLayout: true},
     },
     { 
       path: '/', 
-      name: 'Dashboard', 
+      name: 'dashboard', 
       component: () => import('./components/pages/Dashboard.vue'),
       meta: {
         requiresAuth: true,
@@ -23,18 +23,18 @@ const router = createRouter({
       },
     },
     { 
-      path: '/profile', 
-      name: 'profile', 
-      component: () => import('./components/pages/Profile.vue'), 
+      path: '/user/:uuid?', 
+      name: 'user', 
+      component: () => import('./components/pages/User.vue'), 
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
       },
     },
     { 
-      path: '/auto-cropper', 
-      name: 'Auto-Cropper', 
-      component: () => import('./components/pages/Auto-Cropper.vue'),
+      path: '/auto-cropper/:projects?/:uuid?', 
+      name: 'auto-cropper', 
+      component: () => import('./components/pages/auto_cropper/Auto-Cropper.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -58,14 +58,14 @@ const router = createRouter({
         requiresNoLayout: false,
       },
     },
-    { 
-      path: '/api-tester', 
-      name: 'api-tester', 
-      component: () => import('./components/pages/api_tester/ApiTesterMain.vue'),
+    {
+      path: '/upload/:projects?/:uuid?',
+      name: 'upload',
+      component: () => import('./components/pages/uploader/Upload-Utility.vue'),
       meta: {
         requiresAuth: true,
-        requiresNoLayout: false
-      },
+        requiresNoLayout: false,
+      }
     }
   ],
 });
@@ -79,16 +79,15 @@ router.beforeEach(async (to, from, next) => {
       next();
     } else {
       await user_store.check_auth();
-      if (await user_store.check_auth()) {
+      if (user_store.logged_in) {
           next();
       } else {
         next({
-          name: 'authenticator',
+          name: 'authenticate',
           query: { redirect: to.fullPath },
         });
       }
     }
-    
   } else {
     next()
   }
