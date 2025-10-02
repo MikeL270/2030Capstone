@@ -286,8 +286,8 @@ class Box(CgOBJ):
 	
 	def serialize(self) -> dict:
 		return {
-			'top_left': list(self.top_left),
-			'bottom_right': list(self.bottom_right),
+			'top_left': {'x': self.top_left[0], 'y': self.top_left[1]},
+			'bottom_right': {'x': self.bottom_right[0], 'y': self.bottom_right[1]},
 		}
 
 @dataclass

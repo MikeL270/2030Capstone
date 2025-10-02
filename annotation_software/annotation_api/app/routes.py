@@ -517,6 +517,28 @@ def close_crop_session():
 	return '', 201 
 
 #---------------------------------------------------------------------------------------------------------------------------#
+# Review area
+
+@app.route('/api/v1/create/reviewed_area_batch', methods=['POST'])
+@login_required
+def create_ra_batch():
+	'''
+
+	'''
+	data = request.get_json()
+	ra_batch = base.get_reviewed_area_batch(
+		cast(User, current_user),
+		data['herd_unit_id'],
+		data['batch_size'],
+		data['label_id'],
+		data['survey_id'],
+	)
+	if ra_batch is None:
+		abort(404, 'Cannot get batch')
+	
+	return ra_batch, 201
+
+#---------------------------------------------------------------------------------------------------------------------------#
 # Inference
 
 @app.route('/api/v1/get/survey/<string:survey_id>/images/all')

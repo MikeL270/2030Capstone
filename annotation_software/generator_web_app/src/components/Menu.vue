@@ -29,6 +29,10 @@ export default defineComponent({
                 <Icon icon="fluent:crop-sparkle-24-filled" width="2.5vw" height="2.5vw"></Icon>
                 <p v-if="menu_toggled"> Auto Crop </p>
             </RouterLink>
+            <RouterLink to="/crop-verifier" :class="['Item', {'router-link-active': $route.path.startsWith('/crop-verifier')}]" title="Crop Verifier">
+                <Icon icon="mynaui:bounding-box-solid" width="2.5vw" height="2.5vw"></Icon>
+                <p v-if="menu_toggled"> Verify </p>
+            </RouterLink>
             <RouterLink to="/upload" class="Item" :class="['Item', {'router-link-active': $route.path.startsWith('/upload')}]" title="Upload">
                 <Icon icon="material-symbols:upload" width="2.5vw" height="2.5vw"></Icon>
                 <p v-if="menu_toggled"> Upload </p>
