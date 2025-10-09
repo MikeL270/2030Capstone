@@ -39,16 +39,16 @@ export default defineComponent({
             this.cvs.setBoxEnd();
             const canvas = (this.$refs.drawArea as HTMLCanvasElement);
             const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
             if (ctx == undefined) return;
             ctx.reset();
             this.reDrawBoxes(ctx);
             ctx.beginPath();
             ctx.lineWidth = 2;
             ctx.strokeStyle = 'red';
-            console.log(canvas.offsetTop)
             ctx.rect(
-                this.cvs.currentBox.top_left.x,
-                this.cvs.currentBox.top_left.y,
+                this.cvs.currentBox.top_left.x - rect.left,
+                this.cvs.currentBox.top_left.y - rect.top,
                 this.cvs.currentBox.get_width(),
 				this.cvs.currentBox.get_height(),
             );
