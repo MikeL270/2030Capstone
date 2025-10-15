@@ -334,7 +334,7 @@ class Image(CgOBJ):
 		del self.image
 
 	def serve(self, img_format: str):
-		if self.image:
+		if self.image is not None:
 			_, self.img_encoded = cv2.imencode(img_format, self.get_image()) #type: ignore
 		else:
 			raise Exception(f'{self.name} has no image data')

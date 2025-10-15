@@ -1344,7 +1344,7 @@ class Database:
 
 	@connect
 	def _create_annotation(self, cursor: psycopg.Cursor[Annotation], label_id: Label | int | UUID, image_id: Image | int | UUID,
-						  herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID, returning: bool) -> Annotation | None:
+						herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID, returning: bool) -> Annotation | None:
 		'''
 		
 		
@@ -1358,7 +1358,7 @@ class Database:
 			return annotation if isinstance(annotation, Annotation) else None
 
 	def create_annotation(self, label_id: Label | int | UUID, image_id: Image | int | UUID,
-						  herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID) -> Annotation | None:
+						herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID) -> Annotation | None:
 		'''
 		
 		'''
@@ -1373,27 +1373,30 @@ class Database:
 		'''
 		user = self._get_user(user_id) if not isinstance(user_id, User) else user_id
 		query = sql.SQL(''' INSERT INTO core.annotations (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, created_by_user_id)
-						 		   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING annotation_id; ''')
+							VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING annotation_id; ''')
 		match annotations:
 			case list() if isinstance(annotations[0], Annotation):
 				ids = []
 				for annot in annotations:
 					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.top_left[0], annot.dimensions.top_left[1], 
-						   			   annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
-					ids.append(cursor.fetchone())
-				return ids if len(ids) > 1 else ids[0]
+									annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
+					annot_id = cursor.fetchone()
+					if annot_id is None:
+						raise Exception('Failed to insert annotation')
+					ids.append(annot_id[0])
+				return ids 
 			case Annotation():
 				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.top_left[0], annotations.dimensions.top_left[1], 
-						   			   annotations.dimensions.bottom_right[0], annotations.dimensions.bottom_right[1], user.user_id))
+										annotations.dimensions.bottom_right[0], annotations.dimensions.bottom_right[1], user.user_id))
 				annot_ids = cursor.fetchall() 
 				ids = [annot_id[0] for annot_id in annot_ids]
-				return ids if len(ids) > 1 else ids[0]
+				return ids
 			case _:
 				raise TypeError('annotations must be of type Annotation or a list consisting of Annotation objects')
 	
 	def insert_annotations(self, annotations: list[Annotation] | Annotation, user_id: User | int | UUID) -> list[int]:
 		'''
-		 
+	
 		'''
 		return self._insert_annotations(annotations = annotations, user_id = user_id)
 
@@ -1402,7 +1405,7 @@ class Database:
 	@connect
 	def _get_annotation(self, cursor: psycopg.Cursor[Annotation], annotation_ids: int | UUID | list[int | UUID]) -> Annotation | list[Annotation] | None:
 		'''
-		 
+		
 		''' 
 		cursor.row_factory = class_row(Annotation)
 		query = sql.SQL(''' SELECT * FROM core.annotations WHERE {id_field} = ANY(%s); ''')
@@ -1422,7 +1425,7 @@ class Database:
 
 	def get_annotation(self, annotation_ids: int | UUID | list[int | UUID]) -> Annotation | list[Annotation] | None:
 		'''
-		   
+		
 		'''
 		return self._get_annotation(annotation_ids = annotation_ids)
 
@@ -1437,20 +1440,20 @@ class Database:
 		'''
 		cursor.row_factory = class_row(ReviewedArea)
 		cursor.execute(sql.SQL('''INSERT INTO core.reviewed_area (image_id, name, area_tx, area_ty, area_bx, area_by, 
-								  reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
-						 		  %s, %s, %s, %s, %s, %s, %s)'''), (image_id, name, area_tx, area_ty, area_bx, area_by, 
-								  abs(area_ty - area_by), abs(area_tx - area_bx), cast(User, user).user_id))
+								reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
+						%s, %s, %s, %s, %s, %s, %s)'''), (image_id, name, area_tx, area_ty, area_bx, area_by, 
+								abs(area_ty - area_by), abs(area_tx - area_bx), cast(User, user).user_id))
 		if returning:
 			reviewed_area = cursor.fetchone()
 			return reviewed_area if isinstance(reviewed_area, ReviewedArea) else None
 
 	def create_reviewed_area(self, image_id: Image | int | UUID, name: str, area_tx: int, area_ty: int, area_bx: int, area_by: int,
-						   	  user: User | int | UUID, returning: bool) -> ReviewedArea | None:
+							user: User | int | UUID, returning: bool) -> ReviewedArea | None:
 		'''
 		
 		'''
 		return self._create_reviewed_area(image_id = image_id, name = name, area_tx = area_tx, area_ty = area_ty, area_bx = area_bx,
-										  area_by = area_by, user = user, returning = returning)
+										area_by = area_by, user = user, returning = returning)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -1460,27 +1463,27 @@ class Database:
 		
 		'''
 		query = sql.SQL(''' INSERT INTO core.reviewed_area (image_id, name, area_tx, area_ty, area_bx, area_by, 
-								  reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
-						 		  %s, %s, %s, %s, %s, %s, %s) RETURNING reviewed_area_id; ''')
+								reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
+								%s, %s, %s, %s, %s, %s, %s) RETURNING reviewed_area_id; ''')
 		match reviewed_areas:
 			case list() if isinstance(reviewed_areas[0], ReviewedArea):
 				ids = []
 				for ra in reviewed_areas:
 					cursor.execute(query, (ra.image_id, ra.name, ra.dimensions.top_left[0], ra.dimensions.top_left[1], 
-						   			   ra.dimensions.bottom_right[0], ra.dimensions.bottom_right[1], ra.reviewed_area_length_px, 
-									   ra.reviewed_area_width_px, 0))
+									ra.dimensions.bottom_right[0], ra.dimensions.bottom_right[1], ra.reviewed_area_length_px, 
+									ra.reviewed_area_width_px, 0))
 					ids.append(cursor.fetchone())
 				return ids if len(ids) > 1 else ids[0]
 			case ReviewedArea():
 				cursor.execute(query, (reviewed_areas.image_id, reviewed_areas.name, reviewed_areas.dimensions.top_left[0], reviewed_areas.dimensions.top_left[1], 
-						   			   reviewed_areas.dimensions.bottom_right[0], reviewed_areas.dimensions.bottom_right[1], reviewed_areas.reviewed_area_length_px, 
-									   reviewed_areas.reviewed_area_width_px, 0))
+									reviewed_areas.dimensions.bottom_right[0], reviewed_areas.dimensions.bottom_right[1], reviewed_areas.reviewed_area_length_px, 
+									reviewed_areas.reviewed_area_width_px, 0))
 				ra_ids = cursor.fetchall()
 				ids = [ra_id[0] for ra_id in ra_ids]
 				return ids if len(ids) > 1 else ids[0]
 			case _:
 				raise TypeError('reviewed_areas must be of type ReviewedArea or a list consisting of ReviewedAreas')
-	 
+	
 	def insert_reviewed_areas(self, reviewed_areas: list[ReviewedArea] | ReviewedArea) -> int | list[int]:
 		'''
 		
@@ -1831,7 +1834,7 @@ class Database:
 	# 	'''
 	# 	self._remove_project_users(project_id = project_id, user_ids = user_ids)
 	
-	 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Relationship Management - projectmanagement <-> projectmanagement: projects <-> schemas
 
 	# @connect
@@ -2016,8 +2019,8 @@ class Database:
 		cursor.row_factory = class_row(Model)
 		query = sql.SQL(''' SELECT models.model_id, name, created, modified, uuid, schema_id FROM projectmanagement.models AS models
 							JOIN projectmanagement.surveys_models AS surveys_models ON surveys_models.model_id = models.model_id
-				  			JOIN projectmanagement.herd_units_models AS herd_units_models ON herd_units_models.model_id = models.model_id
-				  			WHERE surveys_models.survey_id = %s AND herd_units_models.herd_unit_id = %s AND models.schema_id = %s; ''')
+							JOIN projectmanagement.herd_units_models AS herd_units_models ON herd_units_models.model_id = models.model_id
+							WHERE surveys_models.survey_id = %s AND herd_units_models.herd_unit_id = %s AND models.schema_id = %s; ''')
 		cursor.execute(query, (survey.survey_id, herd_unit.herd_unit_id, schema.schema_id))
 		models = cursor.fetchall()
 		if models is None:
@@ -2081,10 +2084,10 @@ class Database:
 			case _:
 				raise TypeError('reveiwed_area_id or annotation_ids are of an unexpected type')
 		return True if cursor.rowcount > 0 else False
-	 
+
 	def add_reviewed_area_annotations(self, reviewed_area_id: ReviewedArea | int | UUID, annotation_ids: Annotation | int | UUID | list[Annotation] | list[int] | list[UUID]) -> bool:
 		'''
-		 
+
 		'''
 		return self._add_reviewed_area_annotations(reviewed_area_id = reviewed_area_id, annotation_ids = annotation_ids)
 
@@ -2118,7 +2121,7 @@ class Database:
 
 	@connect
 	def _get_batch(self, cursor: psycopg.Cursor[dict], survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
-				   batch_size: int, label: int, score: float, model_id: Model | int | UUID, user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
+					batch_size: int, label: int, score: float, model_id: Model | int | UUID, user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 		
 		'''
@@ -2146,25 +2149,25 @@ class Database:
             SELECT json_agg(row_to_json(img_preds))
             FROM (
                 SELECT
-				  	I.image_id,
+					I.image_id,
                     I.name,
                     I.in_training,
-				  	I.crops_generated,
-				  	I.created,
+					I.crops_generated,
+					I.created,
 					I.modified,
-				  	I.image_length_px,
-				  	I.image_width_px,
-				  	I.uuid,
+					I.image_length_px,
+					I.image_width_px,
+					I.uuid,
                     json_agg(
                         json_build_object(
-				  			'pred_id', P.pred_id,
+							'pred_id', P.pred_id,
 							'image_id', P.image_id,
-				  			'model_id', P.model_id,
+							'model_id', P.model_id,
 							'dimensions', json_build_object('top_left', json_build_array(P.box_tx, P.box_ty), 'bottom_right', json_build_array(P.box_bx, P.box_by)),
                             'score', P.score,
                             'label', P.label,
-				  			'created', P.created,
-				  			'uuid', P.uuid
+							'created', P.created,
+							'uuid', P.uuid
                         )
                         ORDER BY P.score DESC
                     ) AS predictions
@@ -2188,8 +2191,8 @@ class Database:
 		return cast(dict, results)['json_agg']
 
 	def get_batch(self,survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
-				   batch_size: int, label: int, score: float, model_id: Model | int | UUID, 
-				   user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
+					batch_size: int, label: int, score: float, model_id: Model | int | UUID, 
+					user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 
 		'''
@@ -2240,7 +2243,7 @@ class Database:
 			case _:
 				raise TypeError('pred_ids must be a list of ints, Predictions, or UUIDS')
 		return True if cursor.rowcount > 0 else False
-	 
+
 	def set_predictions_reviewed(self, pred_ids: list[Prediction | int | UUID], user_id: int) -> bool:
 		'''
 		
@@ -2308,7 +2311,7 @@ class Database:
 
 	@connect
 	def _get_reviewed_area_batch(self, cursor: psycopg.Cursor[dict], user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
-				   batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
+					batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
 		''' Fetch a batch of reviewed areas and their associated annotations that have yet to be reviewed.
 
 		'''
@@ -2376,7 +2379,7 @@ class Database:
 		return cast(dict, results)['json_agg']
 	
 	def get_reviewed_area_batch(self, user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
-				   batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
+					batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
 		'''
 
 		'''

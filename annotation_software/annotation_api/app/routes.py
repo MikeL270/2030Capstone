@@ -11,10 +11,10 @@ from datetime import datetime
 import io
 from uuid import UUID
 import cv2
-from flask import Response, abort, jsonify, request, session
+from flask import Blueprint, Response, abort, jsonify, request, session
 from cropgenerator import auto_crop, create_subcrop
 from cropgenerator.generatorobjects import Prediction, User, ReviewedArea, Annotation
-from app import app, login_manager, base, cache, pathfinder, BUCKET_NAME
+from app import app, login_manager, base, cache, pathfinder
 from typing import cast
 from flask_login import (
 	current_user,
@@ -23,6 +23,9 @@ from flask_login import (
 	logout_user,
 ) 
 
+BUCKET_NAME = 'mlance4'
+
+bp = Blueprint('app', __name__)
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # User session management
@@ -37,7 +40,7 @@ def load_user(session_user_id):
 def unathorizated_callback():
 	abort(401, 'unathorized, are you logged in? Should you be accessing this?')
 
-@app.route('/api/v1/authenticate', methods=['POST'])
+@bp.route('/api/v1/authenticate', methods=['POST'])
 def authenticate():
 	req_data = request.get_json()
 	if not req_data or 'external-id' not in req_data:
@@ -53,12 +56,12 @@ def authenticate():
 			base.login_user(user)
 		return user.serialize(), 201
 
-@app.route('/api/v1/check_auth', methods=["GET"])
+@bp.route('/api/v1/check_auth', methods=["GET"])
 @login_required
 def check_auth():
 	return Response('true'), 201
 
-@app.route('/api/v1/users/get_current_user', methods = ['GET'])
+@bp.route('/api/v1/users/get_current_user', methods = ['GET'])
 @login_required
 def get_user():
 	try:
@@ -66,7 +69,7 @@ def get_user():
 	except Exception as e:
 		abort(500, e)
 	return cast(User, user).serialize(), 201
-@app.route('/api/v1/deauthenticate', methods=["POST"])
+@bp.route('/api/v1/deauthenticate', methods=["POST"])
 @login_required
 def logout():
 	logout_user()
@@ -74,12 +77,12 @@ def logout():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # # Organization CRUD
-# @app.route('/app/v1/create/organization')
+# @bp.route('/app/v1/create/organization')
 # @login_required
 # def create_organization():
 # 	pass
 
-@app.route('/api/v1/request/organizations/all')
+@bp.route('/api/v1/request/organizations/all')
 @login_required
 def get_user_organizations():
 	organizations = base.get_user_organizations(cast(User, current_user))
@@ -92,14 +95,14 @@ def get_user_organizations():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Project CRUD
 
-@app.route('/api/v1/projects/create', methods = ['POST'])
+@bp.route('/api/v1/projects/create', methods = ['POST'])
 @login_required
 def create_project():
 	data = request.get_json()
 	project = base.create_project(name = data['name'],)
 	return project.serialize(), 201 
 
-@app.route('/api/v1/projects/request/<string:project_id>', methods=['GET'])
+@bp.route('/api/v1/projects/request/<string:project_id>', methods=['GET'])
 @login_required
 def get_project(project_id: str):
 	project = base.get_project(project_id = UUID(project_id))
@@ -107,14 +110,14 @@ def get_project(project_id: str):
 		abort(404, 'project not found')
 	return project.serialize()
 	
-@app.route('/api/v1/request/projects/all')
+@bp.route('/api/v1/request/projects/all')
 @login_required
 def get_all_projects():
 	projects = base.get_user_projects(cast(User, current_user))
 	serialized_projects = [project.serialize() for project in projects] 
 	return jsonify(serialized_projects), 201
 
-# @app.route('/app/v1/projects/update/<string:project_id>', methods = ['PUT'])
+# @bp.route('/app/v1/projects/update/<string:project_id>', methods = ['PUT'])
 # @login_required
 # def update_project(project_id: str):
 # 	pass
@@ -122,7 +125,7 @@ def get_all_projects():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Schema CRUD
 
-@app.route('/api/v1/request/projects/<string:project_id>/schemas/all', methods=['GET'])
+@bp.route('/api/v1/request/projects/<string:project_id>/schemas/all', methods=['GET'])
 @login_required
 def get_project_schemas(project_id: str):
 	schemas = base.get_project_schemas(UUID(project_id))
@@ -132,12 +135,12 @@ def get_project_schemas(project_id: str):
 #---------------------------------------------------------------------------------------------------------------------------#
 # Label CRUD
 
-# @app.route('/app/v1/create/label')
+# @bp.route('/app/v1/create/label')
 # @login_required
 # def create_label():
 # 	pass
 
-@app.route('/api/v1/request/projects/<string:project_id>/schemas/<string:schema_id>/labels/all', methods=['GET'])
+@bp.route('/api/v1/request/projects/<string:project_id>/schemas/<string:schema_id>/labels/all', methods=['GET'])
 @login_required
 def get_schema_labels(project_id: str, schema_id: str):
 	labels = base.get_schema_labels(UUID(schema_id))
@@ -147,7 +150,7 @@ def get_schema_labels(project_id: str, schema_id: str):
 #---------------------------------------------------------------------------------------------------------------------------#
 # Herd Unit Crud
  
-@app.route('/api/v1/request/projects/<string:project_id>/herd_units/all', methods=['GET'])
+@bp.route('/api/v1/request/projects/<string:project_id>/herd_units/all', methods=['GET'])
 @login_required
 def get_project_herdunits(project_id: str):
 	herd_units = base.get_project_herd_units(UUID(project_id))
@@ -156,7 +159,7 @@ def get_project_herdunits(project_id: str):
 		abort(404, 'No Herd Units Found')
 	return jsonify(serialized_herd_units), 201
 
-@app.route('/api/v1/request/surveys/<string:survey_id>/herd_units/all', methods=['GET'])
+@bp.route('/api/v1/request/surveys/<string:survey_id>/herd_units/all', methods=['GET'])
 @login_required
 def get_survey_herdunits(survey_id: str):
 	herd_units = base.get_cropping_herd_units(UUID(survey_id))
@@ -168,7 +171,7 @@ def get_survey_herdunits(survey_id: str):
 #---------------------------------------------------------------------------------------------------------------------------#
 # Model Crud
 
-@app.route('/api/v1/create/model', methods=['POST'])
+@bp.route('/api/v1/create/model', methods=['POST'])
 @login_required
 def create_model():
 	'''
@@ -181,7 +184,7 @@ def create_model():
 		abort(500, e)
 	return model.serialize(), 201
 	
-@app.route('/api/v1/request/projects/<string:project_id>/models/all', methods=['GET'])
+@bp.route('/api/v1/request/projects/<string:project_id>/models/all', methods=['GET'])
 @login_required
 def get_project_models(project_id: str):
 	try:
@@ -191,7 +194,7 @@ def get_project_models(project_id: str):
 	serialized_models = [model.serialize() for model in models]
 	return jsonify(serialized_models), 201
 
-@app.route('/api/v1/request/surveys/<string:survey_id>/herd_units/<string:herd_unit_id>/schemas/<string:schema_id>/models/all', methods=['GET'])
+@bp.route('/api/v1/request/surveys/<string:survey_id>/herd_units/<string:herd_unit_id>/schemas/<string:schema_id>/models/all', methods=['GET'])
 @login_required
 def get_cropper_models(survey_id: str, herd_unit_id: str, schema_id: str):
 	models = base.get_cropping_models(UUID(survey_id), UUID(herd_unit_id), UUID(schema_id))
@@ -203,7 +206,7 @@ def get_cropper_models(survey_id: str, herd_unit_id: str, schema_id: str):
 #---------------------------------------------------------------------------------------------------------------------------#
 # Survey Crud
 
-@app.route('/api/v1/request/projects/<string:project_id>/surveys/all', methods=['GET'])
+@bp.route('/api/v1/request/projects/<string:project_id>/surveys/all', methods=['GET'])
 @login_required
 def get_project_surveys(project_id: str):
 	surveys = base.get_projects_surveys(UUID(project_id))
@@ -215,7 +218,7 @@ def get_project_surveys(project_id: str):
 #---------------------------------------------------------------------------------------------------------------------------#
 # Image Crud
 
-@app.route('/api/v1/create/image', methods=['POST'])
+@bp.route('/api/v1/create/image', methods=['POST'])
 @login_required
 def upload_image_to_db():
 	'''
@@ -226,7 +229,7 @@ def upload_image_to_db():
 		abort(500, 'Could not create Image')
 	return image.serialize(), 201
 
-# @app.route('/app/v1/get/image', methods=['GET'])
+# @bp.route('/app/v1/get/image', methods=['GET'])
 # @login_required
 # def get_image():
 # 	'''
@@ -235,7 +238,7 @@ def upload_image_to_db():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Prediction Crud
 
-@app.route('/api/v1/create/prediction', methods=['POST'])
+@bp.route('/api/v1/create/prediction', methods=['POST'])
 def create_prediction():
 	'''
 	
@@ -260,7 +263,7 @@ def create_prediction():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Image and Prediction Mass Uploader
 
-@app.route('/api/v1/upload/image/presigned-url', methods=['POST'])
+@bp.route('/api/v1/upload/image/presigned-url', methods=['POST'])
 @login_required
 def get_presigned_url():
 	'''
@@ -288,7 +291,7 @@ def get_presigned_url():
 	return jsonify(response), 201
 
 
-@app.route('/api/v1/upload/image/create_multipart_upload', methods=['POST'])
+@bp.route('/api/v1/upload/image/create_multipart_upload', methods=['POST'])
 @login_required
 def create_multipart_upload():
 	'''
@@ -296,7 +299,7 @@ def create_multipart_upload():
 	to be uploaded. the app responds with a unique UploadId, which is required 
 	for all subsequent chunk uploads for that file.
 	'''
-   
+
 	data = request.get_json()
 	try: 
 		response = pathfinder.create_multipart_upload(
@@ -309,7 +312,7 @@ def create_multipart_upload():
 	except Exception as e:
 		abort(500, e)
 
-@app.route('/api/v1/upload/image/complete', methods=['POST'])
+@bp.route('/api/v1/upload/image/complete', methods=['POST'])
 @login_required
 def complete_upload():
 	'''
@@ -332,7 +335,7 @@ def complete_upload():
 		abort(500, str(e))
 	return jsonify(response), 201
 
-@app.route('/api/v1/upload/image/abort', methods=['POST'])
+@bp.route('/api/v1/upload/image/abort', methods=['POST'])
 @login_required 
 def abort_upload():
 	'''
@@ -353,7 +356,7 @@ def abort_upload():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Auto Cropping
-@app.route('/api/v1/create/batch', methods=['POST'])
+@bp.route('/api/v1/create/batch', methods=['POST'])
 @login_required
 def get_batch():
 	'''
@@ -376,8 +379,8 @@ def get_batch():
 		abort(404, 'Cannot get batch')
 	
 	return img_batch, 201
- 
-@app.route('/api/v1/create/prediction_crops', methods=['POST'])
+
+@bp.route('/api/v1/create/prediction_crops', methods=['POST'])
 @login_required
 def create_prediction_crops():
 	'''
@@ -391,7 +394,7 @@ def create_prediction_crops():
 		img_key = f'images/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/image/{image.name}'
 		img_data = pathfinder.get_object(Bucket=BUCKET_NAME, Key=img_key)['Body'].read()
 		cache.set(image.uuid, img_data, 360) 
-	 
+
 	image.set_image(img_data)
 	pred_crops = create_subcrop(image, data['predictions'])
 	serialized_pred_crops = [] 
@@ -408,7 +411,7 @@ def create_prediction_crops():
 	session['pred_crop_data'] + serialized_pred_crops #type: ignore
 	return json_pred_crop_data, 201
 
-@app.route('/api/v1/request/image/<string:image_id>/pred_crop/<string:pred_crop_id>', methods=['GET'])
+@bp.route('/api/v1/request/image/<string:image_id>/pred_crop/<string:pred_crop_id>', methods=['GET'])
 def get_pred_crop(image_id: str, pred_crop_id: str):
 	'''
 	
@@ -420,7 +423,7 @@ def get_pred_crop(image_id: str, pred_crop_id: str):
 	_, encoded_img = cv2.imencode('.webp', crop)
 	return Response(encoded_img.tobytes(), mimetype='image/webp'), 201
 
-@app.route('/api/v1/update/image/no-annotations', methods=["POST"])
+@bp.route('/api/v1/update/image/no-annotations', methods=["POST"])
 @login_required
 def no_annotations():
 	'''
@@ -431,7 +434,7 @@ def no_annotations():
 	res_2 = base.set_predictions_reviewed([UUID(pred_id) for pred_id in data['prediction_ids']], current_user.user_id)	 	
 	return '', 201 if res_1 and res_2 else abort(500, 'Update failed!')
 
-@app.route('/api/v1/create/reviewed-area-and-annotations', methods=["PUT"])
+@bp.route('/api/v1/create/reviewed-area-and-annotations', methods=["PUT"])
 @login_required
 def create_reviewed_area_and_annotations():
 	'''
@@ -453,7 +456,7 @@ def create_reviewed_area_and_annotations():
 	
 	# (re)Construct prediction objects from data in request
 	predictions = []
-  
+
 	for pred in data['predictions']:
 		prediction = Prediction(
 			pred_id = pred['pred_id'], 
@@ -504,7 +507,7 @@ def create_reviewed_area_and_annotations():
 
 	return '', 201 if res_1 and res_2 and res_3 else abort(500, 'Cropping failed!')
 
-@app.route('/api/v1/end/crop_session', methods=['POST'])
+@bp.route('/api/v1/end/crop_session', methods=['POST'])
 @login_required
 def close_crop_session():
 	'''
@@ -519,7 +522,7 @@ def close_crop_session():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Review area
 
-@app.route('/api/v1/create/reviewed_area_batch', methods=['POST'])
+@bp.route('/api/v1/create/reviewed_area_batch', methods=['POST'])
 @login_required
 def create_ra_batch():
 	'''
@@ -541,7 +544,7 @@ def create_ra_batch():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Inference
 
-@app.route('/api/v1/get/survey/<string:survey_id>/images/all')
+@bp.route('/api/v1/get/survey/<string:survey_id>/images/all')
 @login_required
 def get_survey_images(survey_id: str):
 	'''
@@ -554,19 +557,16 @@ def get_survey_images(survey_id: str):
 		print(e)
 		abort(500, e)
 	return jsonify(serialized_images), 201
- 
+
 #---------------------------------------------------------------------------------------------------------------------------#
 # Error Handling
 
-@app.errorhandler(404)
+@bp.errorhandler(404)
 def not_found(error): 
 	return f'404: {error.description}', 404
 
-@app.errorhandler(500)
+@bp.errorhandler(500)
 def internal_service_error(error): 
 	return f'500: {error.description}', 500
 
 #---------------------------------------------------------------------------------------------------------------------------#
- 
-
-[print(route) for route in app.url_map.iter_rules()]   

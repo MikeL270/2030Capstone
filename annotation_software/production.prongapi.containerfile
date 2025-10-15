@@ -40,6 +40,6 @@ ENV PATH="/venv/api_env/bin:$PATH"
 
 WORKDIR /app
 
-COPY ./generator_api .
+COPY ./annotation_api .
 
-CMD ["gunicorn", "-w", "8", "-b", "0.0.0.0:8000", "annotation_api:app"]
+CMD ["gunicorn", "-c", "gunicorn.py", "app:app"]
