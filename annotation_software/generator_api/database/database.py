@@ -1285,7 +1285,7 @@ class Database:
 		model = self._get_model(model_id) if model_id is not isinstance(model_id, Model) else model_id
 		cursor.execute(sql.SQL(''' INSERT INTO core.predictions (image_id, model_id, label, score, box_tx, box_ty, 
 								   box_bx, box_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), 
-								   (image.image_id, model.model_id, score, label, box_tx, box_ty, box_bx, box_by))
+								   (image.image_id, model.model_id, label, score, box_tx, box_ty, box_bx, box_by))
 		if returning:
 			prediction = cursor.fetchone()
 			return prediction
