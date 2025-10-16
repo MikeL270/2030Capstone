@@ -1,11 +1,9 @@
 import os
-
 import boto3
 from boto3.s3.transfer import TransferConfig
 from boto3.s3.transfer import TransferConfig
 from botocore.client import Config
 from botocore.config import Config
-from cropgenerator.generatorobjects import CropgenJSONPRovider
 from dotenv import load_dotenv
 from flask import Flask
 from flask_caching import Cache
@@ -46,7 +44,6 @@ def create_app():
 	global pathfinder
 	base = db.Database(db_config) #pyright: ignore
 	app = Flask(__name__)
-	app.json_provider_class = CropgenJSONPRovider
 	app.secret_key = os.environ.get('SECRET_KEY')
 	app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 	app.config['SESSION_COOKIE_SECURE'] = False 

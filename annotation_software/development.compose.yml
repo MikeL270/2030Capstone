@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: development.prongapi.containerfile
+    user: "root"
     environment:
       APPLICATION_URL: http://testing.lancecomputer.com:5173
       ROOT: ${ROOT}
@@ -23,10 +24,9 @@ services:
       FLASK_APP: /app/app.py
       FLASK_DEBUG: 1 
     volumes:
-      - ${DATA_PATH}:/data
-      - ./annotation_api:/app
-      - ./requirements.txt:/app/requirements.txt
-      - ./crop_generator:/venv/crop_generator
+      - ./annotation_api:/app:Z
+      - ./requirements.txt:/app/requirements.txt:Z
+      - ./crop_generator:/venv/crop_generator:Z
     ports:
       - "5000:5000"
     command: >
@@ -54,6 +54,7 @@ services:
     command: npm run dev -- --host 0.0.0.0
     networks: 
       - dev_pronghorn_app_network
+    
 
   # Postgres database, uncomment if not using external database host
   # db:
