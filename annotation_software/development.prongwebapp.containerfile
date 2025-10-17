@@ -1,28 +1,21 @@
 # Containerfile for in container development
 
-FROM node:20-alpine
+FROM node:lts-alpine
 
-USER root
+ENV NODE_ENV=development
 
-RUN mkdir /app && /app
+WORKDIR /app
 
-COPY /generator_web_app/package.json package-lock.json* ./
+COPY /generator_web_app/package.json /generator_web_app/package-lock.json ./
 
-RUN chown -R pronghorn:pronghorn /app
-
-RUN chmod 644 package.json \
-    && [ -f package-lock.json ] && chmod 644 package-lock.json || true
-
-
-RUN cd /app && npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 
 COPY /generator_web_app/. .
 
-RUN chown -R prong:prong /app
-RUN chmod -R 755 /app
+RUN chown -R node:node /app
 
-USER prong
+USER node
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev"]
+CMD [ "npm", "run", "dev", "--", "--host" ]

@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: development.prongapi.containerfile
-    user: "root"
     environment:
       APPLICATION_URL: http://testing.lancecomputer.com:5173
       ROOT: ${ROOT}
@@ -45,13 +44,20 @@ services:
   web-app-dev:
     build:
       context: .
-      dockerfile: development.prongwebapp.containerfile
-    volumes:
-      - ./generator_web_app:/app
-      - ./generator_web_app/node_modules:/app/node_modules
+      dockerfile: development.prongwebapp.containerfile  
     ports:
       - "5173:5173"
-    command: npm run dev -- --host 0.0.0.0
+    develop:
+      watch:
+        - path: ./generator_web_app/source
+          target: /app/src
+          action: sync
+        - path: ./generator_web_app/package.json
+          target: /app/package.json
+          action: restart
+        - path: ./generator_web_app/vite.config.ts
+          target: /app/vite.config.ts
+          action: restart
     networks: 
       - dev_pronghorn_app_network
     
