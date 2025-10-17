@@ -96,11 +96,3 @@ def create_app():
 	server_session = Session(app)
 
 	return app
-
-app = create_app()
-
-from app.routes import bp
-
-app.register_blueprint(bp)
-
-logging.info('ran')
