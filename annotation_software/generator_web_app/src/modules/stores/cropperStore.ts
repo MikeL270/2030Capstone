@@ -22,22 +22,22 @@ interface batch {
 }
 
 export const useAutoCropperStore = defineStore('autoCropperStore', {
-    state: () => ({
-		batches:[{
-			'images':[],
-            'predictions': [],
-            'prediction_crops':[]
+	state: () => ({
+		batches: [{
+			'images': [],
+			'predictions': [],
+			'prediction_crops': []
 		}] as batch[],
 		batch_idx: 0,
 		image_idx: 0,
 		active_pred_idx: 0,
 		loading: false,
 		bootstrapped: false,
-    }),
+	}),
 	getters: {
-		CurrentBatch: (state) =>  state.batches[state.batch_idx],
+		CurrentBatch: (state) => state.batches[state.batch_idx],
 		NextBatch: (state) => (state.batches[state.batch_idx + 1] != undefined) ? true : false,
-		LastBatch: (state) => (state.batches[state.batch_idx - 1] != undefined) ? true : false, 
+		LastBatch: (state) => (state.batches[state.batch_idx - 1] != undefined) ? true : false,
 		CurrentImages(): Image[] { return this.CurrentBatch?.images },
 		CurrentPredictions(state): Prediction[] { return this.CurrentBatch?.predictions[state.image_idx] },
 		CurrentPredictionIds(): string[] {
@@ -49,18 +49,18 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 		},
 		CurrentPredictionCrops(state): PredictionCrop[] { return this.CurrentBatch?.prediction_crops[state.image_idx] },
 		CurrentPredictionCrop(): PredictionCrop { return this.CurrentPredictionCrops[this.active_pred_idx] },
-		NextPredictionCrops(state): boolean { 
-			const predcrops: boolean = (this.CurrentBatch?.prediction_crops[state.image_idx + 1] != undefined) ? true : false; 
+		NextPredictionCrops(state): boolean {
+			const predcrops: boolean = (this.CurrentBatch?.prediction_crops[state.image_idx + 1] != undefined) ? true : false;
 			return predcrops;
 		},
-		LastPredictionCrops(state): boolean { 
-			const predcrops: boolean = (this.CurrentBatch?.prediction_crops[state.image_idx - 1] != undefined) ? true : false; 
+		LastPredictionCrops(state): boolean {
+			const predcrops: boolean = (this.CurrentBatch?.prediction_crops[state.image_idx - 1] != undefined) ? true : false;
 			return predcrops;
 		},
-		CurrentImage(state): Image  { return this.CurrentImages[state.image_idx] },
+		CurrentImage(state): Image { return this.CurrentImages[state.image_idx] },
 		ImageNum: (state) => state.image_idx + 1,
-		ApprovedPredictions():  Prediction[] { 
-			const newPredictions: Prediction[] = []; 
+		ApprovedPredictions(): Prediction[] {
+			const newPredictions: Prediction[] = [];
 			for (let i = 0; i < this.CurrentPredictionCrops.length; i++) {
 				if (this.CurrentPredictionCrops[i].approved) {
 					let oldPred = this.CurrentPredictions[i];
@@ -69,21 +69,21 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 				}
 			}
 			return newPredictions;
-			}
+		}
 	},
-    actions: {
+	actions: {
 		async get_batch(batch_index: number) {
-			const resp = await getBatch(pstore.CurrentSurvey?.uuid, 
-										pstore.CurrentHerdUnit?.uuid, 
-										prefstore.batch_size, 
-										0.9, 
-										pstore.CurrentLabel?.label, 
-										pstore.CurrentModel?.uuid)
+			const resp = await getBatch(pstore.CurrentSurvey?.uuid,
+				pstore.CurrentHerdUnit?.uuid,
+				prefstore.batch_size,
+				0.9,
+				pstore.CurrentLabel?.label,
+				pstore.CurrentModel?.uuid)
 			if (resp == undefined) return;
 			if (!this.batches[batch_index]) this.batches[batch_index] = {
-				'images':[],
+				'images': [],
 				'predictions': [],
-				'prediction_crops':[]
+				'prediction_crops': []
 			} as batch;
 			this.batches[batch_index]['images'] = resp[0];
 			this.batches[batch_index]['predictions'] = resp[1];
@@ -128,7 +128,7 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 				this.next_batch();
 				this.loading = false;
 				return;
-			} 
+			}
 			// if next prediction crops already exist increase image_idx
 			if (this.NextPredictionCrops) {
 				this.image_idx++;
@@ -154,7 +154,7 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 				this.image_idx--;
 
 				this.loading = false;
-			} else if (this.image_idx == 0 && this.LastBatch){
+			} else if (this.image_idx == 0 && this.LastBatch) {
 				this.batch_idx--;
 				this.image_idx = this.CurrentImages.length - 1;
 			}
@@ -175,10 +175,11 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 				await submitNoAnnotations(this.CurrentImage.uuid, this.CurrentPredictionIds);
 			} else {
 				if (pstore.CurrentHerdUnit == undefined || pstore.CurrentSurvey == undefined || pstore.labels.length == 0) {
-					throw new Error('HerdUnit, Survey, or labels are undefined!');	
-				}			
+					throw new Error('HerdUnit, Survey, or labels are undefined!');
+				}
 				await autoCrop(this.CurrentImage.uuid, this.ApprovedPredictions, pstore.CurrentHerdUnit?.uuid, pstore.CurrentSurvey?.uuid, pstore.labels)
 			}
+			this.loading = false;
 			await this.next_image();
 		},
 		async end_session() {
@@ -186,5 +187,5 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			this.bootstrapped = false;
 			await closeCropSession();
 		}
-    }
+	}
 })
