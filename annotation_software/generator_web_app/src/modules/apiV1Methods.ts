@@ -4,14 +4,16 @@
 // Updated: October 2, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
-import { Box, Image, Prediction, ReviewedArea, PredictionCrop, Project, Organization, User, Schema,
-         Label, HerdUnit, Survey, Model, Annotation } from '@/types/generatorobjects.ts';
+import {
+	Box, Image, Prediction, ReviewedArea, PredictionCrop, Project, Organization, User, Schema,
+	Label, HerdUnit, Survey, Model, Annotation
+} from '@/types/generatorobjects.ts';
 import type { Prediction_intf, User_intf, Image_intf, PredictionCrop_intf, ReviewedArea_intf, Annotation_intf } from '@/types/generatorobjects.ts';
 import { reverse } from 'lodash';
 import { useToast } from 'vue-toastification'
 
 //const api_url: URL = new URL('https://pronghorn-count.arcc.uwyo.edu/api/v1'); //"production"
-const api_url: URL = new URL('http://testing.lancecomputer.com:5000/api/v1');
+const api_url: URL = new URL(`${import.meta.env.API_URL}`) || new URL('http:pronghorn-count');
 //const api_url: URL = new URL('http://testing.lancecomputer.com:8000/api/v1');
 const uh_oh: string = 'status: ';
 
@@ -19,84 +21,84 @@ const toast = useToast()
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // User authentication
-export async function authUser(external_id: string): Promise<User | undefined> {   
-    try {
-        const response = await fetch(`${api_url}/authenticate`, {
-            method: 'POST',
-            headers: {
-                 'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                'external-id': external_id
-            }),
-            credentials: 'include',
-        }); 
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const user = new User(await response.json() as User_intf);
-        return user;
-    } catch (error) {
-        console.error("Error: ", error)
-        return undefined;
-    }
+export async function authUser(external_id: string): Promise<User | undefined> {
+	try {
+		const response = await fetch(`${api_url}/authenticate`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				'external-id': external_id
+			}),
+			credentials: 'include',
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const user = new User(await response.json() as User_intf);
+		return user;
+	} catch (error) {
+		console.error("Error: ", error)
+		return undefined;
+	}
 }
 
 export async function checkAuth(): Promise<boolean> {
-    try {
-        const response = await fetch(`${api_url}/check_auth`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }, 
-            credentials: 'include',
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        else return true;
-    } catch (error) {
-        console.error("Error: ", error);
-        return false;
-    }
+	try {
+		const response = await fetch(`${api_url}/check_auth`, {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			credentials: 'include',
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		else return true;
+	} catch (error) {
+		console.error("Error: ", error);
+		return false;
+	}
 }
 
 export async function getCurrentUser(): Promise<User | undefined> {
-    try {
-        const response = await fetch(`${api_url}/users/get_current_user`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const user = new User (await response.json() as User_intf);
-        return user;
-    } catch (error) {
-        console.error("Error: ", error)
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/users/get_current_user`, {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			credentials: 'include',
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const user = new User(await response.json() as User_intf);
+		return user;
+	} catch (error) {
+		console.error("Error: ", error)
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // Organization Crud
 
 export async function getUserOrganizations(): Promise<Organization[] | undefined> {
-    try {
-        const response = await fetch(`${api_url}/request/organizations/all`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const resp = await response.json();
-        var organizations = [];
-        for (const organization of resp) organizations.push(new Organization(organization));
-        return organizations;
-    } catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/request/organizations/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		var organizations = [];
+		for (const organization of resp) organizations.push(new Organization(organization));
+		return organizations;
+	} catch (error: any) {
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -109,96 +111,96 @@ export async function getUserOrganizations(): Promise<Organization[] | undefined
 // Project Crud
 
 export async function getProjects(): Promise<Project[] | undefined> {
-    try {
-        const response = await fetch(`${api_url}/request/projects/all`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const resp = await response.json();
-        var projects = [];
-        for (const project of resp) projects.push(new Project(project));
-        return projects;
-    } catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/request/projects/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		var projects = [];
+		for (const project of resp) projects.push(new Project(project));
+		return projects;
+	} catch (error: any) {
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // Schema Crud
 
 export async function getProjectSchemas(project_id: string | undefined): Promise<Schema[] | undefined> {
-    try {
-        const response = await fetch(`${api_url}/request/projects/${project_id}/schemas/all`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const resp = await response.json();
-        var schemas = [];
-        for (const schema of resp) schemas.push(new Schema(schema));
-        return schemas;
-    } catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/request/projects/${project_id}/schemas/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		var schemas = [];
+		for (const schema of resp) schemas.push(new Schema(schema));
+		return schemas;
+	} catch (error: any) {
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // Label Crud
 
 export async function getSchemaLabels(project_id: string | undefined, schema_id: string | undefined): Promise<Label[] | undefined> {
-    try {
-        const response = await fetch(`${api_url}/request/projects/${project_id}/schemas/${schema_id}/labels/all`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const resp = await response.json();
-        var labels = [];
-        for (const label of resp) labels.push(new Label(label));
-        return labels;
-    } catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/request/projects/${project_id}/schemas/${schema_id}/labels/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		var labels = [];
+		for (const label of resp) labels.push(new Label(label));
+		return labels;
+	} catch (error: any) {
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // Herd Unit Crud
 
 export async function getProjectHerdUnits(project_id: string | undefined): Promise<HerdUnit[] | undefined> {
-    try {
-        const response = await fetch(`${api_url}/request/projects/${project_id}/herd_units/all`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const resp = await response.json();
-        var herd_units = [];
-        for (const herd_unit of resp) herd_units.push(new HerdUnit(herd_unit));
-        return herd_units;
-    } catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/request/projects/${project_id}/herd_units/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		var herd_units = [];
+		for (const herd_unit of resp) herd_units.push(new HerdUnit(herd_unit));
+		return herd_units;
+	} catch (error: any) {
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 export async function getCropperHerdUnits(survey_id: string | undefined): Promise<HerdUnit[] | undefined> {
@@ -211,39 +213,39 @@ export async function getCropperHerdUnits(survey_id: string | undefined): Promis
 			},
 		});
 		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const resp = await response.json();
-        var herd_units = [];
-        for (const herd_unit of resp) herd_units.push(new HerdUnit(herd_unit));
-        return herd_units;
+		const resp = await response.json();
+		var herd_units = [];
+		for (const herd_unit of resp) herd_units.push(new HerdUnit(herd_unit));
+		return herd_units;
 	} catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // Model Crud
 
 export async function getProjectModels(project_id: string | undefined): Promise<Model[] | undefined> {
-    try {
-        const response = await fetch(`${api_url}/request/projects/${project_id}/models/all`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-        const resp = await response.json();
-        var models = [];
-        for (const model of resp) models.push(new Model(model)); 
-        return models;
-    } catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/request/projects/${project_id}/models/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
+		const resp = await response.json();
+		var models = [];
+		for (const model of resp) models.push(new Model(model));
+		return models;
+	} catch (error: any) {
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 export async function getCropperModels(survey_id: string | undefined, herd_unit_id: string | undefined, schema_id: string | undefined): Promise<Model[] | undefined> {
@@ -261,34 +263,34 @@ export async function getCropperModels(survey_id: string | undefined, herd_unit_
 		for (const model of resp) models.push(new Model(model));
 		return models;
 	} catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 // Survey Crud
 
 export async function getProjectSurveys(project_id: string | undefined): Promise<Survey[] | undefined> {
-    try {
-        const response = await fetch(`${api_url}/request/projects/${project_id}/surveys/all`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-         });
-        if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`);
-        const resp = await response.json();
-        var surveys = [];
-        for (const survey of resp) surveys.push(new Survey(survey));
-        return surveys;
-    } catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+	try {
+		const response = await fetch(`${api_url}/request/projects/${project_id}/surveys/all`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`);
+		const resp = await response.json();
+		var surveys = [];
+		for (const survey of resp) surveys.push(new Survey(survey));
+		return surveys;
+	} catch (error: any) {
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -314,21 +316,21 @@ export async function createImage(project_id: string | undefined, survey_id: str
 				'image_width': image_width,
 			}),
 		});
-		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)	
+		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
 		const resp = await response.json();
 		const image = new Image(resp)
 		return image;
 	} catch (error: any) {
-        console.error("There was an error fetching the data:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error fetching the data:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
- // Multipart image upload
+// Multipart image upload
 
- export async function createMultiPartUpload(image_key: string): Promise<string | undefined> {
+export async function createMultiPartUpload(image_key: string): Promise<string | undefined> {
 	try {
 		const response = await fetch(`${api_url}/upload/image/create_multipart_upload`, {
 			method: 'POST',
@@ -341,14 +343,14 @@ export async function createImage(project_id: string | undefined, survey_id: str
 			}),
 		});
 		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
-			const resp = await response.json();
+		const resp = await response.json();
 		return resp.upload_id as string;
 	} catch (error: any) {
-        console.error("There was an error creating the upload:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
- }
+		console.error("There was an error creating the upload:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
+}
 
 export async function getPresignedUrl(upload_id: string, part_number: number, image_key: string, chunk_size: number, chunk_md5: string): Promise<string | undefined> {
 	try {
@@ -370,10 +372,10 @@ export async function getPresignedUrl(upload_id: string, part_number: number, im
 		const resp = await response.json();
 		return resp as string;
 	} catch (error: any) {
-        console.error("There was an error creating the presigned url:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error creating the presigned url:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 export async function abortMultipartUpload(image_key: string, upload_id: string): Promise<string | undefined> {
@@ -393,10 +395,10 @@ export async function abortMultipartUpload(image_key: string, upload_id: string)
 		const resp = await response.json()
 		return resp as string;
 	} catch (error: any) {
-        console.error("There was an error aborting the multipart upload:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error aborting the multipart upload:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 export async function completeMultiPartUpload(image_key: string, parts: any[], upload_id: string): Promise<string | undefined> {
@@ -416,10 +418,10 @@ export async function completeMultiPartUpload(image_key: string, parts: any[], u
 		if (!response.ok) throw new Error(`${uh_oh} ${await response.text()}`)
 		return await response.json() as string;
 	} catch (error: any) {
-        console.error("There was an error completeing the multipart upload:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error completeing the multipart upload:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 
 }
 
@@ -458,16 +460,16 @@ export async function getBatch(survey_id: string | undefined, herd_unit_id: stri
 		}
 		return [images as Image[], predictions as Prediction[][]];
 	} catch (error: any) {
-        console.error("There was an error fetching the batch", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error fetching the batch", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 
 }
 
-export async function getPredCrops(image_id: string | undefined, survey_id: string | undefined, 
+export async function getPredCrops(image_id: string | undefined, survey_id: string | undefined,
 	herd_unit_id: string | undefined, predictions: Prediction[] | undefined): Promise<PredictionCrop[] | undefined> {
-		try {
+	try {
 		const response = await fetch(`${api_url}/create/prediction_crops`, {
 			method: 'POST',
 			credentials: 'include',
@@ -492,10 +494,10 @@ export async function getPredCrops(image_id: string | undefined, survey_id: stri
 		}
 		return pred_crops;
 	} catch (error: any) {
-        console.error("There was an error creating pred crops:", error);
-        toast.error(`${error}`);
-        return undefined;
-    }
+		console.error("There was an error creating pred crops:", error);
+		toast.error(`${error}`);
+		return undefined;
+	}
 }
 
 export async function submitNoAnnotations(image_id: string, prediction_ids: string[]): Promise<boolean> {
@@ -517,10 +519,10 @@ export async function submitNoAnnotations(image_id: string, prediction_ids: stri
 			return true;
 		}
 	} catch (error: any) {
-        console.error("There was an error closing the image and predictions:", error);
-        toast.error(`${error}`);
-        return false;
-    }
+		console.error("There was an error closing the image and predictions:", error);
+		toast.error(`${error}`);
+		return false;
+	}
 }
 
 export async function autoCrop(image_uuid: string, predictions: Prediction[], herd_unit_id: string, survey_id: string, labels: Label[]): Promise<boolean> {
@@ -545,10 +547,10 @@ export async function autoCrop(image_uuid: string, predictions: Prediction[], he
 			return true;
 		}
 	} catch (error: any) {
-        console.error("There was an error creating crops:", error);
-        toast.error(`${error}`);
-        return false;
-    }
+		console.error("There was an error creating crops:", error);
+		toast.error(`${error}`);
+		return false;
+	}
 }
 
 export async function closeCropSession(): Promise<boolean> {
@@ -568,16 +570,16 @@ export async function closeCropSession(): Promise<boolean> {
 
 	} catch (error: any) {
 		console.error("There was an error closing images:", error);
-        toast.error(`${error}`);
-        return false;
+		toast.error(`${error}`);
+		return false;
 	}
 
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
- // Area reviewing
+// Area reviewing
 
- export async function getReviewedAreaBatch(herd_unit_id: string, label_id: string, survey_id: string, batch_size: number): Promise<[ReviewedArea[], Annotation[][]] | undefined> {
+export async function getReviewedAreaBatch(herd_unit_id: string, label_id: string, survey_id: string, batch_size: number): Promise<[ReviewedArea[], Annotation[][]] | undefined> {
 	try {
 		const response = await fetch(`${api_url}/create/reviewed_area_batch`, {
 			method: 'POST',
@@ -608,7 +610,7 @@ export async function closeCropSession(): Promise<boolean> {
 
 	} catch (error: any) {
 		console.error("There was an error fetching reviewed_areas:", error);
-        toast.error(`${error}`);
+		toast.error(`${error}`);
 		return undefined;
 	}
- }
+}

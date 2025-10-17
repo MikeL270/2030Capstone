@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: development.prongapi.containerfile
     environment:
-      APPLICATION_URL: http://testing.lancecomputer.com:5173
+      APPLICATION_URL: pronghorn-count-dev.arcc.uwyo.edu:5173
       ROOT: ${ROOT}
       HERD_UNIT: ${HERD_UNIT}
       CROP_FOLDER: ${CROP_FOLDER}
