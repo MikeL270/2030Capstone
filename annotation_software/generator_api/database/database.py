@@ -1361,21 +1361,24 @@ class Database:
 		'''
 		user = self._get_user(user_id) if not isinstance(user_id, User) else user_id
 		query = sql.SQL(''' INSERT INTO core.annotations (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, created_by_user_id)
-						 		   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING annotation_id; ''')
+							VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING annotation_id; ''')
 		match annotations:
 			case list() if isinstance(annotations[0], Annotation):
 				ids = []
 				for annot in annotations:
 					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.top_left[0], annot.dimensions.top_left[1], 
-						   			   annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
-					ids.append(cursor.fetchone()[0])
-				return ids if len(ids) > 1 else ids[0]
+									annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
+					annot_id = cursor.fetchone()
+					if annot_id is None:
+						raise Exception('Failed to insert annotation')
+					ids.append(annot_id[0])
+				return ids 
 			case Annotation():
 				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.top_left[0], annotations.dimensions.top_left[1], 
-						   			   annotations.dimensions.bottom_right[0], annotations.dimensions.bottom_right[1], user.user_id))
+										annotations.dimensions.bottom_right[0], annotations.dimensions.bottom_right[1], user.user_id))
 				annot_ids = cursor.fetchall() 
 				ids = [annot_id[0] for annot_id in annot_ids]
-				return ids if len(ids) > 1 else ids[0]
+				return ids
 			case _:
 				raise TypeError('annotations must be of type Annotation or a list consisting of Annotation objects')
 	
