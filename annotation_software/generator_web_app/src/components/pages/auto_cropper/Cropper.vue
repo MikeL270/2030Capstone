@@ -72,7 +72,7 @@ export default defineComponent({
 		const label_color_hex = this.pstore.labels?.find((label) => label.label == predCrop.label)?.color;
 		ctx.strokeStyle = (label_color_hex != undefined) ? label_color_hex : 'white'
 		ctx.fillStyle = (label_color_hex != undefined) ? label_color_hex + '54' : '#ffffff54'
-		ctx.fillRect(box.top_left[0], box.top_left[1], box.get_width(), box.get_height());
+		//ctx.fillRect(box.top_left[0], box.top_left[1], box.get_width(), box.get_height());
 		ctx.rect(box.top_left[0], box.top_left[1], box.get_width(), box.get_height());
 		ctx.stroke();
 	},
