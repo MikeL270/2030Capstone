@@ -548,7 +548,6 @@ def create_reviewed_area_and_annotations():
 							  box_bx = pred['dimensions']['bottom_right'][0],
 							  box_by = pred['dimensions']['bottom_right'][1],
 							  created = datetime.fromisoformat(pred['created'].replace("Z", "+00:00")),
-							  modified = datetime.fromisoformat(pred['modified'].replace("Z", "+00:00")),
 							  uuid = pred['uuid']) for pred in data['predictions']]
   
 	# Create reviewed area(s) from auto_crop() funchtion
