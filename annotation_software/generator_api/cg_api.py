@@ -538,18 +538,24 @@ def create_reviewed_area_and_annotations():
 	label_ids = { lbl['label'] : lbl['label_id'] for lbl in data['labels'] }
 	
 	# (re)Construct prediction objects from data in request
-	predictions = [Prediction(pred_id = pred['pred_id'], 
-						   	  image_id = pred['image_id'],
-							  model_id = pred['model_id'],
-							  label = pred['label'],
-							  score = pred['score'],
-							  box_tx = pred['dimensions']['top_left'][0],
-							  box_ty = pred['dimensions']['top_left'][1],
-							  box_bx = pred['dimensions']['bottom_right'][0],
-							  box_by = pred['dimensions']['bottom_right'][1],
-							  created = datetime.fromisoformat(pred['created'].replace("Z", "+00:00")),
-							  uuid = pred['uuid']) for pred in data['predictions']]
-  
+	predictions = []
+
+	for pred in data['predictions']:
+		prediction = Prediction(
+			pred_id = pred['pred_id'], 
+			image_id = pred['image_id'],
+			model_id = pred['model_id'],
+			label = pred['label'],
+			score = pred['score'],
+			box_tx = pred['dimensions']['top_left'][0],
+			box_ty = pred['dimensions']['top_left'][1],
+			box_bx = pred['dimensions']['bottom_right'][0],
+			box_by = pred['dimensions']['bottom_right'][1],
+			created = datetime.fromisoformat(pred['created'].replace("Z", "+00:00")),
+			uuid = pred['uuid'],
+			reviewed_by_user_id = 0
+		)
+		predictions.append(prediction)
 	# Create reviewed area(s) from auto_crop() funchtion
 	reviewed_areas = auto_crop(image=image, predictions=predictions, labels_ids=label_ids)
 
