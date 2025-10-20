@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: development.prongapi.containerfile
     environment:
-      APPLICATION_URL: pronghorn-count-dev.arcc.uwyo.edu:5173
+      ORIGIN_URL: http://pronghorn-count-dev.arcc.uwyo.edu:5173
       ROOT: ${ROOT}
       HERD_UNIT: ${HERD_UNIT}
       CROP_FOLDER: ${CROP_FOLDER}
@@ -17,19 +17,20 @@ services:
       DB_HOST: ${DB_HOST}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS} 
-      DB_NAME: testing
+      DB_NAME: pronghorn_count_test
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       FLASK_APP: /app/app.py
-      FLASK_DEBUG: 1 
     volumes:
       - ./annotation_api:/app:Z
       - ./requirements.txt:/app/requirements.txt:Z
       - ./crop_generator:/venv/crop_generator:Z
     ports:
-      - "5000:5000"
-    command: >
-      /bin/bash -c "source /venv/api_env/bin/activate && uv run flask run -h 0.0.0.0 -p 5000"
+      - "8000:8000"
+    command: > 
+      /bin/bash -c "source /venv/api_env/bin/activate && python -u /app/app.py"
+      
+     
     networks: 
       - dev_pronghorn_app_network
   valkey:
@@ -45,13 +46,14 @@ services:
     build:
       context: .
       dockerfile: development.prongwebapp.containerfile  
+    arguments:
+      - API_URL: ${API_URL}
     ports:
       - "5173:5173"
+    volumes:
+    - ./generator_web_app/src:/app/src:Z
     develop:
       watch:
-        - path: ./generator_web_app/source
-          target: /app/src
-          action: sync
         - path: ./generator_web_app/package.json
           target: /app/package.json
           action: restart
@@ -60,7 +62,16 @@ services:
           action: restart
     networks: 
       - dev_pronghorn_app_network
-    
+  dev-proxy:
+    image: nginx:latest
+    ports:
+      - "443:443"
+      - "80:80"
+    networks:
+      - dev_pronghorn_app_network
+    volumes:
+      - dev_nginx_conf:/etc/nginx/
+      - nginx_certs:/etc/ssl/
 
   # Postgres database, uncomment if not using external database host
   # db:
@@ -79,6 +90,10 @@ services:
   #     - "5432:5432"
   #   user: "999:999"
 
+
+volumes:
+  dev_nginx_conf:
+  nginx_certs:
 
 networks: 
   dev_pronghorn_app_network:

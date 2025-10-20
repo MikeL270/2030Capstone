@@ -19,6 +19,6 @@ export default defineConfig({
     target: 'esnext'
   },
   server: {
-    allowedHosts: ['testing.lancecomputer.com', 'pronghorn-count-dev.arcc.uwyo.edu']
+    allowedHosts: ['testing.lancecomputer.com', 'pronghorn-count-dev.arcc.uwyo.edu', 'annotation_software_web-app-dev_1']
   }
 })

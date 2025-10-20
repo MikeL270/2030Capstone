@@ -14,7 +14,7 @@ import cv2
 from flask import Blueprint, Response, abort, jsonify, request, session
 from cropgenerator import auto_crop, create_subcrop
 from cropgenerator.generatorobjects import Prediction, User, ReviewedArea, Annotation
-from app import app, login_manager, base, cache, pathfinder
+from app import login_manager, base, cache, pathfinder
 from typing import cast
 from flask_login import (
 	current_user,

@@ -11,7 +11,6 @@ from flask_cors import CORS
 from flask_login import LoginManager
 from flask_session import Session
 import redis
-import logging
 
 import database as db
 
@@ -22,7 +21,7 @@ db_config = {
 	'user': os.environ.get('DB_USER'),              
 	'password': os.environ.get('DB_PASS'),    
 	'host': os.environ.get('DB_HOST'),           
-	'port': '5432'              
+	'port': '5433'              
 }
 
 base = None
@@ -45,8 +44,8 @@ def create_app():
 	base = db.Database(db_config) #pyright: ignore
 	app = Flask(__name__)
 	app.secret_key = os.environ.get('SECRET_KEY')
-	app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-	app.config['SESSION_COOKIE_SECURE'] = False 
+	app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
+	app.config['SESSION_COOKIE_SECURE'] = True 
 	app.config['SESSION_TYPE'] = 'redis'
 	app.config['SESSION_PERMANENT'] = True
 	app.config['SESSION_USE_SIGNER'] = True
@@ -54,7 +53,7 @@ def create_app():
 	app.config['TESTING'] = True
 	app.config['DEBUG'] = True
 	url = os.environ.get('ORIGIN_URL')
-
+	print(url)
 	CORS(app, resources={
 		r'/api/*': {
 			'origins': [
