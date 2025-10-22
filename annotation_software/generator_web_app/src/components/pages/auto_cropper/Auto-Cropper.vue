@@ -2,8 +2,10 @@
 import '@/assets/selector.css';
 import { defineComponent, defineAsyncComponent, ref } from 'vue';
 import { useProjectStore } from '@/modules/stores/projectStore';
+import { useAutoCropperStore } from '@/modules/stores/cropperStore';
 import { Project, Survey, Schema, HerdUnit, Label, Model } from '@/types/generatorobjects';
 import { mapState } from 'pinia';
+import { POSITION } from 'vue-toastification';
 
 var crumb_num = ref<number>(0);
 export default defineComponent({
@@ -14,12 +16,13 @@ export default defineComponent({
 		Crop: defineAsyncComponent(() => import('./Cropper.vue')),
 	},
 	setup() {
-		const project_store = useProjectStore();
-		return { project_store };
+		const pstore = useProjectStore();
+		const cstore = useAutoCropperStore();
+		return { pstore, cstore };
 	},
 	mounted() {
-		if(this.project_store.CurrentProject) {
-			this.$router.push({name: 'auto-cropper', params: { projects: 'projects', uuid: this.project_store.CurrentProject.uuid }})
+		if(this.pstore.CurrentProject) {
+			this.$router.push({name: 'auto-cropper', params: { projects: 'projects', uuid: this.pstore.CurrentProject.uuid }})
 		}
 	},
 	unmounted() {
@@ -36,25 +39,25 @@ export default defineComponent({
 		CurrentSchema: 'CurrentSchema', 
 		CurrentSurvey: 'CurrentSurvey',
 		CurrentHerdUnit: 'CurrentHerdUnit',
-		CurrentLabel: 'CurrentLabel',
+		CurrentLabels: 'CurrentLabels',
 		CurrentModel: 'CurrentModel',
 	})
 	},
 	watch: {
 		CurrentProject(newValue: Project, oldValue: Project) {
 			if (newValue != oldValue && newValue != undefined) {
-				this.project_store.clear_state();
-				this.project_store.get_project_cropper_children();
+				this.pstore.clear_state();
+				this.pstore.get_project_cropper_children();
 				this.$router.push({name: 'auto-cropper', params: { projects: 'projects', uuid: newValue.uuid }})
 			} else {
-				this.project_store.clear_state();
+				this.pstore.clear_state();
 				this.$router.push({name: 'auto-cropper'});
 			}
 		},
 		CurrentSurvey(newValue: Survey, oldValue: Survey) {
 			const currentQuery = {...this.$route.query};
-			this.project_store.clear_herd_units();
-			this.project_store.clear_models();
+			this.pstore.clear_herd_units();
+			this.pstore.clear_models();
 			if (newValue !=oldValue && newValue != undefined) {
 				const newQuery = {
 					...currentQuery,
@@ -64,8 +67,8 @@ export default defineComponent({
 
 				};
 				this.$router.push({query: newQuery});
-				this.project_store.get_cropper_herd_units();
-				this.project_store.get_cropper_models();
+				this.pstore.get_cropper_herd_units();
+				this.pstore.get_cropper_models();
 			} else {
 				const newQuery = {
 					...currentQuery,
@@ -78,8 +81,8 @@ export default defineComponent({
 		},
 		CurrentSchema(newValue: Schema, oldValue: Schema) {
 			const currentQuery = {...this.$route.query };
-			this.project_store.clear_labels();
-			this.project_store.clear_models();
+			this.pstore.clear_labels();
+			this.pstore.clear_models();
 			if (newValue != oldValue && newValue != undefined) {
 				const newQuery = {
 					...currentQuery,
@@ -88,7 +91,7 @@ export default defineComponent({
 					model: undefined
 				};
 				this.$router.push({query: newQuery})
-				this.project_store.get_labels();
+				this.pstore.get_labels();
 			} else {
 				const newQuery = {
 					...currentQuery,
@@ -101,7 +104,7 @@ export default defineComponent({
 		},
 		CurrentHerdUnit(newValue: HerdUnit, oldValue: HerdUnit) {
 			const currentQuery = {...this.$route.query };
-			this.project_store.clear_models();
+			this.pstore.clear_models();
 			if (newValue != oldValue && newValue != undefined) {
 				const newQuery = {
 					...currentQuery,
@@ -109,7 +112,7 @@ export default defineComponent({
 					model: undefined,
 				};
 				this.$router.push({query: newQuery})
-				this.project_store.get_cropper_models();	
+				this.pstore.get_cropper_models();	
 			} else {
 				const newQuery = {
 					...currentQuery,
@@ -122,13 +125,13 @@ export default defineComponent({
 	},
 	methods: {
 		increment_crumb() {
-			if (this.current_crumb == 0 && !this.project_store.CurrentProject) return;
-			else if (this.current_crumb == 0 && !this.project_store.CurrentProject) return;
-			else if (this.current_crumb == 0 && !this.project_store.CurrentSurvey) return;
-			else if (this.current_crumb == 1 && !this.project_store.CurrentSchema) return;
-			else if (this.current_crumb == 1 && !this.project_store.CurrentLabel) return;
-			else if (this.current_crumb == 1 && !this.project_store.CurrentHerdUnit) return;
-			else if (this.current_crumb == 1 && !this.project_store.CurrentModel) return;
+			if (this.current_crumb == 0 && !this.pstore.CurrentProject) return;
+			else if (this.current_crumb == 0 && !this.pstore.CurrentProject) return;
+			else if (this.current_crumb == 0 && !this.pstore.CurrentSurvey) return;
+			else if (this.current_crumb == 1 && !this.pstore.CurrentSchema) return;
+			else if (this.current_crumb == 1 && this.pstore.CurrentLabels.length == 0) return;
+			else if (this.current_crumb == 1 && !this.pstore.CurrentHerdUnit) return;
+			else if (this.current_crumb == 1 && !this.pstore.CurrentModel) return;
 			else if (this.current_crumb <=3 && this.current_crumb != 2) this.current_crumb+=1;
 		},
 		decrement_crumb() {
@@ -240,14 +243,28 @@ export default defineComponent({
 						</li>
 					</ol>
 					<br/>
-					<div id="Configuration-Verification" v-if="project_store.CurrentLabel && project_store.CurrentModel && project_store.CurrentHerdUnit">
-						<hr/>
-						<h2> Cropper Configuration Verification </h2>
-						<img v-bind:src="project_store.CurrentLabel?.image_link"></img>
+					<div id="Configuration-Verification" v-if="pstore.CurrentLabels.length > 0 && pstore.CurrentModel && pstore.CurrentHerdUnit">
+						<h2> Auto Cropper Session Configuration </h2>
+						<label for="minConfidence">Minimum Confidence: <strong>{{ cstore.min_confidence }}</strong></label>
+						<br>
+						<input 
+							type="range" 
+							v-model="cstore.min_confidence" 
+							id="minConfidence" 
+							min="0.01" 
+							max="1.0" 
+							step="0.01"
+							value="0.9"
+							style="width: 100%;"/>
+						<br>			
 						<p>
-							You are about to create training data crops of {{ project_store.CurrentLabel.name }}
-							based off of predictions from {{ project_store.CurrentModel?.name }} on the Herd Unit
-							{{ project_store.CurrentHerdUnit?.name }}
+							This session will contain predictions of 
+							<strong v-for="label in pstore.CurrentLabels">
+								<!-- for the love all that is good, do not mess with this next line -->
+								{{ (pstore.CurrentLabels[pstore.CurrentLabels.length -1] == label) ? label.name + ' ' : (pstore.CurrentLabels[pstore.CurrentLabels.length -2] == label) ? label.name + ', and ' : label.name + ', ' }} 
+							</strong> with a minimum confidence of
+							<strong>{{ cstore.min_confidence }}</strong> made by the model <strong>{{ pstore.CurrentModel.name }}</strong> on images
+							from the herd unit <strong>{{ pstore.CurrentHerdUnit.name }}</strong> produced on <strong>{{ pstore.CurrentSurvey?.survey_date }}.</strong>
 						</p>
 					</div> 
 				</div> 

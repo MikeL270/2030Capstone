@@ -33,6 +33,7 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 		active_pred_idx: 0,
 		loading: false,
 		bootstrapped: false,
+		min_confidence: 0.9,
 	}),
 	getters: {
 		CurrentBatch: (state) => state.batches[state.batch_idx],
@@ -76,8 +77,8 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			const resp = await getBatch(pstore.CurrentSurvey?.uuid,
 				pstore.CurrentHerdUnit?.uuid,
 				prefstore.batch_size,
-				0.9,
-				pstore.CurrentLabel?.label,
+				this.min_confidence,
+				pstore.CurrentLabelValues,
 				pstore.CurrentModel?.uuid)
 			if (resp == undefined) return;
 			if (!this.batches[batch_index]) this.batches[batch_index] = {
@@ -99,7 +100,7 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			this.get_prediction_crops(this.batch_idx, this.image_idx + 1)
 		},
 		async next_batch() {
-			// clear older batch
+			// clear older batch 
 			// TODO: instead of just deleting the batch cache it in valkey session in a form of lifo/filo stack
 			if (this.batches.length > 3) delete this.batches[0];
 			if (!this.NextBatch) {

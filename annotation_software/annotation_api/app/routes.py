@@ -23,7 +23,7 @@ from flask_login import (
 	logout_user,
 ) 
 
-BUCKET_NAME = 'mlance4'
+BUCKET_NAME = 'pronghorn-count-test'
 
 bp = Blueprint('app', __name__)
 
@@ -45,9 +45,10 @@ def authenticate():
 	req_data = request.get_json()
 	if not req_data or 'external-id' not in req_data:
 		abort(400, 'malformed request')
-	user = base.get_user(req_data['external-id'])
-	if not user:
-		abort(401, 'authentication failed')
+	try:
+		user = base.get_user(req_data['external-id'])
+	except Exception:
+		abort(404, 'user not found')
 	else:
 		login_user(user)
 		if not user.last_login:
@@ -63,11 +64,11 @@ def check_auth():
 
 @bp.route('/api/v1/users/get_current_user', methods = ['GET'])
 @login_required
-def get_user():
+def get_current_user():
 	try:
 		user = base.get_user(UUID(current_user.id))
-	except Exception as e:
-		abort(500, e)
+	except Exception:
+		abort(500)
 	return cast(User, user).serialize(), 201
 @bp.route('/api/v1/deauthenticate', methods=["POST"])
 @login_required
@@ -180,8 +181,8 @@ def create_model():
 	data = request.get_json()
 	try:
 		model = base.create_model(data['name'])
-	except Exception as e:
-		abort(500, e)
+	except Exception:
+		abort(500)
 	return model.serialize(), 201
 	
 @bp.route('/api/v1/request/projects/<string:project_id>/models/all', methods=['GET'])
@@ -212,7 +213,7 @@ def get_project_surveys(project_id: str):
 	surveys = base.get_projects_surveys(UUID(project_id))
 	serialized_surveys = [survey.serialize() for survey in surveys]
 	if serialized_surveys is None:
-		abort(404, 'No Surveys Found')
+		abort(404)
 	return jsonify(serialized_surveys), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
@@ -226,7 +227,7 @@ def upload_image_to_db():
 	data = request.get_json()
 	image = base.create_image(data['name'], UUID(data['herd_unit_id']), UUID(data['survey_id']), data['img_key'], data['image_length'], data['image_width'])
 	if image is None:
-		abort(500, 'Could not create Image')
+		abort(500)
 	return image.serialize(), 201
 
 # @bp.route('/app/v1/get/image', methods=['GET'])
@@ -256,7 +257,7 @@ def create_prediction():
 		data['returning']
 	)
 	if prediction is None:
-		abort(500, 'could not create prediction')
+		abort(500)
 	return prediction.serialize(), 201
 
 
@@ -285,8 +286,7 @@ def get_presigned_url():
 		},
 		ExpiresIn=3600,
 		)
-	except Exception as e:
-		print(e)
+	except Exception:
 		abort(500)
 	return jsonify(response), 201
 
@@ -309,8 +309,8 @@ def create_multipart_upload():
 		)
 		upload_id = response['UploadId']
 		return jsonify({'upload_id': upload_id}), 201
-	except Exception as e:
-		abort(500, e)
+	except Exception:
+		abort(500)
 
 @bp.route('/api/v1/upload/image/complete', methods=['POST'])
 @login_required
@@ -331,8 +331,8 @@ def complete_upload():
 			},
 			UploadId = data['upload_id'],
 		)
-	except Exception as e:
-		abort(500, str(e))
+	except Exception:
+		abort(500)
 	return jsonify(response), 201
 
 @bp.route('/api/v1/upload/image/abort', methods=['POST'])
@@ -350,15 +350,15 @@ def abort_upload():
 			Key = data['image_key'],
 			UploadId = data['upload_id'],
 		)
-	except Exception as e: #
-		abort(500, e)
+	except Exception: #
+		abort(500)
 	return jsonify(response), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Auto Cropping
 @bp.route('/api/v1/create/batch', methods=['POST'])
 @login_required
-def get_batch():
+def create_auto_crop_batch():
 	'''
 	
 	'''
@@ -367,17 +367,20 @@ def get_batch():
 		for data in session['pred_crop_data']:
 			cache.delete(data['uuid'])
 		session.pop('pred_crop_data')
-	img_batch = base.get_batch(
-		UUID(data['survey_id']),
-		UUID(data['herd_unit_id']),
-		int(data['size']),
-		int(data['label']),
-		float(data['score']),
-		UUID(data['model_id']),
-		cast(User, current_user))
-	if img_batch is None:
-		abort(404, 'Cannot get batch')
-	
+	try:
+		img_batch = base.get_batch(
+			UUID(data['survey_id']),
+			UUID(data['herd_unit_id']),
+			int(data['size']),
+			data['labels'],
+			float(data['score']),
+			UUID(data['model_id']),
+			cast(User, current_user))
+	except TypeError as e:
+		print(e)
+		abort(404, 'Database returned nothing, perhaps your confidence score is too high.')
+	except Exception:
+		abort(500)
 	return img_batch, 201
 
 @bp.route('/api/v1/create/prediction_crops', methods=['POST'])
@@ -558,15 +561,3 @@ def get_survey_images(survey_id: str):
 		abort(500, e)
 	return jsonify(serialized_images), 201
 
-#---------------------------------------------------------------------------------------------------------------------------#
-# Error Handling
-
-@bp.errorhandler(404)
-def not_found(error): 
-	return f'404: {error.description}', 404
-
-@bp.errorhandler(500)
-def internal_service_error(error): 
-	return f'500: {error.description}', 500
-
-#---------------------------------------------------------------------------------------------------------------------------#

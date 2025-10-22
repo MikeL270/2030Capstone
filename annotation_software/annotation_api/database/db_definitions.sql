@@ -37,7 +37,6 @@ CREATE TABLE core.predictions (
 	model_id integer NOT NULL DEFAULT 0,
 	reviewed_by_user_id integer NOT NULL DEFAULT 0,
 	score double precision NOT NULL,
-	schema_id integer NOT NULL DEFAULT 0,
 	box_tx integer NOT NULL,
 	box_ty integer NOT NULL,
 	box_bx integer NOT NULL,

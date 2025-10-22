@@ -11,8 +11,9 @@ from flask_cors import CORS
 from flask_login import LoginManager
 from flask_session import Session
 import redis
-
+import app.errors as errors
 import database as db
+from werkzeug.exceptions import HTTPException
 
 load_dotenv()
 
@@ -53,7 +54,6 @@ def create_app():
 	app.config['TESTING'] = True
 	app.config['DEBUG'] = True
 	url = os.environ.get('ORIGIN_URL')
-	print(url)
 	CORS(app, resources={
 		r'/api/*': {
 			'origins': [
@@ -62,9 +62,6 @@ def create_app():
 			'supports_credentials': True     
 		}
 	})
-
-	# Cache
-	
 
 	BUCKET_NAME = 'mlance4' # Change to production bucket name
 
@@ -84,6 +81,7 @@ def create_app():
 		endpoint_url=os.environ.get('AWS_ENDPOINT_URL_S3')
 	)
 
+	# boto3 docs 
 	transfer_config = TransferConfig(
 		use_threads=True,
 		multipart_threshold=16 * 1024 * 1024
@@ -93,5 +91,7 @@ def create_app():
 	login_manager = LoginManager()
 	login_manager.init_app(app)
 	server_session = Session(app)
+	app.errorhandler(HTTPException)(errors.handle_generic_http)
+	app.errorhandler(500)(errors.internal_service_error)
 
 	return app

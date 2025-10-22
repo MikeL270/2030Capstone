@@ -47,8 +47,8 @@ export default defineComponent({
             ctx.lineWidth = 2;
             ctx.strokeStyle = 'red';
             ctx.rect(
-                this.cvs.currentBox.top_left.x - rect.left,
-                this.cvs.currentBox.top_left.y - rect.top,
+                this.cvs.currentBox.top_left.x,
+                this.cvs.currentBox.top_left.y,
                 this.cvs.currentBox.get_width(),
 				this.cvs.currentBox.get_height(),
             );

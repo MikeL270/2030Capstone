@@ -366,7 +366,7 @@ class Database:
 			if roles:
 				self._add_roles_user(user, roles)
 				role_objs = self._get_user_roles(user)
-				if role_objs:
+				if role_objs is not None:
 					user.roles = [role for role in role_objs]
 			# if organizations:
 			# 	self._add_user_organizations(user.user_id, organizations)
@@ -402,7 +402,8 @@ class Database:
 		'''
 		user = self._get_user(user_ids = user_ids)
 		role_objs = self._get_user_roles(user)
-		user.roles = [role for role in role_objs] if isinstance(role_objs, list) else [role_objs] if isinstance(role_objs, Role) else None
+		if role_objs is not None:
+			user.roles = [role for role in role_objs]
 		return user
 		
 	
@@ -1555,7 +1556,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _get_user_roles(self, cursor: psycopg.Cursor[Role], user_id: User| int | UUID) -> list[Role] | Role | None:
+	def _get_user_roles(self, cursor: psycopg.Cursor[Role], user_id: User| int | UUID) -> list[Role] | None:
 		''' Internal helper function, do not call directly
 		
 		'''
@@ -1572,7 +1573,7 @@ class Database:
 				user = self._get_user(user_id)
 				cursor.execute(query, (user.user_id,))
 		roles = cursor.fetchall()
-		return roles[0] if len(roles) == 1 and isinstance(roles[0], Role) else roles if all(isinstance(role, Role) for role in roles) else None
+		return roles
 
 	def get_user_roles(self, user_id: User| int | UUID) -> list[Role] | Role | None:
 		''' Request all roles associated with a user 
@@ -2121,10 +2122,11 @@ class Database:
 
 	@connect
 	def _get_batch(self, cursor: psycopg.Cursor[dict], survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
-					batch_size: int, label: int, score: float, model_id: Model | int | UUID, user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
+					batch_size: int, labels: list[int], score: float, model_id: Model | int | UUID, user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 		
 		'''
+		print('hello')
 		cursor.row_factory = dict_row
 		herd_unit = self.get_herd_unit(herd_unit_id) if not isinstance(herd_unit_id, HerdUnit) else herd_unit_id
 		survey = self.get_survey(survey_id) if not isinstance(survey_id, Survey) else survey_id
@@ -2132,19 +2134,19 @@ class Database:
 		model = self.get_model(model_id) if not isinstance(model_id, Model) else model_id
 		if not herd_unit or not survey or not user or not model:
 			raise Exception('Could not fetch batch')
-		query = sql.SQL('''
+		query = sql.SQL(''' 
             WITH SelectedImageIds AS (
                 SELECT DISTINCT I.image_id, I.herd_unit_id, I.survey_id
                 FROM core.images I
                 INNER JOIN core.predictions P ON I.image_id = P.image_id
-                WHERE I.herd_unit_id = %s
-					AND I.survey_id = %s
+                WHERE I.herd_unit_id = %(herd_unit_id)s
+					AND I.survey_id = %(survey_id)s
 					AND I.opened_by_user_id = 0
-					AND P.model_id = %s
+					AND P.model_id = %(model_id)s
 					AND P.reviewed_by_user_id = 0  
-					AND P.label = %s
-					AND P.score > %s
-                LIMIT %s
+					AND P.label = ANY(%(labels)s)
+					AND P.score > %(score)s
+                LIMIT %(batch_size)s
             )
             SELECT json_agg(row_to_json(img_preds))
             FROM (
@@ -2174,13 +2176,24 @@ class Database:
                 FROM core.images I
                 INNER JOIN core.predictions P ON I.image_id = P.image_id
                 WHERE I.image_id IN (SELECT image_id FROM SelectedImageIds)
-                    AND P.label = %s
-                    AND P.score > %s
-                    AND P.model_id = %s
-                GROUP BY I.image_id, I.name, I.in_training
+                    AND P.label = ANY(%(labels)s)
+                    AND P.score > %(score)s
+                    AND P.model_id = %(model_id)s
+				GROUP BY I.image_id, P.score, P.label
+                ORDER BY P.score DESC
             ) AS img_preds;
         ''')
-		cursor.execute(query, (herd_unit.herd_unit_id, survey.survey_id, model.model_id, label, score, batch_size, label, score, model.model_id))
+		params = {
+			'herd_unit_id': herd_unit.herd_unit_id,
+			'survey_id': survey.survey_id,
+			'model_id': model.model_id,
+			'labels': labels, 
+			'score': score,
+			'batch_size': batch_size
+		}
+		
+		cursor.execute(query, params)
+		
 		results = cursor.fetchone()
 		if results is None:
 			raise Exception('Failed to fetch batch')
@@ -2191,12 +2204,12 @@ class Database:
 		return cast(dict, results)['json_agg']
 
 	def get_batch(self,survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
-					batch_size: int, label: int, score: float, model_id: Model | int | UUID, 
+					batch_size: int, labels: list[int], score: float, model_id: Model | int | UUID, 
 					user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 
 		'''
-		return self._get_batch(survey_id = survey_id, herd_unit_id = herd_unit_id, batch_size = batch_size, user_id = user_id, label = label, score = score, model_id = model_id)
+		return self._get_batch(survey_id = survey_id, herd_unit_id = herd_unit_id, batch_size = batch_size, user_id = user_id, labels = labels, score = score, model_id = model_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Functionality - Close image

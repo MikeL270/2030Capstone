@@ -5,8 +5,8 @@ import { defineComponent } from "vue";
 export default defineComponent({
     name: 'Cropper-Configurinator-3000',
     setup() {
-        const project_store = useProjectStore();
-        return { project_store }
+        const pstore = useProjectStore();
+        return { pstore }
     },
 })
 </script>
@@ -18,10 +18,9 @@ export default defineComponent({
                 <p> Name </p>
                 <p> Created </p>
                 <p> Modified </p>
-                <p> External ID </p> 
             </div>
             <figure>
-                <button class="Entry" v-for="schema in project_store.schemas" @click="project_store.set_current_schema(schema)" :class="{Selected: project_store.CurrentSchema?.uuid == schema.uuid}">
+                <button class="Entry" v-for="schema in pstore.schemas" @click="pstore.set_current_schema(schema)" :class="{Selected: pstore.CurrentSchema?.uuid == schema.uuid}">
                     <p> {{ schema.name }} </p> 
                     <p> {{ schema.created.toLocaleString('en-US', { 
                         year: 'numeric', 
@@ -35,32 +34,31 @@ export default defineComponent({
                         day: 'numeric', 
                         }) }} 
                     </p>
-                    <p> {{ schema.uuid }} </p>
                 </button>
             </figure>
         </div>
         <div class="Configuration-Menu" v-if="$route.name == 'auto-cropper'">
-            <h2> Label Selection </h2>
+            <!-- <h2> Label Selection </h2>
             <div class="Table-Title"> 
+                <p> Image </p>
                 <p> Name </p>
-                <p> Created </p>
                 <p> Modified </p>
-                <p> External ID </p> 
-            </div>
-            <figure v-if="project_store.labels">
-                <button class="Entry" v-for="label in project_store.labels" @click="project_store.set_current_label(label)" :class="{Selected: project_store.CurrentLabel?.uuid == label.uuid}">
+            </div> -->
+            <table>
+                <caption><h2>Label Selection</h2></caption>
+                <th>Image</th>
+                <th>Name</th>
+                <th>Created</th>
+            </table>
+            <figure v-if="pstore.labels">
+                <button class="Entry" v-for="label in pstore.labels" @click="pstore.set_current_labels(label)" :class="{Selected: pstore.label_idxs.includes(pstore.labels.indexOf(label))}">
+                    <img v-bind:src="label?.image_link"></img>
                     <p> {{ label.name }} </p> 
-                    <p> {{ label.created.toLocaleString('en-US', { 
-                        year: 'numeric', 
-                        month: 'numeric', 
-                        day: 'numeric', })}} 
-                    </p>
                     <p> {{ label.modified.toLocaleString('en-US', { 
                         year: 'numeric', 
                         month: 'numeric', 
                         day: 'numeric', })}} 
                     </p>
-                    <p> {{ label.uuid }} </p>
                 </button>
             </figure>
 			<figure v-else="">
@@ -77,10 +75,9 @@ export default defineComponent({
                 <p> Name </p>
                 <p> Created </p>
                 <p> Modified </p>
-                <p> External ID </p> 
             </div>
             <figure>
-                <button class="Entry" v-for="herdunit in project_store.herd_units" @click="project_store.set_current_herd_unit(herdunit) ":class="{Selected: project_store.CurrentHerdUnit?.uuid == herdunit.uuid}">
+                <button class="Entry" v-for="herdunit in pstore.herd_units" @click="pstore.set_current_herd_unit(herdunit) ":class="{Selected: pstore.CurrentHerdUnit?.uuid == herdunit.uuid}">
                     <p> {{ herdunit.name }} </p> 
                         <p> {{ herdunit.created.toLocaleString('en-US', { 
                             year: 'numeric', 
@@ -94,7 +91,6 @@ export default defineComponent({
                             day: 'numeric', 
                             }) }} 
                         </p>
-                        <p> {{ herdunit.uuid }} </p>
                 </button>
             </figure>
         </div>
@@ -104,10 +100,9 @@ export default defineComponent({
                 <p> Name </p>
                 <p> Created </p>
                 <p> Modified </p>
-                <p> External ID </p> 
             </div>
-            <figure v-if="project_store.models">
-                <button class="Entry" v-for="model in project_store.models" @click="project_store.set_current_model(model)" :class="{Selected: project_store.CurrentModel?.uuid == model.uuid}">
+            <figure v-if="pstore.models">
+                <button class="Entry" v-for="model in pstore.models" @click="pstore.set_current_model(model)" :class="{Selected: pstore.CurrentModel?.uuid == model.uuid}">
                     <p> {{ model.name }} </p> 
                         <p> {{ model.created.toLocaleString('en-US', { 
                             year: 'numeric', 
@@ -121,7 +116,6 @@ export default defineComponent({
                             day: 'numeric', 
                             }) }} 
                         </p>
-                        <p> {{ model.uuid }} </p>
                 </button>
             </figure>
 			<figure v-else="">
@@ -141,4 +135,11 @@ export default defineComponent({
 			width: 100%;
 		}
 	}
+    table {
+        width: 100%;
+        overflow-y: auto;
+    }
+    tr {
+        width: 100%;
+    }
 </style>

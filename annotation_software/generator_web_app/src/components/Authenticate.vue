@@ -11,7 +11,6 @@ export default defineComponent({
         const user_store = (useUserStore());
         const router = useRouter();
         const route = useRoute();
- 
         const redirection_path = route.query.redirect as string; 
   
         return { user_store, router, route, redirection_path, toast }
@@ -58,8 +57,15 @@ export default defineComponent({
         },
     },
    
-    mounted() {        
+    async mounted() {        
         this.start_up_toast()
+        await this.user_store.check_auth();
+        if (this.user_store.logged_in == true) {
+            console.log('authed')
+            this.router.push('/')
+        } else {
+            console.log('no auth')
+        }
     },
 }); 
 </script>

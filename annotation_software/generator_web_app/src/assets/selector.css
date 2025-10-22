@@ -5,24 +5,28 @@
 	justify-content: center;
 	align-items: center;
 }
+
 .Instructions {
 	width: 30%;
 	max-height: 100%;
-	border-radius: 8px; 
+	border-radius: 8px;
 	box-shadow: 0 8px 12px 4px var(--color-background);
 	border: solid 1px var(--color-background);
 	text-align: left;
 	padding: 1%;
 	display: flex;
 	flex-direction: column;
+
 	ol {
 		width: 100%;
 		text-align: left;
 		align-items: start;
 	}
 }
+
 #Configuration-Verification {
-	margin: 2%; 
+	margin: 2%;
+
 	img {
 		float: left;
 		margin: 0 4% 0 4%;
@@ -33,6 +37,7 @@
 		user-select: none;
 	}
 }
+
 .Component-Container {
 	display: flex;
 	flex-grow: 0;
@@ -41,110 +46,129 @@
 	gap: 2%;
 	padding: 1.5%;
 }
+
 #NavigationButtons {
 	margin-top: auto;
 	display: flex;
 	width: 100%;
+
 	button {
-		border-radius: 8px; 
+		border-radius: 8px;
 		width: 100%;
 		min-height: 5vh;
-		background-color: var(--wygf-bg-blue );
+		background-color: var(--wygf-bg-blue);
 		color: var(--color-heading);
 		margin: 1%;
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		border: none;
+
 		svg {
 			margin-right: 3%;
 			margin-left: 3%;
 		}
 	}
+
 	button:hover {
 		color: var(--wygf-yellow);
 		cursor: pointer;
 	}
+
 	.Active_Crumb {
 		color: var(--wygf-yellow)
 	}
 }
+
 .Configuration-Container {
-		display: grid;
-		width: 100%;
-		height: 100%;
-		gap: 2%;
-		grid-template-columns: 1fr 1fr;
-		grid-template-rows: 1fr 1fr;
-		overflow: hidden;
-    }
+	display: grid;
+	width: 100%;
+	height: 100%;
+	gap: 2%;
+	grid-template-columns: 1fr 1fr;
+	grid-template-rows: 1fr 1fr;
+	overflow: hidden;
+}
+
 .Configuration-Menu {
-    border-radius: 8px 8px 8px 8px;
-    width: 100%;
+	border-radius: 8px 8px 8px 8px;
+	width: 100%;
 	max-height: 37.5vh;
 	height: 100%;
-    box-shadow: 0 8px 12px 4px var(--color-background);
-    border: solid 1px var(--color-background);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 2%;
-    text-align: center;
-    button {
-        border: none;
-        background: none;
-        color: var(--color-text);
-        font-size: 1em;
-    }
-    button:hover {
-        color: rgb(255, 255, 255);
+	box-shadow: 0 8px 12px 4px var(--color-background);
+	border: solid 1px var(--color-background);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 2%;
+	text-align: center;
+
+	button {
+		border: none;
+		background: none;
+		color: var(--color-text);
+		font-size: 1em;
+	}
+
+	button:hover {
+		color: rgb(255, 255, 255);
 		cursor: pointer;
-    }
+	}
 }
+
 figure {
-    display: flex;
+	display: flex;
 	flex-direction: column !important;
 	justify-content: flex-start !important;
 	width: 100%;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    align-self: center;
-    max-height: 35vh;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-color: var(--color-text) transparent;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	align-self: center;
+	max-height: 35vh;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-color: var(--color-text) transparent;
 }
+
 .Table-Title {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    width: 100%;
-    justify-content: center;
-    text-align: center;
-    align-items: center;
-    height: 7vh !important;
-    font-weight: 900;
-    border-radius: 0px !important;
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	width: 100%;
+	justify-content: center;
+	text-align: center;
+	align-items: center;
+	height: 7vh !important;
+	font-weight: 900;
+	border-radius: 0px !important;
 }
+
 .Entry {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    min-height: 8vh;
+	display: flex;
+	min-height: 8vh;
 	margin: 1%;
 	width: 100%;
-    border-radius: 8px;
-    border: solid 1px var(--color-background) !important;
-    color: var(--color-text);
-    background: none;
-    font-size: 1.10em;
-    p {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        font-size: 0.75em;
-    }
+	border-radius: 8px;
+	border: solid 1px var(--color-background) !important;
+	color: var(--color-text);
+	background: none;
+	font-size: 1.10em;
+
+	p {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+	}
+
+	img {
+		border-radius: 4px;
+		justify-self: center;
+		align-self: center;
+		width: 5vw;
+	}
 }
+
 .Selected {
-    color: var(--wygf-yellow) !important;
+	color: var(--wygf-yellow) !important;
 }

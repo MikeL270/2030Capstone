@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: development.prongapi.containerfile
     environment:
-      ORIGIN_URL: http://pronghorn-count-dev.arcc.uwyo.edu:5173
+      ORIGIN_URL: https://pronghorn-count-dev.arcc.uwyo.edu
       ROOT: ${ROOT}
       HERD_UNIT: ${HERD_UNIT}
       CROP_FOLDER: ${CROP_FOLDER}
@@ -25,12 +25,8 @@ services:
       - ./annotation_api:/app:Z
       - ./requirements.txt:/app/requirements.txt:Z
       - ./crop_generator:/venv/crop_generator:Z
-    ports:
-      - "8000:8000"
     command: > 
       /bin/bash -c "source /venv/api_env/bin/activate && python -u /app/app.py"
-      
-     
     networks: 
       - dev_pronghorn_app_network
   valkey:
@@ -46,10 +42,8 @@ services:
     build:
       context: .
       dockerfile: development.prongwebapp.containerfile  
-    arguments:
-      - API_URL: ${API_URL}
-    ports:
-      - "5173:5173"
+    environment:
+      API_URL: ${API_URL}
     volumes:
     - ./generator_web_app/src:/app/src:Z
     develop:

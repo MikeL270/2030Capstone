@@ -16,8 +16,6 @@ services:
       DB_NAME: ${DB_NAME}
       SESSION_REDIS: ${SESSION_REDIS}
       ORIGIN_URL: ${APPLICATION_URL}
-    ports:
-      - "8000:8000"
     networks: 
       - pronghorn_app_network 
   valkey:
@@ -33,10 +31,11 @@ services:
     build:
       context: .
       dockerfile: production.prongwebapp.containerfile
+      args:
+        - API_URL: ${API_URL}
     ports:
-      # - "80:80"
-      # - "443:443"
-      - "6900:6900"
+      - "80:80"
+      - "443:443"
     networks: 
       - pronghorn_app_network
     volumes:
