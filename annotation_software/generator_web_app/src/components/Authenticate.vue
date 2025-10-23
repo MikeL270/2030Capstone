@@ -61,11 +61,8 @@ export default defineComponent({
         this.start_up_toast()
         await this.user_store.check_auth();
         if (this.user_store.logged_in == true) {
-            console.log('authed')
             this.router.push('/')
-        } else {
-            console.log('no auth')
-        }
+        } 
     },
 }); 
 </script>

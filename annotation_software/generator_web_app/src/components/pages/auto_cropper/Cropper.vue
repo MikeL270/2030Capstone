@@ -47,6 +47,7 @@ export default defineComponent({
 	},
 	async unmounted() {
 		await this.cstore.end_session();
+		document.removeEventListener('keydown', this.handle_key_press);
 	},
 	methods: {
 	render_bounding_boxes() {

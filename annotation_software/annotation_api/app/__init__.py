@@ -93,5 +93,9 @@ def create_app():
 	server_session = Session(app)
 	app.errorhandler(HTTPException)(errors.handle_generic_http)
 	app.errorhandler(500)(errors.internal_service_error)
-
+	from app.routes import bp
+	app.register_blueprint(bp)
 	return app
+
+# limits to single worker context (for now)
+

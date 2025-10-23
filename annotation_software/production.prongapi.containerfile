@@ -42,4 +42,4 @@ WORKDIR /app
 
 COPY ./annotation_api .
 
-CMD ["gunicorn", "-c", "gunicorn.py", "app:app"]
+CMD ["gunicorn", "-c", "gunicorn.py", "app:create_app()"]

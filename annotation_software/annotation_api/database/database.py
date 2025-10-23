@@ -2136,9 +2136,9 @@ class Database:
 			raise Exception('Could not fetch batch')
 		query = sql.SQL(''' 
             WITH SelectedImageIds AS (
-                SELECT DISTINCT I.image_id, I.herd_unit_id, I.survey_id
+                SELECT DISTINCT I.image_id, I.herd_unit_id, I.survey_id, P.score
                 FROM core.images I
-                INNER JOIN core.predictions P ON I.image_id = P.image_id
+                INNER JOIN core."predictions_by_confidence" P ON I.image_id = P.image_id
                 WHERE I.herd_unit_id = %(herd_unit_id)s
 					AND I.survey_id = %(survey_id)s
 					AND I.opened_by_user_id = 0
@@ -2146,6 +2146,7 @@ class Database:
 					AND P.reviewed_by_user_id = 0  
 					AND P.label = ANY(%(labels)s)
 					AND P.score > %(score)s
+				ORDER BY P.score DESC
                 LIMIT %(batch_size)s
             )
             SELECT json_agg(row_to_json(img_preds))
@@ -2174,13 +2175,12 @@ class Database:
                         ORDER BY P.score DESC
                     ) AS predictions
                 FROM core.images I
-                INNER JOIN core.predictions P ON I.image_id = P.image_id
+                INNER JOIN core."predictions_by_confidence" P ON I.image_id = P.image_id
                 WHERE I.image_id IN (SELECT image_id FROM SelectedImageIds)
                     AND P.label = ANY(%(labels)s)
                     AND P.score > %(score)s
                     AND P.model_id = %(model_id)s
-				GROUP BY I.image_id, P.score, P.label
-                ORDER BY P.score DESC
+				GROUP BY I.image_id 
             ) AS img_preds;
         ''')
 		params = {
@@ -2191,9 +2191,10 @@ class Database:
 			'score': score,
 			'batch_size': batch_size
 		}
-		
-		cursor.execute(query, params)
-		
+		try:
+			cursor.execute(query, params)
+		except Exception as e:
+			print(e)
 		results = cursor.fetchone()
 		if results is None:
 			raise Exception('Failed to fetch batch')

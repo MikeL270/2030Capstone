@@ -23,7 +23,7 @@ from flask_login import (
 	logout_user,
 ) 
 
-BUCKET_NAME = 'pronghorn-count-test'
+BUCKET_NAME = 'pronghorn-count'
 
 bp = Blueprint('app', __name__)
 

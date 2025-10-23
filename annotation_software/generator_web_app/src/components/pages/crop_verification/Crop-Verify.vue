@@ -36,7 +36,7 @@ export default defineComponent({
 		CurrentSchema: 'CurrentSchema', 
 		CurrentSurvey: 'CurrentSurvey',
 		CurrentHerdUnit: 'CurrentHerdUnit',
-		CurrentLabel: 'CurrentLabel',
+		CurrentLabels: 'CurrentLabels',
 		CurrentModel: 'CurrentModel',
     })
     },
@@ -238,12 +238,12 @@ export default defineComponent({
 						</li>
 					</ol>
 					<br/>
-					<div id="Configuration-Verification" v-if="project_store.CurrentLabel && project_store.CurrentModel && project_store.CurrentHerdUnit">
+					<div id="Configuration-Verification" v-if="project_store.CurrentLabels && project_store.CurrentModel && project_store.CurrentHerdUnit">
 						<hr/>
 						<h2> Cropper Configuration Verification </h2>
-						<img v-bind:src="project_store.CurrentLabel?.image_link"></img>
+						<img v-bind:src="project_store.CurrentLabels[0].image_link"></img>
 						<p>
-							You are about to create training data crops of {{ project_store.CurrentLabel.name }}
+							You are about to create training data crops of {{ project_store.CurrentLabels[0].name }}
 							based off of predictions from {{ project_store.CurrentModel?.name }} on the Herd Unit
 							{{ project_store.CurrentHerdUnit?.name }}
 						</p>
