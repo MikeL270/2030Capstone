@@ -1,50 +1,55 @@
 // Typescript Class definition analogues for crop_generator objects 
 // Author: Michael B. Lance
 // Created: April 9, 2025
-// Updated: August 8, 2025
+// Updated: October 21, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { mean } from 'lodash';
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
+export interface coord {
+    x: number,
+    y: number
+}
+
 export interface Box_intf {
-	top_left: number[];
-	bottom_right: number[];
+    top_left: coord;
+    bottom_right: coord;
 }
 
 export class Box implements Box_intf {
-    top_left: number[];
-    bottom_right: number[];
-    constructor (box: Box_intf) {
+    top_left: coord;
+    bottom_right: coord;
+    constructor(box: Box_intf) {
         this.top_left = box.top_left;
         this.bottom_right = box.bottom_right;
     }
     get_center(): number[] {
-        let x = mean([this.top_left[0], this.bottom_right[0]]);
-        let y = mean([this.top_left[1], this.bottom_right[1]]);
+        let x = mean([this.top_left.x, this.bottom_right.x]);
+        let y = mean([this.top_left.y, this.bottom_right.y]);
         return [x, y];
     }
     get_points(): number[] {
-        return [this.top_left[0], this.top_left[1], this.bottom_right[0], this.bottom_right[1]];
+        return [this.top_left.x, this.top_left.y, this.bottom_right.x, this.bottom_right.y];
     }
-	get_width(): number {
-		return Math.abs(this.top_left[0] - this.bottom_right[0]);
-	}
-	get_height(): number {
-		return Math.abs(this.top_left[1] - this.bottom_right[1]);
-	}
-	serialize() {
-		return [this.top_left[0], this.top_left[1], this.bottom_right[0], this.bottom_right[1]];
-		
-	}
+    get_width(): number {
+        return Math.abs(this.top_left.x - this.bottom_right.x);
+    }
+    get_height(): number {
+        return Math.abs(this.top_left.y - this.bottom_right.y);
+    }
+    serialize() {
+        return [this.top_left.x, this.top_left.y, this.bottom_right.x, this.bottom_right.y];
+
+    }
 
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface HerdUnit_intf {
-	herd_unit_id: number;
+    herd_unit_id: number;
     name: string;
     created: Date;
     modified: Date;
@@ -52,15 +57,15 @@ export interface HerdUnit_intf {
 }
 
 export class HerdUnit implements HerdUnit_intf {
-	herd_unit_id: number;
+    herd_unit_id: number;
     name: string;
     created: Date;
     modified: Date;
     uuid: string;
 
-    
+
     constructor(herdunit: HerdUnit_intf) {
-		this.herd_unit_id = herdunit.herd_unit_id;
+        this.herd_unit_id = herdunit.herd_unit_id;
         this.name = herdunit.name;
         this.created = new Date(herdunit.created);
         this.modified = new Date(herdunit.modified);
@@ -71,146 +76,161 @@ export class HerdUnit implements HerdUnit_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Image_intf {
-	image_id: number;
-	herd_unit_id: number;
-	survey_id: number;
-	img_key: string;
-	name: string;
-	in_training: boolean;
-	crops_generated: number;
-	created: Date;
-	modified: Date;
-	image_length_px: number;
-	image_width_px: number;
-	uuid: string;
+    image_id: number;
+    herd_unit_id: number;
+    survey_id: number;
+    img_key: string;
+    name: string;
+    in_training: boolean;
+    crops_generated: number;
+    created: Date;
+    modified: Date;
+    image_length_px: number;
+    image_width_px: number;
+    uuid: string;
 }
 
 export class Image implements Image_intf {
-	image_id: number;
-	herd_unit_id: number;
-	survey_id: number;
-	img_key: string;
+    image_id: number;
+    herd_unit_id: number;
+    survey_id: number;
+    img_key: string;
     name: string;
-	in_training: boolean;
-	crops_generated: number;
-	created: Date;
-	modified: Date;
-	image_length_px: number;
-	image_width_px: number;
-	uuid: string;
-  
+    in_training: boolean;
+    crops_generated: number;
+    created: Date;
+    modified: Date;
+    image_length_px: number;
+    image_width_px: number;
+    uuid: string;
+
     constructor(img: Image_intf) {
-		this.image_id = img.image_id;
-		this.herd_unit_id = img.herd_unit_id;
-		this.survey_id = img.survey_id;
-		this.img_key = img.img_key;
+        this.image_id = img.image_id;
+        this.herd_unit_id = img.herd_unit_id;
+        this.survey_id = img.survey_id;
+        this.img_key = img.img_key;
         this.name = img.name;
-		this.in_training = img.in_training;
-		this.crops_generated = img.crops_generated;
-		this.created = new Date(img.created);
-		this.modified = new Date(img.modified);
-		this.image_length_px = img.image_length_px;
-		this.image_width_px = img.image_width_px;
-		this.uuid = img.uuid
+        this.in_training = img.in_training;
+        this.crops_generated = img.crops_generated;
+        this.created = new Date(img.created);
+        this.modified = new Date(img.modified);
+        this.image_length_px = img.image_length_px;
+        this.image_width_px = img.image_width_px;
+        this.uuid = img.uuid
     }
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export interface Prediction_intf { 
-	pred_id: number;
-	image_id: number;
-	model_id: number;
+export interface Prediction_intf {
+    pred_id: number;
+    image_id: number;
+    model_id: number;
     dimensions: Box;
     score: number;
     label: number;
-	created: Date;
-	modified: Date;
-	uuid: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
 }
 
 export class Prediction implements Prediction_intf {
-	pred_id: number;
-	image_id: number;
-	model_id: number;
+    pred_id: number;
+    image_id: number;
+    model_id: number;
     dimensions: Box;
     score: number;
     label: number;
-	created: Date;
-	modified: Date;
-	uuid: string;
+    created: Date;
+    modified: Date;
+    uuid: string;
 
     constructor(pred: Prediction_intf) {
-		this.pred_id = pred.pred_id;
-		this.image_id = pred.image_id;
-		this.model_id = pred.model_id;
+        this.pred_id = pred.pred_id;
+        this.image_id = pred.image_id;
+        this.model_id = pred.model_id;
         this.dimensions = new Box(pred.dimensions);
         this.score = pred.score;
-        this.label = pred.label;    
-		this.created = new Date(pred.created);
-		this.modified = new Date(pred.modified);
-		this.uuid = pred.uuid;
+        this.label = pred.label;
+        this.created = new Date(pred.created);
+        this.modified = new Date(pred.modified);
+        this.uuid = pred.uuid;
     }
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Annotation_intf {
-	annotation_id: number;
-	label_id: number;
-	herd_unit_id: number;
-	dimensions: Box;
-	score: number;
-	created: Date;
-	modified: Date;
-	uuid: string;
+    annotation_id: number;
+    label_id: number;
+    herd_unit_id: number;
+    dimensions: Box;
+    score: number;
+    created: Date;
+    modified: Date;
+    uuid: string;
 }
 
 export class Annotation implements Annotation_intf {
-	annotation_id: number;
-	label_id: number;
-	herd_unit_id: number;
-	dimensions: Box;
-	score: number;
-	created: Date;
-	modified: Date;
-	uuid: string;
+    annotation_id: number;
+    label_id: number;
+    herd_unit_id: number;
+    dimensions: Box;
+    score: number;
+    created: Date;
+    modified: Date;
+    uuid: string;
 
-	constructor (annotation: Annotation_intf) {
-		this.annotation_id = annotation.annotation_id;
-		this.label_id = annotation.label_id;
-		this.herd_unit_id = annotation.herd_unit_id;
-		this.dimensions = new Box(annotation.dimensions);
+    constructor(annotation: Annotation_intf) {
+        this.annotation_id = annotation.annotation_id;
+        this.label_id = annotation.label_id;
+        this.herd_unit_id = annotation.herd_unit_id;
+        this.dimensions = new Box(annotation.dimensions);
         this.score = annotation.score;
-		this.created = new Date(annotation.created);
-		this.modified = new Date(annotation.modified);
-		this.uuid = annotation.uuid;
-	}
+        this.created = new Date(annotation.created);
+        this.modified = new Date(annotation.modified);
+        this.uuid = annotation.uuid;
+    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export interface Crop_intf {
-    id: number,
+export interface ReviewedArea_intf {
+    reviewed_area_id: number,
     image_id: number,
     name: string,
     dimensions: Box,
+    created: Date,
+    modified: Date,
+    reviewed_area_length_px: number,
+    reviewed_area_width_px: number,
+    uuid: string,
     url: string,
 }
 
-export class Crop implements Crop_intf {
-    id: number;
+export class ReviewedArea implements ReviewedArea_intf {
+    reviewed_area_id: number;
     image_id: number;
     name: string;
     dimensions: Box;
+    created: Date;
+    modified: Date;
+    reviewed_area_length_px: number;
+    reviewed_area_width_px: number;
+    uuid: string;
     url: string;
 
-    constructor(crop: Crop_intf) {
-        
-        this.id = crop.id;
+    constructor(crop: ReviewedArea_intf) {
+
+        this.reviewed_area_id = crop.reviewed_area_id;
         this.image_id = crop.image_id;
         this.name = crop.name;
-        this.dimensions = crop.dimensions;
+        this.dimensions = new Box(crop.dimensions);
+        this.created = new Date(crop.created);
+        this.modified = new Date(crop.modified);
+        this.reviewed_area_length_px = crop.reviewed_area_length_px;
+        this.reviewed_area_width_px = crop.reviewed_area_width_px;
+        this.uuid = crop.uuid;
         this.url = crop.url;
     }
 }
@@ -219,39 +239,39 @@ export class Crop implements Crop_intf {
 
 export interface PredictionCrop_intf {
     image_id: number;
-	pred_id: number;
+    pred_id: number;
     name: string;
     score: number;
     label: number;
     dimensions: Box;
-	bounding_box: Box;
+    bounding_box: Box;
     approved: boolean;
-	uuid: string;
+    uuid: string;
 }
 
 export class PredictionCrop implements PredictionCrop_intf {
     image_id: number;
-	pred_id: number;
+    pred_id: number;
     name: string;
     score: number;
     label: number;
     approved: boolean;
     dimensions: Box;
-	bounding_box: Box;
+    bounding_box: Box;
     url: string;
-	uuid: string;
-	draw_box: boolean = false;
-    
-    constructor(predcrop: PredictionCrop_intf, url: string) { 
+    uuid: string;
+    draw_box: boolean = false;
+
+    constructor(predcrop: PredictionCrop_intf, url: string) {
         this.image_id = predcrop.image_id;
-		this.pred_id = predcrop.pred_id;
+        this.pred_id = predcrop.pred_id;
         this.name = predcrop.name;
         this.score = predcrop.score;
         this.label = predcrop.label;
         this.dimensions = new Box(predcrop.dimensions);
-		this.bounding_box = new Box(predcrop.bounding_box);
+        this.bounding_box = new Box(predcrop.bounding_box);
         this.approved = predcrop.approved;
-		this.uuid = predcrop.uuid;
+        this.uuid = predcrop.uuid;
         this.url = url;
     }
 }
@@ -309,7 +329,9 @@ export class User {
         this.last_login = new Date(usr.last_login);
         this.locale = usr.locale;
         this.roles = [];
-        for (const role of usr.roles) this.roles.push(new Role(role));
+        if (usr.roles != undefined) {
+            for (const role of usr.roles) this.roles.push(new Role(role));
+        }
         this.uuid = usr.uuid;
     }
 }
@@ -343,7 +365,7 @@ export class Organization implements Organization_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Project_intf {
-	project_id: number;
+    project_id: number;
     name: string;
     created: Date;
     modified: Date;
@@ -351,14 +373,14 @@ export interface Project_intf {
 }
 
 export class Project implements Project_intf {
-	project_id: number;
+    project_id: number;
     name: string;
     created: Date;
     modified: Date;
     uuid: string;
 
     constructor(Proj: Project_intf) {
-		this.project_id = Proj.project_id;
+        this.project_id = Proj.project_id;
         this.name = Proj.name;
         this.created = new Date(Proj.created);
         this.modified = new Date(Proj.modified);
@@ -392,32 +414,32 @@ export class Schema implements Schema_intf {
 //---------------------------------------------------------------------------------------------------------------------------//
 
 export interface Label_intf {
-	label_id: number;
+    label_id: number;
     label: number;
     name: string;
     image_link: string;
-	color: string;
+    color: string;
     created: Date;
     modified: Date;
     uuid: string;
 }
 
 export class Label implements Label_intf {
-	label_id: number;
+    label_id: number;
     label: number;
     name: string;
     image_link: string;
-	color: string;
+    color: string;
     created: Date;
     modified: Date;
     uuid: string;
 
     constructor(lbl: Label_intf) {
-		this.label_id = lbl.label_id;
+        this.label_id = lbl.label_id;
         this.label = lbl.label;
         this.name = lbl.name;
         this.image_link = lbl.image_link;
-		this.color = lbl.color;
+        this.color = lbl.color;
         this.created = new Date(lbl.created);
         this.modified = new Date(lbl.modified);
         this.uuid = lbl.uuid;

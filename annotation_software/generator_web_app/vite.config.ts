@@ -8,7 +8,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 export default defineConfig({
   plugins: [
     vue(),
-	//vueDevTools(),
+    //vueDevTools(),
   ],
   resolve: {
     alias: {
@@ -19,6 +19,6 @@ export default defineConfig({
     target: 'esnext'
   },
   server: {
-      allowedHosts: ['testing.lancecomputer.com']
+    allowedHosts: ['testing.lancecomputer.com', 'pronghorn-count-dev.arcc.uwyo.edu', 'annotation_software_web-app-dev_1']
   }
 })

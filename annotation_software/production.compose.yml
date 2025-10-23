@@ -4,7 +4,6 @@ services:
       context: .
       dockerfile: production.prongapi.containerfile
     environment:
-      APPLICATION_URL: ${APPLICATION_URL}
       SECRET_KEY: ${SECRET_KEY}
       VALKEY_HOST: ${VALKEY_HOST}
       VALKEY_PASS: ${VALKEY_PASS}
@@ -16,8 +15,7 @@ services:
       DB_PASS: ${DB_PASS} 
       DB_NAME: ${DB_NAME}
       SESSION_REDIS: ${SESSION_REDIS}
-    #ports:
-      #- "8000:8000"
+      ORIGIN_URL: ${APPLICATION_URL}
     networks: 
       - pronghorn_app_network 
   valkey:
@@ -33,10 +31,11 @@ services:
     build:
       context: .
       dockerfile: production.prongwebapp.containerfile
+      args:
+        - API_URL: ${API_URL}
     ports:
       - "80:80"
       - "443:443"
-      # - "6900:6900"
     networks: 
       - pronghorn_app_network
     volumes:

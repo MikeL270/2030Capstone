@@ -5,7 +5,7 @@
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { defineStore } from 'pinia';
-import { authUser, checkAuth, getCurrentUser, getUserOrganizations } from '../apiV1Methods.ts';
+import { authUser, checkAuth, getCurrentUser, getUserOrganizations, deauthUser } from '../apiV1Methods.ts';
 import { User, Organization } from '@/types/generatorobjects.ts';
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -18,7 +18,7 @@ export const useUserStore = defineStore('userStore', {
         organization_idx: undefined as number | undefined,
     }),
     getters: {
-        CurrentOrganization: (state) => (state.organizations && state.organization_idx) ?  state.organizations[state.organization_idx] : undefined,
+        CurrentOrganization: (state) => (state.organizations && state.organization_idx) ? state.organizations[state.organization_idx] : undefined,
         CurrentUser: (state) => state.user
     },
     actions: {
@@ -26,9 +26,13 @@ export const useUserStore = defineStore('userStore', {
             this.user = await authUser(external_id) as User;
             this.logged_in = (this.user) ? true : false;
         },
+        async deuathenticate() {
+            await deauthUser();
+            this.clear_state();
+        },
         async get_current_user() {
             this.user = await getCurrentUser() as User;
-			if (this.user != undefined) this.logged_in = true;
+            if (this.user != undefined) this.logged_in = true;
         },
         async check_auth() {
             this.logged_in = (await checkAuth()) ? true : false;
@@ -49,10 +53,10 @@ export const useUserStore = defineStore('userStore', {
         clear_state() {
             this.logged_in = false;
             this.user = undefined;
-            this.organizations =undefined;
-			this.organization_idx = undefined;
+            this.organizations = undefined;
+            this.organization_idx = undefined;
         }
-    }, 
+    },
 })
 
 

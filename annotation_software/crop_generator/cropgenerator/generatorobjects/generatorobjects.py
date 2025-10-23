@@ -286,8 +286,8 @@ class Box(CgOBJ):
 	
 	def serialize(self) -> dict:
 		return {
-			'top_left': list(self.top_left),
-			'bottom_right': list(self.bottom_right),
+			'top_left': {'x': self.top_left[0], 'y': self.top_left[1]},
+			'bottom_right': {'x': self.bottom_right[0], 'y': self.bottom_right[1]},
 		}
 
 @dataclass
@@ -336,7 +336,9 @@ class Image(CgOBJ):
 	def serve(self, img_format: str):
 		if self.image is not None:
 			_, self.img_encoded = cv2.imencode(img_format, self.get_image()) #type: ignore
-			return self.img_encoded.tobytes()
+		else:
+			raise Exception(f'{self.name} has no image data')
+		return self.img_encoded.tobytes()
 		
 	def serialize(self) -> dict:
 		return {

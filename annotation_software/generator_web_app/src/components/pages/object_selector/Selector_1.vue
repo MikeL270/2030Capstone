@@ -19,7 +19,6 @@ export default defineComponent({
                 <p> Name </p>
                 <p> Created </p>
                 <p> Modified </p>
-                <p> External ID </p> 
             </div>
 			<figure>
 				<button class="Entry" v-for="project in project_store.projects" 
@@ -38,7 +37,6 @@ export default defineComponent({
                         day: 'numeric', 
                         }) }} 
                     </p>
-                    <p> {{ project.uuid }} </p>
 				</button>
 			</figure>
 		</div>
@@ -48,7 +46,6 @@ export default defineComponent({
                 <p> Name </p>
                 <p> Created </p>
                 <p> Modified </p>
-                <p> External ID </p> 
             </div>
             <figure v-if="project_store.surveys">
                 <button class="Entry" v-for="survey in project_store.surveys" @click="project_store.set_current_survey(survey)" :class="{Selected: project_store.CurrentSurvey?.uuid == survey.uuid}">
@@ -65,7 +62,7 @@ export default defineComponent({
                         day: 'numeric', 
                         }) }} 
                     </p>
-                    <p> {{ survey.uuid }} </p>
+
                 </button>
             </figure>
 			<figure v-else>

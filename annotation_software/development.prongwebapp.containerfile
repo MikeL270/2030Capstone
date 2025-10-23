@@ -1,15 +1,21 @@
 # Containerfile for in container development
 
-FROM node:20-alpine
+FROM node:lts-alpine
+
+ENV NODE_ENV=development
 
 WORKDIR /app
 
-COPY /generator_web_app/package.json ./
+COPY /generator_web_app/package.json /generator_web_app/package-lock.json ./
 
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 
 COPY /generator_web_app/. .
 
+RUN chown -R node:node /app
+
+USER node
+
 EXPOSE 5173
 
-CMD ["npm", "run", "dev"]
+CMD [ "npm", "run", "dev", "--", "--host" ]

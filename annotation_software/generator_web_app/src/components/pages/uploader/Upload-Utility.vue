@@ -58,7 +58,7 @@ export default defineComponent({
 					schema: undefined,
 				}
 				this.project_store.labels = [];
-				this.project_store.label_idx = undefined;
+				this.project_store.label_idxs = [];
 				this.$router.push({query: newQuery});
 			}
 		},

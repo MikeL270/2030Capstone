@@ -37,7 +37,6 @@ CREATE TABLE core.predictions (
 	model_id integer NOT NULL DEFAULT 0,
 	reviewed_by_user_id integer NOT NULL DEFAULT 0,
 	score double precision NOT NULL,
-	schema_id integer NOT NULL DEFAULT 0,
 	box_tx integer NOT NULL,
 	box_ty integer NOT NULL,
 	box_bx integer NOT NULL,
@@ -63,7 +62,7 @@ CREATE TABLE core.reviewed_area (
 
 CREATE TABLE core.annotations (
 	annotation_id serial PRIMARY KEY,
-	schema_id integer NOT NULL DEFAULT 0,
+	label_id integer NOT NULL DEFAULT 0,
 	image_id integer NOT NULL,
 	herd_unit_id integer NOT NULL DEFAULT 0,
 	box_tx integer NOT NULL,
@@ -165,6 +164,7 @@ CREATE TABLE projectmanagement.labels (
 	label smallint NOT NULL,
 	name varchar(50) NOT NULL,
 	image_link varchar(1000),
+	color varchar(7) NOT NULL DEFAULT '#ffffff',
 	created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	uuid uuid UNIQUE NOT NULL DEFAULT gen_random_uuid()
@@ -180,6 +180,7 @@ CREATE TABLE projectmanagement.herd_units (
 
 CREATE TABLE projectmanagement.models (
 	model_id serial PRIMARY KEY,
+	schema_id integer NOT NULL DEFAULT 0
 	name varchar(30) NOT NULL,
 	created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -188,7 +189,6 @@ CREATE TABLE projectmanagement.models (
 
 CREATE TABLE projectmanagement.surveys (
 	survey_id serial PRIMARY KEY,
-	survey_year integer NOT NULL,
 	survey_date timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	name varchar(50),
 	additional_info text,
@@ -261,7 +261,7 @@ CREATE INDEX ON core.predictions (image_id);
 
 CREATE INDEX ON core.predictions (model_id);
 
-CREATE INDEX ON core.predictions (reviewd_by_user_id);
+CREATE INDEX ON core.predictions (reviewed_by_user_id);
 
 CREATE INDEX ON core.predictions (created);
 
@@ -271,11 +271,11 @@ CREATE INDEX ON core.reviewed_area (image_id);
 
 CREATE INDEX ON core.reviewed_area (created);
 
-CREATE INDEX ON core.reviewed_area (reviewed_areaLengthPx, reviewed_areaWidthPx);
+CREATE INDEX ON core.reviewed_area (reviewed_area_length_px, reviewed_area_width_px);
 
 CREATE INDEX ON core.reviewed_area (uuid);
 
-CREATE INDEX ON core.annotations (schema_id);
+CREATE INDEX ON core.annotations (label_id);
 
 CREATE INDEX ON core.annotations (image_id);
 
@@ -353,15 +353,15 @@ ALTER TABLE core.predictions ADD FOREIGN KEY (schema_id) REFERENCES projectmanag
 
 ALTER TABLE core.predictions ADD FOREIGN KEY (model_id) REFERENCES projectmanagement.models (model_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
-ALTER TABLE core.predictions ADD FOREIGN KEY (reviewd_by_user_id) REFERENCES usermanagement.users (user_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
+ALTER TABLE core.predictions ADD FOREIGN KEY (reviewed_by_user_id) REFERENCES usermanagement.users (user_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
 ALTER TABLE core.reviewed_area ADD FOREIGN KEY (image_id) REFERENCES core.images (image_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE core.reviewed_area ADD FOREIGN KEY (reviewd_by_user_id) REFERENCES usermanagement.users (user_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
+ALTER TABLE core.reviewed_area ADD FOREIGN KEY (reviewed_by_user_id) REFERENCES usermanagement.users (user_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
 ALTER TABLE core.annotations ADD FOREIGN KEY (image_id) REFERENCES core.images (image_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
-ALTER TABLE core.annotations ADD FOREIGN KEY (schema_id) REFERENCES projectmanagement.schemas (schema_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
+ALTER TABLE core.annotations ADD FOREIGN KEY (label_id) REFERENCES projectmanagement.labels (label_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
 ALTER TABLE projectmanagement.labels ADD FOREIGN KEY (schema_id) REFERENCES projectmanagement.schemas (schema_id) ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
@@ -440,7 +440,7 @@ INSERT INTO projectmanagement.labels (label_id, label, name) VALUES (0, -9999, '
 
 INSERT INTO projectmanagement.projects (project_id, name) VALUES (0, 'NO_PROJECT');
 
-INSERT INTO projectmanagement.surveys (survey_id, survey_year) VALUES (0, 1900);
+INSERT INTO projectmanagement.surveys (survey_id, name) VALUES (0, 'NO_SURVEY');
 
 INSERT INTO usermanagement.users_roles (user_id, role_id) VALUES (0, 0);
 
@@ -459,3 +459,5 @@ INSERT INTO projectmanagement.projects_models(model_id, project_id) VALUES (0, 0
 INSERT INTO projectmanagement.projects_surveys(survey_id, project_id) VALUES (0, 0);
 
 INSERT INTO projectmanagement.surveys_herd_units(survey_id, herd_unit_id) VALUES (0, 0);
+
+INSERT INTO projectmanagement.herd_units_models(herd_unit_id, model_id) VALUES (0, 0);

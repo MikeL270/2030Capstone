@@ -1,23 +1,36 @@
-<script setup lang="ts">
+<script lang="ts">
+import { defineComponent } from 'vue';
 import Header from './components/Header.vue'
 import Menu from './components/Menu.vue'
 import { RouterView } from 'vue-router'
 import { useUserStore } from './modules/stores/userStore';
 import { usePreferenceStore } from './modules/stores/preferencesStore';
 
-// Do this first
-const user_store = useUserStore();
-if (user_store.user == undefined) user_store.get_current_user();
-
-const pref_store = usePreferenceStore();
-
-if (pref_store.first_login) {
-	pref_store.getBrowserPreference();
-	pref_store.first_login = false; 
-} else {
-	pref_store.setTheme(pref_store.theme);
-}
-
+export default defineComponent({
+  name: 'App',
+  components: {
+    RouterView,
+    Header,
+    Menu
+  },
+  setup() {
+    const user_store = useUserStore();
+    const pref_store = usePreferenceStore();
+    if (pref_store.first_login) {
+      pref_store.getBrowserPreference();
+      pref_store.first_login = false; 
+    } else {
+      pref_store.setTheme(pref_store.theme);
+    }
+    return { user_store, pref_store }
+  },
+  async mounted() {
+    await this.user_store.check_auth()
+    if (this.user_store.logged_in) {
+      await this.user_store.get_current_user()
+    }
+  }
+})
 </script>
 
 <template>

@@ -1,23 +1,32 @@
-<script lang="js">
+<script lang="ts">
 import { defineComponent, ref } from 'vue';
 import { usePreferenceStore } from '@/modules/stores/preferencesStore';
 import { useUserStore } from '@/modules/stores/userStore';
+import { preProcessFile } from 'typescript';
 
 export default defineComponent({
 	name:'header_component',
-	setup() {
+    setup() {
+        const isDev = import.meta.env.DEV;
 		const user_store = useUserStore();
 		const pref_store = usePreferenceStore();
 		const is_toggled = ref((pref_store.theme == 'light-theme') ? true : false)
 
-		return {user_store, pref_store, is_toggled}
-	}
+		return {user_store, pref_store, is_toggled, isDev}
+    },
+    methods: {
+        async logout() {
+            await this.user_store.deuathenticate();
+            this.$router.push('/authenticate')
+        }
+    }
 })
 
 </script>
 <template>
    <header>
        <h1> Pronghorn Census Software / {{ $route.name }}</h1>
+       <p v-if="isDev" style="color: red; margin-left: 0.5%; "> Development Mode  </p>
 	   <div id="User-Quick-Actions-Holder" v-if="user_store.logged_in">
 			<label class="switch" for="theme-toggle" title="Toggle Theme">
 					<input id="theme-toggle" type="checkbox" @change="pref_store.toggleTheme()" v-model="is_toggled"> 
@@ -27,6 +36,7 @@ export default defineComponent({
 			<Icon icon="material-symbols-light:light-mode" width="24" height="24 " v-if="pref_store.theme == 'light-theme'"></Icon>
 			<Icon icon="material-symbols:dark-mode-outline" width="24" height="24 " v-else></Icon>
 			<p> {{ user_store.user?.username }} </p>
+            <button id="logout" @click="logout()"><Icon icon="mdi:logout"></Icon></button>
 			</div>
    </header>
 </template>
@@ -115,4 +125,9 @@ header {
     .slider.round:before {
         border-radius: 50%;
     }
+#logout {
+    background: none;
+    border: none;
+    color: var(--color-text)
+}
 </style>
