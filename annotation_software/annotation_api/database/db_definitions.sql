@@ -48,6 +48,7 @@ CREATE TABLE core.predictions (
 CREATE TABLE core.reviewed_area (
 	reviewed_area_id serial PRIMARY KEY,
 	image_id integer NOT NULL,
+	name varchar(100),
 	area_tx integer NOT NULL,
 	area_ty integer NOT NULL,
 	area_bx integer NOT NULL,

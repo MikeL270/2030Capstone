@@ -11,10 +11,12 @@ from datetime import datetime
 import io
 from uuid import UUID
 import cv2
-from flask import Blueprint, Response, abort, jsonify, request, session
+from flask import Blueprint, Response, abort, jsonify, request, session, current_app
 from cropgenerator import auto_crop, create_subcrop
 from cropgenerator.generatorobjects import Prediction, User, ReviewedArea, Annotation
-from app import login_manager, base, cache, pathfinder
+from app.extensions import login_manager, cache, base 
+from app import pathfinder
+from database import Database
 from typing import cast
 from flask_login import (
 	current_user,
@@ -23,9 +25,10 @@ from flask_login import (
 	logout_user,
 ) 
 
-BUCKET_NAME = 'pronghorn-count'
 
 bp = Blueprint('app', __name__)
+
+
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # User session management
@@ -277,7 +280,7 @@ def get_presigned_url():
 		response = pathfinder.generate_presigned_url(
 		ClientMethod='upload_part', 
 		Params = {
-		'Bucket': BUCKET_NAME,
+		'Bucket': current_app.config['BUCKET_NAME'],
 		'Key': data['image_key'], 
 		'UploadId': data['upload_id'],
 		'PartNumber': data['part_number'],
@@ -303,7 +306,7 @@ def create_multipart_upload():
 	data = request.get_json()
 	try: 
 		response = pathfinder.create_multipart_upload(
-			Bucket = BUCKET_NAME,
+			Bucket = current_app.config['BUCKET_NAME'],
 			Key = data['image_key'],
 			ContentType = 'image/jpeg',
 		)
@@ -324,7 +327,7 @@ def complete_upload():
 	data = request.get_json()
 	try:
 		response = pathfinder.complete_multipart_upload(
-			Bucket = BUCKET_NAME,
+			Bucket = current_app.config['BUCKET_NAME'],
 			Key = data['image_key'],
 			MultipartUpload={
 				'Parts': data['parts']
@@ -346,7 +349,7 @@ def abort_upload():
 	data = request.get_json()
 	try:
 		response = pathfinder.abort_multipart_upload(
-			Bucket = BUCKET_NAME,
+			Bucket = current_app.config['BUCKET_NAME'],
 			Key = data['image_key'],
 			UploadId = data['upload_id'],
 		)
@@ -395,7 +398,7 @@ def create_prediction_crops():
 
 	if not img_data:
 		img_key = f'images/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/image/{image.name}'
-		img_data = pathfinder.get_object(Bucket=BUCKET_NAME, Key=img_key)['Body'].read()
+		img_data = pathfinder.get_object(Bucket=current_app.config['BUCKET_NAME'], Key=img_key)['Body'].read()
 		cache.set(image.uuid, img_data, 360) 
 
 	image.set_image(img_data)
@@ -450,7 +453,7 @@ def create_reviewed_area_and_annotations():
 
 	if not img_data:
 		img_key = f'images/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/image/{image.name}'
-		img_data = pathfinder.get_object(Bucket=BUCKET_NAME, Key=img_key)['Body'].read()
+		img_data = pathfinder.get_object(Bucket=current_app.config['BUCKET_NAME'], Key=img_key)['Body'].read()
 		cache.set(image.uuid, img_data, 360) 
 	image.set_image(img_data)
 
@@ -499,7 +502,7 @@ def create_reviewed_area_and_annotations():
 		
 
 		pathfinder.put_object(
-			Bucket=BUCKET_NAME,
+			Bucket=current_app.config['BUCKET_NAME'],
 			Key=ra_key,
 			Body=io.BytesIO(img_bytes),  #type: ignore
 			ContentType='image/jpeg'

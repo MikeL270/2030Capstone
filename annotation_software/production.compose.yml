@@ -13,7 +13,10 @@ services:
       DB_HOST: ${DB_HOST}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS} 
+      DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
+      BUCKET_NAME: ${BUCKET_NAME}
+      NUM_API_WORKERS: ${NUM_API_WORKERS}
       SESSION_REDIS: ${SESSION_REDIS}
       ORIGIN_URL: ${APPLICATION_URL}
     networks: 
@@ -32,7 +35,7 @@ services:
       context: .
       dockerfile: production.prongwebapp.containerfile
       args:
-        - API_URL: ${API_URL}
+        - VITE_API_URL_ARG: ${VITE_API_URL}
     ports:
       - "80:80"
       - "443:443"

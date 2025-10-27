@@ -9,6 +9,7 @@ from functools import wraps
 import os
 from typing import Any, Callable, Optional, cast, Union, List
 from uuid import UUID
+import uuid
 
 from cropgenerator.generatorobjects import (
 	Annotation,
@@ -31,6 +32,8 @@ from psycopg.rows import class_row, dict_row
 import psycopg.sql as sql
 from psycopg_pool import ConnectionPool
 
+EXT_KEY = 'base' 
+
 #---------------------------------------------------------------------------------------------------------------------------#
 
 class Database:
@@ -39,8 +42,21 @@ class Database:
 		self._pool = None
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	def init_app(self, app, app_attribute_name='database'):
+		'''
+		'''
+		if not hasattr(app, 'extensions'):
+			app.extensions = {}
+		app.extensions[EXT_KEY] = self
+
+		setattr(app, app_attribute_name, self)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	def create_pool(self, min_size: int=2, max_size: int=4):
+		if self._pool is not None: # dispose of existing pool
+			self.close_pool()
+		self.pool_uuid = uuid.uuid4()
 		self._pool = ConnectionPool(
 			kwargs = self._config,
 			min_size= min_size,

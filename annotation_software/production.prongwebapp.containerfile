@@ -1,6 +1,9 @@
 # Containerfile for production deployment 
 
 # build stage
+ARG VITE_API_URL_ARG
+ENV VITE_API_URL=${VITE_API_URL_ARG}
+
 FROM node:lts-alpine as build-stage
 WORKDIR /app
 COPY /generator_web_app/package*.json ./
