@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import Authenticate from '@/components/Authenticate.vue';
+import Authenticate from '@/components/authenticate.vue';
 import { useUserStore } from '@/modules/stores/userStore';
 
 
@@ -16,7 +16,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'dashboard',
-      component: () => import('./components/pages/Dashboard.vue'),
+      component: () => import('@/components/pages/dashboard.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -25,7 +25,7 @@ const router = createRouter({
     {
       path: '/user/:uuid?',
       name: 'user',
-      component: () => import('./components/pages/User.vue'),
+      component: () => import('@/components/pages/user.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -34,7 +34,7 @@ const router = createRouter({
     {
       path: '/auto-cropper/:projects?/:uuid?',
       name: 'auto-cropper',
-      component: () => import('./components/pages/auto_cropper/Auto-Cropper.vue'),
+      component: () => import('@/components/pages/autoCropper/autoCropperPage.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -42,8 +42,8 @@ const router = createRouter({
     },
     {
       path: '/crop-verifier/:projects?/:uuid?',
-      name: 'Crop-Verifier',
-      component: () => import('@/components/pages/crop_verification/Crop-Verify.vue'),
+      name: 'crop-verifier',
+      component: () => import('@/components/pages/cropVerifier/cropVerifierPage.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -52,7 +52,7 @@ const router = createRouter({
     {
       path: '/settings',
       name: 'settings',
-      component: () => import('./components/pages/Settings.vue'),
+      component: () => import('@/components/pages/settings.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -61,7 +61,7 @@ const router = createRouter({
     {
       path: '/statistics',
       name: 'statistics',
-      component: () => import('./components/pages/Statistics.vue'),
+      component: () => import('@/components/pages/statistics.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -70,7 +70,7 @@ const router = createRouter({
     {
       path: '/upload/:projects?/:uuid?',
       name: 'upload',
-      component: () => import('./components/pages/uploader/Upload-Utility.vue'),
+      component: () => import('@/components/pages/uploader/uploaderPage.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,

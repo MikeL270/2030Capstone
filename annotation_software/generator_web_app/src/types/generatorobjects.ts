@@ -1,7 +1,7 @@
 // Typescript Class definition analogues for crop_generator objects 
 // Author: Michael B. Lance
 // Created: April 9, 2025
-// Updated: October 21, 2025
+// Updated: October 28, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { mean } from 'lodash';
@@ -14,33 +14,33 @@ export interface coord {
 }
 
 export interface Box_intf {
-    top_left: coord;
-    bottom_right: coord;
+    topLeft: coord;
+    bottomRight: coord;
 }
 
 export class Box implements Box_intf {
-    top_left: coord;
-    bottom_right: coord;
+    topLeft: coord;
+    bottomRight: coord;
     constructor(box: Box_intf) {
-        this.top_left = box.top_left;
-        this.bottom_right = box.bottom_right;
+        this.topLeft = box.topLeft;
+        this.bottomRight = box.bottomRight;
     }
-    get_center(): number[] {
-        let x = mean([this.top_left.x, this.bottom_right.x]);
-        let y = mean([this.top_left.y, this.bottom_right.y]);
+    getCenter(): number[] {
+        let x = mean([this.topLeft.x, this.bottomRight.x]);
+        let y = mean([this.topLeft.y, this.bottomRight.y]);
         return [x, y];
     }
-    get_points(): number[] {
-        return [this.top_left.x, this.top_left.y, this.bottom_right.x, this.bottom_right.y];
+    getPoints(): number[] {
+        return [this.topLeft.x, this.topLeft.y, this.bottomRight.x, this.bottomRight.y];
     }
-    get_width(): number {
-        return Math.abs(this.top_left.x - this.bottom_right.x);
+    getWidth(): number {
+        return Math.abs(this.topLeft.x - this.bottomRight.x);
     }
-    get_height(): number {
-        return Math.abs(this.top_left.y - this.bottom_right.y);
+    getHeight(): number {
+        return Math.abs(this.topLeft.y - this.bottomRight.y);
     }
     serialize() {
-        return [this.top_left.x, this.top_left.y, this.bottom_right.x, this.bottom_right.y];
+        return [this.topLeft.x, this.topLeft.y, this.bottomRight.x, this.bottomRight.y];
 
     }
 
@@ -48,7 +48,7 @@ export class Box implements Box_intf {
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export interface HerdUnit_intf {
+export interface HerdUnitIntf {
     herd_unit_id: number;
     name: string;
     created: Date;
@@ -56,7 +56,7 @@ export interface HerdUnit_intf {
     uuid: string;
 }
 
-export class HerdUnit implements HerdUnit_intf {
+export class HerdUnit implements HerdUnitIntf {
     herd_unit_id: number;
     name: string;
     created: Date;
@@ -64,7 +64,7 @@ export class HerdUnit implements HerdUnit_intf {
     uuid: string;
 
 
-    constructor(herdunit: HerdUnit_intf) {
+    constructor(herdunit: HerdUnitIntf) {
         this.herd_unit_id = herdunit.herd_unit_id;
         this.name = herdunit.name;
         this.created = new Date(herdunit.created);
@@ -75,7 +75,7 @@ export class HerdUnit implements HerdUnit_intf {
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export interface Image_intf {
+export interface ImageIntf {
     image_id: number;
     herd_unit_id: number;
     survey_id: number;
@@ -90,7 +90,7 @@ export interface Image_intf {
     uuid: string;
 }
 
-export class Image implements Image_intf {
+export class Image implements ImageIntf {
     image_id: number;
     herd_unit_id: number;
     survey_id: number;
@@ -104,7 +104,7 @@ export class Image implements Image_intf {
     image_width_px: number;
     uuid: string;
 
-    constructor(img: Image_intf) {
+    constructor(img: ImageIntf) {
         this.image_id = img.image_id;
         this.herd_unit_id = img.herd_unit_id;
         this.survey_id = img.survey_id;
@@ -122,7 +122,7 @@ export class Image implements Image_intf {
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export interface Prediction_intf {
+export interface PredictionIntf {
     pred_id: number;
     image_id: number;
     model_id: number;
@@ -134,7 +134,7 @@ export interface Prediction_intf {
     uuid: string;
 }
 
-export class Prediction implements Prediction_intf {
+export class Prediction implements PredictionIntf {
     pred_id: number;
     image_id: number;
     model_id: number;
@@ -145,7 +145,7 @@ export class Prediction implements Prediction_intf {
     modified: Date;
     uuid: string;
 
-    constructor(pred: Prediction_intf) {
+    constructor(pred: PredictionIntf) {
         this.pred_id = pred.pred_id;
         this.image_id = pred.image_id;
         this.model_id = pred.model_id;
@@ -244,7 +244,7 @@ export interface PredictionCrop_intf {
     score: number;
     label: number;
     dimensions: Box;
-    bounding_box: Box;
+    boundingBox: Box;
     approved: boolean;
     uuid: string;
 }
@@ -257,10 +257,10 @@ export class PredictionCrop implements PredictionCrop_intf {
     label: number;
     approved: boolean;
     dimensions: Box;
-    bounding_box: Box;
+    boundingBox: Box;
     url: string;
     uuid: string;
-    draw_box: boolean = false;
+    drawBox: boolean = false;
 
     constructor(predcrop: PredictionCrop_intf, url: string) {
         this.image_id = predcrop.image_id;
@@ -269,7 +269,7 @@ export class PredictionCrop implements PredictionCrop_intf {
         this.score = predcrop.score;
         this.label = predcrop.label;
         this.dimensions = new Box(predcrop.dimensions);
-        this.bounding_box = new Box(predcrop.bounding_box);
+        this.boundingBox = new Box(predcrop.boundingBox);
         this.approved = predcrop.approved;
         this.uuid = predcrop.uuid;
         this.url = url;
@@ -495,6 +495,19 @@ export class Model implements Model_intf {
         this.modified = new Date(mdl.modified);
         this.uuid = mdl.uuid
     }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------//
+
+export interface autoCropperBatch {
+    images: Image[],
+    predictions: Prediction[][],
+    predictionCrops: PredictionCrop[][],
+}
+
+export interface cropVerifierBatch {
+    crops: ReviewedArea[],
+    annotations: Annotation[][],
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//

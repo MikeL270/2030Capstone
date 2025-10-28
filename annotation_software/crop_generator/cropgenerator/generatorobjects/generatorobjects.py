@@ -1,11 +1,10 @@
 # Class definition for objects used in the crop_generator module and database
 # Author: Michael B. Lance
 # created: April 4, 2025
-# updated: September 11 2025
+# updated: October 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import numpy as np
-import os
 from flask.json.provider import JSONProvider
 import cv2
 from abc import ABC, abstractmethod
@@ -215,10 +214,10 @@ class User(UserMixin, CgOBJ):
 		self.uuid = uuid
 		self.roles = roles
 	
-	def get_id(self) -> str:
+	def getId(self) -> str:
 		return self.id
 	
-	def has_role(self, role_name: str) -> bool:
+	def hasRole(self, role_name: str) -> bool:
 		if self.roles:
 			return role_name in self.roles
 		else:
@@ -244,24 +243,24 @@ class Box(CgOBJ):
 	''' A Box contains dimensional data for crops and predictions
 	
 	'''
-	def __init__(self, top_left: tuple[int, int], bottom_right: tuple[int, int]):
-		self.top_left = top_left
-		self.bottom_right = bottom_right
+	def __init__(self, topLeft: tuple[int, int], bottomRight: tuple[int, int]):
+		self.topLeft = topLeft
+		self.bottomRight = bottomRight
 
-	def get_center(self) -> tuple:
-		x = np.mean([self.top_left[0], self.bottom_right[0]])
-		y = np.mean([self.top_left[1], self.bottom_right[1]])
+	def getCenter(self) -> tuple:
+		x = np.mean([self.topLeft[0], self.bottomRight[0]])
+		y = np.mean([self.topLeft[1], self.bottomRight[1]])
 
 		return ((abs(x), abs(y)))
 
-	def get_points(self) -> list[int]:
-		return [self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]]
+	def getPoints(self) -> list[int]:
+		return [self.topLeft[0], self.topLeft[1], self.bottomRight[0], self.bottomRight[1]]
 
-	def calc_iou(self, box_2) -> float:
+	def calcIou(self, box_2) -> float:
 		# Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
 		#Extract bounding boxes coordinates
-		x0_A, y0_A, x1_A, y1_A = self.get_points()
-		x0_B, y0_B, x1_B, y1_B = box_2.get_points()
+		x0_A, y0_A, x1_A, y1_A = self.getPoints()
+		x0_B, y0_B, x1_B, y1_B = box_2.getPoints()
 		
 		# Get the coordinates of the intersection rectangle
 		x0_I = max(x0_A, x0_B)
@@ -286,8 +285,8 @@ class Box(CgOBJ):
 	
 	def serialize(self) -> dict:
 		return {
-			'top_left': {'x': self.top_left[0], 'y': self.top_left[1]},
-			'bottom_right': {'x': self.bottom_right[0], 'y': self.bottom_right[1]},
+			'topLeft': {'x': self.topLeft[0], 'y': self.topLeft[1]},
+			'bottomRight': {'x': self.bottomRight[0], 'y': self.bottomRight[1]},
 		}
 
 @dataclass
@@ -311,31 +310,31 @@ class Image(CgOBJ):
 		self.uuid = uuid
 		self.image = None
 
-	def set_image(self, image_data: np.ndarray):
-		if isinstance(image_data, bytes):
+	def setImage(self, imageData: np.ndarray):
+		if isinstance(imageData, bytes):
 			try:
-				pil_image = PillowImage.open(io.BytesIO(image_data))
-				pil_image = pil_image.convert('RGB')
-				self.image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+				pilImage = PillowImage.open(io.BytesIO(imageData))
+				pilImage = pilImage.convert('RGB')
+				self.image = cv2.cvtColor(np.array(pilImage), cv2.COLOR_RGB2BGR)
 			except Exception as e:
 				print(f"Error converting bytes to image: {e}")
 				self.image = None
-		elif isinstance(image_data, np.ndarray):
-			self.image = image_data
+		elif isinstance(imageData, np.ndarray):
+			self.image = imageData
 		else:
-			print(f"Unsupported type: {type(image_data)}")
+			print(f"Unsupported type: {type(imageData)}")
 			self.image = None
 
-	def get_image(self) -> Optional[np.ndarray]:
+	def getImage(self) -> Optional[np.ndarray]:
 		if self.image is not None:
 			return self.image
 
-	def delete_image(self):
+	def deleteImage(self):
 		del self.image
 
 	def serve(self, img_format: str):
 		if self.image is not None:
-			_, self.img_encoded = cv2.imencode(img_format, self.get_image()) #type: ignore
+			_, self.img_encoded = cv2.imencode(img_format, self.getImage(), [cv2.IMWRITE_JPEG_QUALITY, 100]) #type: ignore
 		else:
 			raise Exception(f'{self.name} has no image data')
 		return self.img_encoded.tobytes()
@@ -440,14 +439,14 @@ class ReviewedArea(Image):
 	
 class PredictionCrop(Image):
 	def __init__(self, image_id: int, pred_id: int, name: str, score: float, label: int, dimensions: Box, 
-				bounding_box: Box, uuid: UUID, url: Optional[str]=None):
+				boundingBox: Box, uuid: UUID, url: Optional[str]=None):
 		self.image_id = image_id
 		self.pred_id = pred_id
 		self.name = name
 		self.score = score
 		self.label = label 
 		self.dimensions = dimensions
-		self.bounding_box = bounding_box
+		self.boundingBox = boundingBox
 		self.approved = False
 		self.uuid = uuid
 	
@@ -459,7 +458,7 @@ class PredictionCrop(Image):
 			'score': self.score,
 			'label': self.label,
 			'dimensions': self.dimensions.serialize(),
-			'bounding_box': self.bounding_box.serialize(),
+			'boundingBox': self.boundingBox.serialize(),
 			'approved': self.approved,
 			'uuid': self.uuid,
 		}

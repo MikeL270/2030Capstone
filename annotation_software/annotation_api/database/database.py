@@ -1,7 +1,7 @@
 # Psycopg3 database abstraction layer for crop generator_api
 # Author: Michael B. Lance
 # Created: November 17, 2024
-# Updated: October 2, 2025
+# Updated: October 28, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 from datetime import datetime
@@ -160,7 +160,7 @@ class Database:
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 	@connect
-	def _update_organization(self, cursor: psycopg.Cursor[Organization], organization_id: Organization | int | UUID,
+	def _update_organization(self, cursor: psycopg.Cursor[Organization], orgId: Organization | int | UUID,
 							 name: str | None = None, logo_url: str | None = None) -> bool:
 		''' Internal helper function, do not call directly
 		
@@ -168,22 +168,22 @@ class Database:
 		query = sql.SQL(''' UPDATE usermanagement.organizations SET {augmented_field}, modified = CURRENT_TIMESTAMP
 							WHERE {id_field} = %s; ''')
 		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key)) for key, value in locals().items() if key in set(['name', 'logo_url']) and value is not None])
-		match organization_id:
+		match orgId:
 			case Organization():
 				cursor.execute(query.format(
 					augmented_field = sql.SQL(f"name = '{organization_id.name}', logo_url = '{organization_id.logo_url}'"), #type: ignore
 					id_field = sql.Identifier('organization_id')
-				), (organization_id.organization_id,))
+				), (orgId.organization_id,))
 			case int():
 				cursor.execute(query.format(
 					augmented_field = kw_augmented_field,
 					id_field = sql.Identifier('organization_id')
-				), (organization_id,))
+				), (orgId,))
 			case UUID():
 				cursor.execute(query.format(
 					kw_augmented_field = kw_augmented_field,
 					id_field = sql.Identifier('uuid')
-				), (organization_id,))
+				), (orgId,))
 			case _:
 				raise TypeError('organization_id must be an Organization, int, uuid, string')
 		return True if cursor.rowcount > 0 else False
@@ -1257,7 +1257,7 @@ class Database:
 			raise Exception('Could not find image')
 		return image 
 	
-	def get_image(self, image_id: int | UUID) -> Image:
+	def getImage(self, image_id: int | UUID) -> Image:
 		'''
 		
 		'''
@@ -1395,16 +1395,16 @@ class Database:
 			case list() if isinstance(annotations[0], Annotation):
 				ids = []
 				for annot in annotations:
-					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.top_left[0], annot.dimensions.top_left[1], 
-									annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
+					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.topLeft[0], annot.dimensions.topLeft[1], 
+									annot.dimensions.bottomRight[0], annot.dimensions.bottomRight[1], user.user_id))
 					annot_id = cursor.fetchone()
 					if annot_id is None:
 						raise Exception('Failed to insert annotation')
 					ids.append(annot_id[0])
 				return ids 
 			case Annotation():
-				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.top_left[0], annotations.dimensions.top_left[1], 
-										annotations.dimensions.bottom_right[0], annotations.dimensions.bottom_right[1], user.user_id))
+				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.topLeft[0], annotations.dimensions.topLeft[1], 
+										annotations.dimensions.bottomRight[0], annotations.dimensions.bottomRight[1], user.user_id))
 				annot_ids = cursor.fetchall() 
 				ids = [annot_id[0] for annot_id in annot_ids]
 				return ids
@@ -1486,14 +1486,14 @@ class Database:
 			case list() if isinstance(reviewed_areas[0], ReviewedArea):
 				ids = []
 				for ra in reviewed_areas:
-					cursor.execute(query, (ra.image_id, ra.name, ra.dimensions.top_left[0], ra.dimensions.top_left[1], 
-									ra.dimensions.bottom_right[0], ra.dimensions.bottom_right[1], ra.reviewed_area_length_px, 
+					cursor.execute(query, (ra.image_id, ra.name, ra.dimensions.topLeft[0], ra.dimensions.topLeft[1], 
+									ra.dimensions.bottomRight[0], ra.dimensions.bottomRight[1], ra.reviewed_area_length_px, 
 									ra.reviewed_area_width_px, 0))
 					ids.append(cursor.fetchone())
 				return ids if len(ids) > 1 else ids[0]
 			case ReviewedArea():
-				cursor.execute(query, (reviewed_areas.image_id, reviewed_areas.name, reviewed_areas.dimensions.top_left[0], reviewed_areas.dimensions.top_left[1], 
-									reviewed_areas.dimensions.bottom_right[0], reviewed_areas.dimensions.bottom_right[1], reviewed_areas.reviewed_area_length_px, 
+				cursor.execute(query, (reviewed_areas.image_id, reviewed_areas.name, reviewed_areas.dimensions.topLeft[0], reviewed_areas.dimensions.topLeft[1], 
+									reviewed_areas.dimensions.bottomRight[0], reviewed_areas.dimensions.bottomRight[1], reviewed_areas.reviewed_area_length_px, 
 									reviewed_areas.reviewed_area_width_px, 0))
 				ra_ids = cursor.fetchall()
 				ids = [ra_id[0] for ra_id in ra_ids]
@@ -2137,12 +2137,11 @@ class Database:
 	# Functionality - Get Batch of images
 
 	@connect
-	def _get_batch(self, cursor: psycopg.Cursor[dict], survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
+	def _get_auto_crop_batch(self, cursor: psycopg.Cursor[dict], survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
 					batch_size: int, labels: list[int], score: float, model_id: Model | int | UUID, user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 		
 		'''
-		print('hello')
 		cursor.row_factory = dict_row
 		herd_unit = self.get_herd_unit(herd_unit_id) if not isinstance(herd_unit_id, HerdUnit) else herd_unit_id
 		survey = self.get_survey(survey_id) if not isinstance(survey_id, Survey) else survey_id
@@ -2150,6 +2149,7 @@ class Database:
 		model = self.get_model(model_id) if not isinstance(model_id, Model) else model_id
 		if not herd_unit or not survey or not user or not model:
 			raise Exception('Could not fetch batch')
+
 		query = sql.SQL(''' 
             WITH SelectedImageIds AS (
                 SELECT DISTINCT I.image_id, I.herd_unit_id, I.survey_id, P.score
@@ -2182,7 +2182,7 @@ class Database:
 							'pred_id', P.pred_id,
 							'image_id', P.image_id,
 							'model_id', P.model_id,
-							'dimensions', json_build_object('top_left', json_build_array(P.box_tx, P.box_ty), 'bottom_right', json_build_array(P.box_bx, P.box_by)),
+							'dimensions', json_build_object('topLeft', json_build_array(P.box_tx, P.box_ty), 'bottomRight', json_build_array(P.box_bx, P.box_by)),
                             'score', P.score,
                             'label', P.label,
 							'created', P.created,
@@ -2220,13 +2220,13 @@ class Database:
 		cursor.executemany(sql.SQL('UPDATE core.images SET opened_by_user_id = %s WHERE image_id = %s'), ids)
 		return cast(dict, results)['json_agg']
 
-	def get_batch(self,survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
+	def get_auto_crop_batch(self,survey_id: Survey | int | UUID, herd_unit_id: HerdUnit | int | UUID, 
 					batch_size: int, labels: list[int], score: float, model_id: Model | int | UUID, 
 					user_id: User | int | UUID) -> dict[str, Union[str, int, List[int]]]:
 		'''
 
 		'''
-		return self._get_batch(survey_id = survey_id, herd_unit_id = herd_unit_id, batch_size = batch_size, user_id = user_id, labels = labels, score = score, model_id = model_id)
+		return self._get_auto_crop_batch(survey_id = survey_id, herd_unit_id = herd_unit_id, batch_size = batch_size, user_id = user_id, labels = labels, score = score, model_id = model_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Functionality - Close image
@@ -2258,7 +2258,7 @@ class Database:
 	# Functionality - Delcare predictions as reviewed
 
 	@connect
-	def _set_predictions_reviewed(self, cursor: psycopg.Cursor, pred_ids: list[Prediction | int | UUID], user_id: int) -> bool:
+	def _set_predictions_reviewed(self, cursor: psycopg.Cursor, pred_ids: list[Prediction] | list[int] | list[UUID], user_id: int) -> bool:
 		'''
 		
 		'''
@@ -2274,7 +2274,7 @@ class Database:
 				raise TypeError('pred_ids must be a list of ints, Predictions, or UUIDS')
 		return True if cursor.rowcount > 0 else False
 
-	def set_predictions_reviewed(self, pred_ids: list[Prediction | int | UUID], user_id: int) -> bool:
+	def set_predictions_reviewed(self, pred_ids: list[Prediction] | list[int] | list[UUID], user_id: int) -> bool:
 		'''
 		
 		'''
@@ -2306,7 +2306,7 @@ class Database:
 		return self._set_user_open_images_closed(user_id = user_id)
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-	# Functionality  - Get Images by survey
+	# Functionality - Get Images by survey
 
 	@connect 
 	def _get_survey_images(self, cursor: psycopg.Cursor[Image], survey_id: Survey | int | UUID) -> list[Image] | Image:
@@ -2340,77 +2340,45 @@ class Database:
 	# Functionality - Get crops and annotations
 
 	@connect
-	def _get_reviewed_area_batch(self, cursor: psycopg.Cursor[dict], user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
-					batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
+	def _get_reviewed_area_batch(self, cursor: psycopg.Cursor[ReviewedArea], user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
+					batch_size: int, survey_id: Union[Survey, int, UUID]) -> list[ReviewedArea]:
 		''' Fetch a batch of reviewed areas and their associated annotations that have yet to be reviewed.
 
 		'''
-		cursor.row_factory = dict_row
+		cursor.row_factory = class_row(ReviewedArea)
 		herd_unit = self.get_herd_unit(herd_unit_id) if not isinstance(herd_unit_id, HerdUnit) else herd_unit_id
 		survey = self.get_survey(survey_id) if not isinstance(survey_id, Survey) else survey_id
 		user = self.get_user(user_id) if not isinstance(user_id, User) else user_id
 		if not herd_unit or not survey or not user:
 			raise Exception('Could not fetch batch')
 
-		query = sql.SQL('''
-			WITH SelctedReviewedAreaIds AS (
-				SELECT DISTINCT RA.reviewed_area_id, RA.image_id
-				FROM core.reviewed_areas RA
-				INNER JOIN core.images I ON RA.image_id = I.image_id
-				WHERE I.herd_unit_id = %s
-					AND I.survey_id = %s
-					AND I.opened_by_user_id = 0
-				LIMIT %s
-			)
-			SELECT json_agg(row_to_json(ra_annotations))
-			FROM (
-				SELECT
-					RA.reviewed_area_id,
-					RA.image_id,
-					RA.name,
-					RA.area_tx,
-					RA.area_ty,
-					RA.area_bx,
-					RA.area_by,
-					RA.reviewed_area_lenth_px,
-					RA.reviewed_area_width_px,
-					RA.created,
-					RA.modified,
-					RA.uuid,
-					json_agg(
-						json_build_object(
-							'annotation_id', A.annotation_id,
-							'label_id', A.label_id,
-							'image_id', A.image_id,
-							'herd_unit_id', A.herd_unit_id,
-							'dimensions', json_build_object('top_left', json_build_array(A.box_tx, A.box_ty), 'bottom_right', json_build_array(A.box_bx, A.box_by)),
-							'created_by_user_id', A.created_by_user_id,
-							'created', A.created,
-							'modified', A.modifed,
-							'uuid', A.uuid
-							)
-					) AS annotations
-				FROM core.reviewed_areas
-				INNER JOIN core.annotations_reviewed_area RAA ON RA.reviwed_area_id = RAA.reveiwed_area_id 
-				INNER JOIN core.annotations ON RAA.annotation_id = A.annotation_id
-				WHERE RA.reviewed_area_id IN (SELECT reviewed_area_id FROM SelectedReviewedAreaIds)
-					AND A.created_by_user_id != %s
-				GROUP RA.image_id, RA.name
-			) AS ra_annotations;
-		''')
-		cursor.execute(query, (herd_unit.herd_unit_id, survey.survey_id, batch_size, user.user_id))
-		results = cursor.fetchone()
+		query = sql.SQL(''' SELECT * FROM core.reviewed_area as RA
+							JOIN core.images as I on ra.image_id = I.image_id
+							WHERE I.herd_unit_id = %(herd_unit_id)s
+								AND I.survey_id = %(survey_id)s
+							LIMIT %(batch_size)s
+								  ''')
+		params = {
+			'herd_unit_id': herd_unit.herd_unit_id,
+			'survey_id' : survey.survey_id,
+			'batch_size' : batch_size
+		}
+		
+		cursor.execute(query, params)
+		results = cursor.fetchall()
+
 		if results is None:
-			raise Exception('Failed to fetch batch')
-		ids = []
-		for row in cast(dict, results)['json_agg']:
-			ids.append((user.user_id, row['image_id']))
-		cursor.executemany(sql.SQL('UPDATE core.images SET opened_by_user_id = %s WHERE image_id = %s'), ids)
-		return cast(dict, results)['json_agg']
+			raise Exception('No reviewed areas found')
+
+		ids = [ra.reviewed_area_id for ra in results]
+		query2 = sql.SQL(''' UPDATE core.images SET opened_by_user_id = %s WHERE image_id = ANY(%s); ''')
+		cursor.execute(query2, (user.user_id, ids))
+
+		return results
 	
 	def get_reviewed_area_batch(self, user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
-					batch_size: int, label_id: Union[Label, int, UUID], survey_id: Union[Survey, int, UUID]) -> dict[str, Union[str, int, List[int]]]:
+					batch_size: int, survey_id: Union[Survey, int, UUID]) -> list[ReviewedArea]:
 		'''
 
 		'''
-		return self._get_reviewed_area_batch(user_id=user_id, herd_unit_id=herd_unit_id, batch_size=batch_size, label_id=label_id, survey_id=survey_id)
+		return self._get_reviewed_area_batch(user_id=user_id, herd_unit_id=herd_unit_id, batch_size=batch_size, survey_id=survey_id)

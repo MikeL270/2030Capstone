@@ -5,15 +5,15 @@ import { defineComponent } from "vue";
 export default defineComponent({
     name: 'Project-Selector',
     setup() {
-        const project_store = useProjectStore();
-        if (project_store.projects.length == 0) project_store.get_projects();
-        return { project_store};
+        const pStore = useProjectStore();
+        if (pStore.projects.length == 0) pStore.get_projects();
+        return { pStore};
     },
 })
 </script>
 <template>
-	<div class="Configuration-Container">
-		<div class="Configuration-Menu">
+	<div class="configurationContainer">
+		<div class="configurationMenu">
 			<h2> Project Selection </h2>
 			<div class="Table-Title"> 
                 <p> Name </p>
@@ -21,9 +21,9 @@ export default defineComponent({
                 <p> Modified </p>
             </div>
 			<figure>
-				<button class="Entry" v-for="project in project_store.projects" 
-				@click="project_store.set_current_project(project)" 
-				:class="{Selected: project_store.CurrentProject?.uuid == project.uuid}">
+				<button class="Entry" v-for="project in pStore.projects" 
+				@click="pStore.set_current_project(project)" 
+				:class="{Selected: pStore.CurrentProject?.uuid == project.uuid}">
 					<p> {{ project.name }} </p> 
                     <p> {{ project.created.toLocaleString('en-US', { 
                         year: 'numeric', 
@@ -40,15 +40,15 @@ export default defineComponent({
 				</button>
 			</figure>
 		</div>
-		<div class="Configuration-Menu">
+		<div class="configurationMenu">
 			<h2> Survey Selection </h2>
             <div class="Table-Title"> 
                 <p> Name </p>
                 <p> Created </p>
                 <p> Modified </p>
             </div>
-            <figure v-if="project_store.surveys">
-                <button class="Entry" v-for="survey in project_store.surveys" @click="project_store.set_current_survey(survey)" :class="{Selected: project_store.CurrentSurvey?.uuid == survey.uuid}">
+            <figure v-if="pStore.surveys">
+                <button class="Entry" v-for="survey in pStore.surveys" @click="pStore.set_current_survey(survey)" :class="{Selected: pStore.CurrentSurvey?.uuid == survey.uuid}">
                     <p> {{ survey.name }} </p> 
                     <p> {{ survey.created.toLocaleString('en-US', { 
                         year: 'numeric', 
@@ -76,11 +76,11 @@ export default defineComponent({
 	</div>
 </template>
 <style scoped>
-	.Configuration-Container {
+	.configurationContainer {
 		grid-template-columns: 1fr 1fr;
 		grid-template-rows: auto;
     }
-	.Configuration-Menu {
+	.configurationMenu {
 		height: 100% !important;
 		max-height: 100%;
 	}

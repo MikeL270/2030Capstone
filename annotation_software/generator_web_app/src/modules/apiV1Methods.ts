@@ -8,7 +8,7 @@ import {
 	Image, Prediction, ReviewedArea, PredictionCrop, Project, Organization, User, Schema,
 	Label, HerdUnit, Survey, Model, Annotation
 } from '@/types/generatorobjects.ts';
-import type { Prediction_intf, User_intf, Image_intf, PredictionCrop_intf, ReviewedArea_intf, Annotation_intf } from '@/types/generatorobjects.ts';
+import type { PredictionIntf, User_intf, ImageIntf, PredictionCrop_intf, ReviewedArea_intf, Annotation_intf } from '@/types/generatorobjects.ts';
 import { useToast } from 'vue-toastification'
 
 
@@ -70,7 +70,7 @@ export async function checkAuth(): Promise<boolean> {
 
 export async function getCurrentUser(): Promise<User | undefined> {
 	try {
-		const response = await fetch(`${api_url}/users/get_current_user`, {
+		const response = await fetch(`${api_url}/users/getCurrentUser`, {
 			method: 'GET',
 			headers: {
 				'Content-Type': 'application/json',
@@ -459,10 +459,10 @@ export async function completeMultiPartUpload(image_key: string, parts: any[], u
 //---------------------------------------------------------------------------------------------------------------------------//
 // Auto Cropping
 
-export async function getBatch(survey_id: string | undefined, herd_unit_id: string | undefined, size: number,
+export async function fetchAutoCropperBatch(survey_id: string | undefined, herd_unit_id: string | undefined, size: number,
 	score: number, labels: number[] | undefined, model_id: string | undefined): Promise<[Image[], Prediction[][]] | undefined> {
 	try {
-		const response = await fetch(`${api_url}/create/batch`, {
+		const response = await fetch(`${api_url}/create/auto-crop-batch`, {
 			method: 'POST',
 			credentials: 'include',
 			headers: {
@@ -482,10 +482,10 @@ export async function getBatch(survey_id: string | undefined, herd_unit_id: stri
 		const images: Image[] = [];
 		const predictions: Prediction[][] = [];
 		for (const img of resp) {
-			images.push(new Image(img as Image_intf));
+			images.push(new Image(img as ImageIntf));
 			const preds: Prediction[] = []
 			for (const pred of img['predictions']) {
-				preds.push(new Prediction(pred as Prediction_intf))
+				preds.push(new Prediction(pred as PredictionIntf))
 			}
 			predictions.push(preds);
 		}
@@ -498,10 +498,10 @@ export async function getBatch(survey_id: string | undefined, herd_unit_id: stri
 
 }
 
-export async function getPredCrops(image_id: string | undefined, survey_id: string | undefined,
+export async function fetchPredCrops(image_id: string | undefined, survey_id: string | undefined,
 	herd_unit_id: string | undefined, predictions: Prediction[] | undefined): Promise<PredictionCrop[] | undefined> {
 	try {
-		const response = await fetch(`${api_url}/create/prediction_crops`, {
+		const response = await fetch(`${api_url}/create/predictionCrops`, {
 			method: 'POST',
 			credentials: 'include',
 			headers: {
@@ -531,9 +531,9 @@ export async function getPredCrops(image_id: string | undefined, survey_id: stri
 	}
 }
 
-export async function submitNoAnnotations(image_id: string, prediction_ids: string[]): Promise<boolean> {
+export async function closeImage(image_id: string): Promise<boolean> {
 	try {
-		const response = await fetch(`${api_url}/update/image/no-annotations`, {
+		const response = await fetch(`${api_url}/update/image/set-closed`, {
 			method: 'POST',
 			credentials: 'include',
 			headers: {
@@ -541,6 +541,29 @@ export async function submitNoAnnotations(image_id: string, prediction_ids: stri
 			},
 			body: JSON.stringify({
 				'image_id': image_id,
+			}),
+		});
+		if (!response.ok) {
+			throw new Error(`${(await response.json() as apiError).message}`);
+		} else {
+			return true;
+		}
+	} catch (error: any) {
+		console.error("Error: ", error);
+		toast.error(`${error}`);
+		return false;
+	}
+}
+
+export async function setPredicionsReviewed(prediction_ids: string[]): Promise<boolean> {
+	try {
+		const response = await fetch(`${api_url}/update/predictions/set-reviewed`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
 				'prediction_ids': prediction_ids
 			}),
 		});
@@ -550,7 +573,7 @@ export async function submitNoAnnotations(image_id: string, prediction_ids: stri
 			return true;
 		}
 	} catch (error: any) {
-		console.error("Error: ", error)
+		console.error("Error: ", error);
 		toast.error(`${error}`);
 		return false;
 	}
@@ -610,9 +633,9 @@ export async function closeCropSession(): Promise<boolean> {
 //---------------------------------------------------------------------------------------------------------------------------//
 // Area reviewing
 
-export async function getReviewedAreaBatch(herd_unit_id: string, label_id: string, survey_id: string, batch_size: number): Promise<[ReviewedArea[], Annotation[][]] | undefined> {
+export async function fetchReviewedAreaBatch(herd_unit_id: string | undefined, survey_id: string | undefined, batch_size: number): Promise<ReviewedArea[] | undefined> {
 	try {
-		const response = await fetch(`${api_url}/create/reviewed_area_batch`, {
+		const response = await fetch(`${api_url}/create/reviewed-area-batch`, {
 			method: 'POST',
 			credentials: 'include',
 			headers: {
@@ -620,24 +643,19 @@ export async function getReviewedAreaBatch(herd_unit_id: string, label_id: strin
 			},
 			body: JSON.stringify({
 				'herd_unit_id': herd_unit_id,
-				'label_id': label_id,
 				'survey_id': survey_id,
 				'batch_size': batch_size
 			}),
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`);
+
 		const resp = await response.json();
 		const reviewed_areas: ReviewedArea[] = [];
-		const annotations: Annotation[][] = [];
+
 		for (const ra of resp) {
 			reviewed_areas.push(new ReviewedArea(ra as ReviewedArea_intf));
-			const annots: Annotation[] = []
-			for (const annot of ra['annotations']) {
-				annots.push(new Annotation(annot as Annotation_intf))
-			}
-			annotations.push(annots);
 		}
-		return [reviewed_areas as ReviewedArea[], annotations as Annotation[][]];
+		return reviewed_areas as ReviewedArea[];
 
 	} catch (error: any) {
 		console.error("Error: ", error)

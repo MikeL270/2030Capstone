@@ -68,7 +68,7 @@ from typing import List
 # 			continue
 # 		pred = Prediction(
 # 			model = model,
-# 			dimensions = Box (top_left=(int(box[0]),int(box[1])), bottom_right=(int(box[2]),int(box[3]))),
+# 			dimensions = Box (topLeft=(int(box[0]),int(box[1])), bottomRight=(int(box[2]),int(box[3]))),
 # 			score = float(score),
 # 			label = int(label),
 # 		)
@@ -112,13 +112,13 @@ from typing import List
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence: float) -> list[str]:
+def sort_by_class_confidence(predictions: list, pred_class: int, minConfidence: float) -> list[str]:
 	''' Sort a list of predictions based on confidence scores for a given class (not really useful with database)
 	
 	Args:
 		predictions: list of predictions (dictionary)
 		pred_class: integer representing a desired class
-		min_confidence: floating point value for the min score to show predictions
+		minConfidence: floating point value for the min score to show predictions
 	
 	Returns a list of predictions sorted by confidence 
 	'''
@@ -132,7 +132,7 @@ def sort_by_class_confidence(predictions: list, pred_class: int, min_confidence:
 			continue
 		max_score = np.max(pred['scores'][is_class])
 		pred['max_class_score'] = max_score
-		if max_score > min_confidence:
+		if max_score > minConfidence:
 			count += 1
 	print(f'{count} images with pronghorn above min confidence score.')
 
@@ -157,11 +157,11 @@ def auto_crop(image: Image, predictions: list[Prediction], labels_ids: dict[int,
 	points = []
 	centers = []
 	crops = [] # Structure to be returned
-	img = image.get_image()
+	img = image.getImage()
 
 	# Get centers for all predictions 
 	for pred in predictions:
-		points.append(pred.dimensions.get_center())
+		points.append(pred.dimensions.getCenter())
 
 	if len(points) == 0:
 		print('no points')
@@ -217,11 +217,11 @@ def auto_crop(image: Image, predictions: list[Prediction], labels_ids: dict[int,
 			area_by = y_end,
 		)
 
-		crop.set_image(img[y_start:y_end, x_start:x_end].copy())
+		crop.setImage(img[y_start:y_end, x_start:x_end].copy())
 		annotations = []
 
 		for p_index, pred in enumerate(predictions):
-			box = pred.dimensions.get_points()
+			box = pred.dimensions.getPoints()
 			if ((box[0] >= x_start) and (box[2] <= x_end)) and ((box[1] >= y_start) and (box[3] <= y_end)): 
 				points_in_crop[p_index] += 1
 				annotations.append(Annotation(
@@ -252,16 +252,16 @@ def auto_crop(image: Image, predictions: list[Prediction], labels_ids: dict[int,
 	
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def create_subcrop(image: Image, predictions: list[dict[str, any]], crop_size: int=150, draw_box: bool=False) -> list[PredictionCrop]:
+def create_subcrop(image: Image, predictions: list[dict[str, any]], crop_size: int=150, drawBox: bool=False) -> list[PredictionCrop]:
 		crops = []
-		img = image.get_image()
+		img = image.getImage()
 		if len(predictions) == 0:        
 			return False  
 		
 		img_height, img_width = img.shape[:2]
  
 		for pred in predictions:
-			box = pred['dimensions']['top_left'] + pred['dimensions']['bottom_right']
+			box = pred['dimensions']['topLeft'] + pred['dimensions']['bottomRight']
 			center_x = (box[0] + box[2]) / 2
 			center_y = (box[1] + box[3]) / 2
 
@@ -291,13 +291,13 @@ def create_subcrop(image: Image, predictions: list[dict[str, any]], crop_size: i
 				score = pred['score'],
 				label = pred['label'],
 				dimensions = Box((int(xmin), int(ymax)), (int(xmax), int(ymin))),
-				bounding_box = Box((int(box[0] - xmin), int(box[1] - ymin)), (int(box[2] - xmin), int(box[3] - ymin))),
+				boundingBox = Box((int(box[0] - xmin), int(box[1] - ymin)), (int(box[2] - xmin), int(box[3] - ymin))),
 				uuid = pred['uuid']
 			)
-			crop.set_image(img[ymin:ymax, xmin:xmax].copy())
+			crop.setImage(img[ymin:ymax, xmin:xmax].copy())
 			crops.append(crop)
 
-			if draw_box:
+			if drawBox:
 				cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 0, 0), 3)
 
 		return crops
@@ -321,7 +321,7 @@ def create_subcrop(image: Image, predictions: list[dict[str, any]], crop_size: i
 #     # Perform Iou check to prevent duplicate data
 #     for crop in crops.keys():
 #         for ecrop in existing_crops:
-#             if crop.calc_iou(Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
+#             if crop.calcIou(Box(ecrop[5], ecrop[6], ecrop[7], ecrop[8])) >= 0.9:
 #                 print('duplicate crop')
 #                 crops.pop(crop, None)
 #     """
@@ -330,6 +330,6 @@ def create_subcrop(image: Image, predictions: list[dict[str, any]], crop_size: i
 #---------------------------------------------------------------------------------------------------------------------------#
 
 # def save_crop(crop: Crop, save_folder: str):
-# 		cv2.imwrite(f'{save_folder}/{crop.name}.jpg', cv2.cvtColor(crop.get_image(), cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])
+# 		cv2.imwrite(f'{save_folder}/{crop.name}.jpg', cv2.cvtColor(crop.getImage(), cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 100])
 
 #---------------------------------------------------------------------------------------------------------------------------#

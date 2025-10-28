@@ -47,7 +47,7 @@ VALUES (?)
 """
 base.query(query, (model_name,))
 base.commit()
-modelId = base.lastrowid()
+model_id = base.lastrowid()
 query = """
 INSERT INTO HerdUnit (HerdUnitName)
 VALUES (?)
@@ -94,7 +94,7 @@ for ind, image in enumerate(dataloader):
         Values (?, ?, ?, ?, ?, ?, ?)
     """
     base.query(query,(image_name, 0, 0, 0, 0, 0))
-    imageId = base.lastrowid()
+    image_id = base.lastrowid()
 
     for box, score, label in zip(boxes, scores, labels):
 
@@ -102,7 +102,7 @@ for ind, image in enumerate(dataloader):
             INSERT INTO Predictions (ImageId, ModelId, BoxTx, BoxTy, BoxBx, BoBy, Score, Label)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-        base.query(query, (imageId, modelId, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label)))
+        base.query(query, (image_id, model_id, int(box[0]), int(box[1]), int(box[2]), int(box[3]), float(score), int(label)))
 
         base.commit()
 

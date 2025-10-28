@@ -17,7 +17,7 @@ import cv2
 class ImageBackend(ABC):
     
     @abstractmethod
-    async def evaluate_crop(self, crop: ReviewedArea, predictions: list[Prediction], class_name, draw_box:bool=False):
+    async def evaluate_crop(self, crop: ReviewedArea, predictions: list[Prediction], class_name, drawBox:bool=False):
         pass
     
 
@@ -60,8 +60,8 @@ class MatplotBackend(ImageBackend):
             except:
                 continue 
 
-    def evaluate_crop(crops: list[PredictionCrop], class_name, draw_box:bool=False):
-        img = image.get_image()
+    def evaluate_crop(crops: list[PredictionCrop], class_name, drawBox:bool=False):
+        img = image.getImage()
         scale_factor = 2
         crop_size = 2
         max_cols = 6
@@ -109,8 +109,8 @@ class OpencvBackend(ImageBackend):
         if key in set([ord('n'), ord('N'), ord('0')]):
             return False
 
-    async def evaluate_crop(self, image: ReviewedArea, predictions: list[Prediction], desired_class: int, class_name, draw_box:bool=False):
-        crops = self.create_subcrop(image, predictions, desired_class, draw_box)
+    async def evaluate_crop(self, image: ReviewedArea, predictions: list[Prediction], desired_class: int, class_name, drawBox:bool=False):
+        crops = self.create_subcrop(image, predictions, desired_class, drawBox)
         
         if os.name == 'posix':
             pass

@@ -8,18 +8,18 @@ import { useProjectStore } from "@/modules/stores/projectStore";
 export default defineComponent({
 	name: 'cropper',
 	setup() {
-		const cstore = useAutoCropperStore();
-		const pstore = useProjectStore();
+		const cStore = useAutoCropperStore();
+		const pStore = useProjectStore();
 		const startup = async () => {
-			if (!cstore.bootstrapped) {
-			await cstore.bootstrap();
+			if (!cStore.bootStrapped) {
+			await cStore.bootstrap();
 		} else {
 			return
 		}
 		
 		};
 		startup();
-		return { cstore, pstore };
+		return { cStore, pStore };
 	},
 	data(): {
 		predCropRefs: Record<string, HTMLCanvasElement>,
@@ -38,106 +38,106 @@ export default defineComponent({
 	watch: {
 		CurrentPredictionCrops(newValue: PredictionCrop[], oldValue: PredictionCrop[]) {
 			if (newValue != oldValue && newValue != undefined) {
-				this.render_bounding_boxes();
+				this.renderBoundingBoxes();
 			} 
 		}
 	},
 	async mounted() { 
-		document.addEventListener('keydown', this.handle_key_press);
+		document.addEventListener('keydown', this.handleKeyPress);
 	},
 	async unmounted() {
-		await this.cstore.end_session();
-		document.removeEventListener('keydown', this.handle_key_press);
+		await this.cStore.endPession();
+		document.removeEventListener('keydown', this.handleKeyPress);
 	},
 	methods: {
-	render_bounding_boxes() {
+	renderBoundingBoxes() {
 		setTimeout(() => {
 			this.CurrentPredictionCrops.forEach((predCrop) => {
 				const canvas = this.predCropRefs[predCrop.uuid];
 				if (canvas) {
-					this.draw_bounding_box(canvas, predCrop);
+					this.drawBoundingBox(canvas, predCrop);
 				}
 			});
 		}, 0);
 	},
-	draw_bounding_box(canvas: HTMLCanvasElement, predCrop: PredictionCrop) {
+	drawBoundingBox(canvas: HTMLCanvasElement, predCrop: PredictionCrop) {
 		if (!canvas || predCrop == undefined) return;
-		const box = predCrop.bounding_box;
-		canvas.width = predCrop.dimensions.get_width();
-		canvas.height = predCrop.dimensions.get_height();
+		const box = predCrop.boundingBox;
+		canvas.width = predCrop.dimensions.getWidth();
+		canvas.height = predCrop.dimensions.getHeight();
 		const ctx = canvas.getContext('2d');
 		if (ctx == null) return;
 		ctx.beginPath();
 		ctx.lineWidth = 2;
-		const label_color_hex = this.pstore.labels?.find((label) => label.label == predCrop.label)?.color;
+		const label_color_hex = this.pStore.labels?.find((label) => label.label == predCrop.label)?.color;
 		ctx.strokeStyle = (label_color_hex != undefined) ? label_color_hex : 'white'
 		ctx.fillStyle = (label_color_hex != undefined) ? label_color_hex + '54' : '#ffffff54'
-		ctx.rect(box.top_left.x, box.top_left.y, box.get_width(), box.get_height());
+		ctx.rect(box.topLeft.x, box.topLeft.y, box.getWidth(), box.getHeight());
 		ctx.stroke();
 		ctx.closePath();
 	},
-	toggle_all_boxes() {
+	toggleAllBoxes() {
 		setTimeout(() => {
 			this.CurrentPredictionCrops.forEach((predCrop) => {
-				predCrop.draw_box = (predCrop.draw_box) ? false : true
+				predCrop.drawBox = (predCrop.drawBox) ? false : true
 			})
 		})
 	},
-	async handle_right_arrow() {
-		await this.cstore.next_image();
+	async handleRightArrow() {
+		await this.cStore.nextImage();
 	},
-	async handle_left_arrow() {
-		await this.cstore.previous_image();
+	async handleLeftArrow() {
+		await this.cStore.previousImage();
 	},
-	async handle_left_bracket() {
-		await this.cstore.previous_prediction();
-		this.predictionRefs[this.cstore.CurrentPredictionCrop.uuid].scrollIntoView({ behavior: 'smooth' });
+	async handleLeftBracket() {
+		await this.cStore.previousPrediction();
+		this.predictionRefs[this.cStore.CurrentPredictionCrop.uuid].scrollIntoView({ behavior: 'smooth' });
 	},
 	async handle_right_bracket() {
-		await this.cstore.next_prediction();
-		this.predictionRefs[this.cstore.CurrentPredictionCrop.uuid].scrollIntoView({ behavior: 'smooth' });
+		await this.cStore.nextPrediction();
+		this.predictionRefs[this.cStore.CurrentPredictionCrop.uuid].scrollIntoView({ behavior: 'smooth' });
 	},
-	handle_s_key() {
-		this.cstore.CurrentPredictionCrop.approved = (this.cstore.CurrentPredictionCrop.approved) ? false : true;
-		this.draw_bounding_box(this.predCropRefs[this.cstore.CurrentPredictionCrop.uuid], this.cstore.CurrentPredictionCrop);
+	handleS() {
+		this.cStore.CurrentPredictionCrop.approved = (this.cStore.CurrentPredictionCrop.approved) ? false : true;
+		this.drawBoundingBox(this.predCropRefs[this.cStore.CurrentPredictionCrop.uuid], this.cStore.CurrentPredictionCrop);
 	},
-	async handle_enter() {
-		await this.cstore.submit();
+	async handleEnter() {
+		await this.cStore.submit();
 	}, 
-	async handle_space() {
+	async handleSpace() {
 		setTimeout(() => {
 			this.CurrentPredictionCrops.forEach((predCrop) => {
-				predCrop.approved = true;
+				predCrop.approved = (predCrop.approved) ? false : true;
 			});
 		}, 0)
 	},
-	decode_digit(event: KeyboardEvent) {
+	decodeDigit(event: KeyboardEvent) {
 		const label_num = +event.key;
-		this.cstore.CurrentPredictionCrop.label = (this.pstore.labels?.find((label) => label.label == label_num) != undefined) ? label_num : this.cstore.CurrentPredictionCrop.label;
-		this.draw_bounding_box(this.predCropRefs[this.cstore.CurrentPredictionCrop.uuid], this.cstore.CurrentPredictionCrop)
-		this.cstore.CurrentPredictionCrop.approved = true;
+		this.cStore.CurrentPredictionCrop.label = (this.pStore.labels?.find((label) => label.label == label_num) != undefined) ? label_num : this.cStore.CurrentPredictionCrop.label;
+		this.drawBoundingBox(this.predCropRefs[this.cStore.CurrentPredictionCrop.uuid], this.cStore.CurrentPredictionCrop)
+		this.cStore.CurrentPredictionCrop.approved = true;
 		this.handle_right_bracket();
 	},
-	handle_key_press(event: KeyboardEvent) {
+	handleKeyPress(event: KeyboardEvent) {
 		switch(true) {
 			case event.code === 'ArrowRight': {
-				this.handle_right_arrow();
+				this.handleRightArrow();
 				break;
 			};
 			case event.code === 'ArrowLeft': {
-				this.handle_left_arrow();
+				this.handleLeftArrow();
 				break;
 			};
 			case event.code === 'KeyB': {
-				this.toggle_all_boxes();
+				this.toggleAllBoxes();
 				break;
 			};
 			case event.code.startsWith('Digit'): {
-				this.decode_digit(event);
+				this.decodeDigit(event);
 				break;
 			};
 			case event.code === 'BracketLeft': {
-				this.handle_left_bracket();
+				this.handleLeftBracket();
 				break;
 			};
 			case event.code === 'BracketRight': {
@@ -145,15 +145,16 @@ export default defineComponent({
 				break;
 			};
 			case event.code === 'KeyS': {
-				this.handle_s_key();
+				this.handleS();
 				break;
 			};
 			case event.code === 'Enter': {
-				this.handle_enter();
+				this.handleEnter();
 				break;
 			};
 			case event.code === 'Space': {
-				this.handle_space()
+				this.handleSpace()
+				break;
 			};
 			default: {
 				console.log('none matched');
@@ -166,61 +167,61 @@ export default defineComponent({
 
 </script>
 <template>
-	<div id="Cropper-Contianer">
-		<div id="Predictions-Container" v-if="!cstore.loading">
-			<div id="Predictions-Carosuel" v-if="!cstore.loading" :class="{Overflow : cstore.CurrentPredictionCrops.length > 2}">
-				<div v-for="predCrop in cstore.CurrentPredictionCrops" 
+	<div id="cropperContianer">
+		<div id="cropperContianer" v-if="!cStore.loading">
+			<div id="predictionsCarosuel" v-if="!cStore.loading" :class="{Overflow : cStore.CurrentPredictionCrops.length > 2}">
+				<div v-for="predCrop in cStore.CurrentPredictionCrops" 
 					:key="predCrop.uuid" 
-					class="Prediction-Object" 
-					:class="{Approved: predCrop.approved == true, Selected: cstore.active_pred_idx == cstore.CurrentPredictionCrops.indexOf(predCrop)}"  
+					class="predictionObject" 
+					:class="{Approved: predCrop.approved == true, Selected: cStore.activePredIdx == cStore.CurrentPredictionCrops.indexOf(predCrop)}"  
 					:title="'Prediction: ' + predCrop.uuid"
 					:ref="(el) => {if (el) {predictionRefs[predCrop.uuid] = el as HTMLDivElement}}">
 					<h2> Score: {{ predCrop.score?.toFixed(3) }} </h2>
 					<button @click="predCrop.approved = (predCrop.approved) ? false : true" tabindex="-1">
-						<canvas :ref="(el) => {if (el) {predCropRefs[predCrop.uuid] = el as HTMLCanvasElement}}" :class="{Visible: predCrop.draw_box}" tabindex="-1"></canvas>
+						<canvas :ref="(el) => {if (el) {predCropRefs[predCrop.uuid] = el as HTMLCanvasElement}}" :class="{Visible: predCrop.drawBox}" tabindex="-1"></canvas>
 						<img :src="predCrop.url" tabindex="-1"></img>
 					</button>
-					<div class="Prediction-Object-Options">
+					<div class="predictionObjectOptions">
 						<section>
 						<label for="label-select-{{ predCrop.uuid }}">Label:</label>
-						<select id="label-select-{{ predCrop.uuid }}" v-model="cstore.CurrentPredictionCrops[cstore.CurrentPredictionCrops.indexOf(predCrop)].label" @change="draw_bounding_box(predCropRefs[predCrop.uuid], predCrop)">
-							<option v-for="label in pstore.labels" :value="label.label" :key="label.label">
+						<select id="label-select-{{ predCrop.uuid }}" v-model="cStore.CurrentPredictionCrops[cStore.CurrentPredictionCrops.indexOf(predCrop)].label" @change="drawBoundingBox(predCropRefs[predCrop.uuid], predCrop)">
+							<option v-for="label in pStore.labels" :value="label.label" :key="label.label">
 								{{ label.name }}
 							</option>
 						</select>
 						</section>
 						<section>
-							<label for="box-toggle-{{ predCrop.uuid }}"> Box: </label>
-							<input type="checkbox" id="box-toggle-{{ predCrop.uuid }}" name="box-toggle" v-model="predCrop.draw_box" tabindex="-1"/>
+							<label for="boxToggle-{{ predCrop.uuid }}"> Box: </label>
+							<input type="checkbox" id="boxToggle-{{ predCrop.uuid }}" name="boxToggle" v-model="predCrop.drawBox" tabindex="-1"/>
 						</section>
 					</div>
 				</div>
 			</div>
 		</div>
-		<div id="Predictions-Container" v-else>
+		<div id="cropperContianer" v-else>
 			<Icon icon="eos-icons:three-dots-loading" width="96" height="96"/> 
 		</div>
 		<div id="Tool-Bar">
 			<div class="Tool">
-				<button @click="handle_left_arrow()" tabindex="-1">
+				<button @click="handleLeftArrow()" tabindex="-1">
 					<Icon icon="ooui:next-rtl" width="16" height="16"/>
 					Previous Image
 				</button>
 			</div>
 			<div class="Tool">
-				<button @click="handle_space()" tabindex="-1">
+				<button @click="handleSpace()" tabindex="-1">
 					<Icon icon="uis:space-key" width="16" height="16"/>
-					Approve All
+					Toggle All
 				</button>
 			</div>
 			<div class="Tool" Title="Submit (Enter)">
-				<button tabindex="-1">
+				<button @click="handleEnter()" tabindex="-1">
 					<Icon icon="vaadin:enter-arrow" width="16" height="16"/>
 					Submit
 				</button>
 			</div>
 			<div class="Tool">
-				<button @click="handle_right_arrow()" tabindex="-1">
+				<button @click="handleRightArrow()" tabindex="-1">
 					Next Image
 					<Icon icon="ooui:next-ltr" width="16" height="16"/> 
 				</button>
@@ -229,7 +230,7 @@ export default defineComponent({
 	</div>
 </template>
 <style scoped>
-#Cropper-Contianer {
+#cropperContianer {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -238,7 +239,7 @@ export default defineComponent({
 	width: 100%;
 	overflow: hidden;
 }
-#Predictions-Container {
+#cropperContianer {
 	height: 100%;
 	display: flex;
 	width: 100%;
@@ -252,7 +253,7 @@ export default defineComponent({
 	}
 	overflow: hidden;
 }
-#Predictions-Carosuel {
+#predictionsCarosuel {
 	display: flex; 
 	align-items: center;
 	justify-content: center;
@@ -268,7 +269,7 @@ export default defineComponent({
 	scrollbar-color: var(--color-text) transparent;
 	scroll-padding-inline: 10%;
 }
-.Prediction-Object {
+.predictionObject {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
@@ -278,13 +279,13 @@ export default defineComponent({
 	background-color: var(--wygf-bg-blue);
 	box-shadow: 0 4px 6px 2px var(--color-background);
 }
-	.Prediction-Object img {
+	.predictionObject img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 		display: block;
 	}
-	.Prediction-Object canvas {
+	.predictionObject canvas {
 		object-fit: cover;
 		display: none;
 		position: absolute;
@@ -292,13 +293,13 @@ export default defineComponent({
 		z-index: 1;
 	}
 
-	.Prediction-Object canvas.Visible {
+	.predictionObject canvas.Visible {
 		width: 100%;
 		height: 100%;
 		display: block;
 		z-index: 999;
 	}
-	.Prediction-Object button {
+	.predictionObject button {
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
@@ -312,7 +313,7 @@ export default defineComponent({
 	}
 
 
-.Prediction-Object-Options {
+.predictionObjectOptions {
 	display: flex;
 	width: 100%;
 	height: 100%;
@@ -321,7 +322,7 @@ export default defineComponent({
 	align-items: center;
 	gap: 1vw;
 }
-.Prediction-Object-Options section {
+.predictionObjectOptions section {
 	display: flex; 
 	align-items: center;
 	gap: 5%;
@@ -347,10 +348,10 @@ export default defineComponent({
 		height: 2vh;
 	}
 }
-.Prediction-Object.Selected {
+.predictionObject.Selected {
 	box-shadow: 0 0 3px 1px white;
 }
-.Prediction-Object.Approved {
+.predictionObject.Approved {
 	box-shadow: 0 0 3px 1px var(--wygf-yellow);
 }
 #Tool-Bar{

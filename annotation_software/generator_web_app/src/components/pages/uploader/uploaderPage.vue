@@ -9,17 +9,17 @@ var crumb_num = ref<number>(0);
 export default defineComponent({
 	name: "Uploader-Utility",
 	components: {
-		Selector_1:  defineAsyncComponent(() => import("../object_selector/Selector_1.vue")),
-		Selector_2: defineAsyncComponent(() => import("../object_selector/Selector_2.vue")),
-		Upload: defineAsyncComponent(() => import("./Uploader.vue")),
+		selector1:  defineAsyncComponent(() => import('@/components/templates/objectSelector/selector1.vue')),
+		selector2: defineAsyncComponent(() => import('@/components/templates/objectSelector/selector2.vue')),
+		Upload: defineAsyncComponent(() => import('@/components/pages/uploader/uploader.vue')),
 	},
 	setup() {
-		const project_store = useProjectStore();
-		return { project_store };
+		const pStore = useProjectStore();
+		return { pStore };
 	},
 	mounted() {
-		if(this.project_store.CurrentProject) {
-			this.$router.push({name: 'upload', params: { projects: 'projects', uuid: this.project_store.CurrentProject.uuid }})
+		if(this.pStore.CurrentProject) {
+			this.$router.push({name: 'upload', params: { projects: 'projects', uuid: this.pStore.CurrentProject.uuid }})
 		}
 	},
 	data() {
@@ -36,11 +36,11 @@ export default defineComponent({
 	watch: {
 		CurrentProject(newValue: Project, oldValue: Project) {
 			if(newValue != oldValue && newValue != undefined) {
-				this.project_store.clear_state();
-				this.project_store.get_project_children();
+				this.pStore.clear_state();
+				this.pStore.get_project_children();
 				this.$router.push({name: 'upload', params: { projects: 'projects', uuid: newValue.uuid }})
 			} else {
-				this.project_store.clear_state();
+				this.pStore.clear_state();
 				this.$router.push({name: 'upload'});
 			}
 		},
@@ -57,19 +57,19 @@ export default defineComponent({
 					...currentQuery,
 					schema: undefined,
 				}
-				this.project_store.labels = [];
-				this.project_store.label_idxs = [];
+				this.pStore.labels = [];
+				this.pStore.label_idxs = [];
 				this.$router.push({query: newQuery});
 			}
 		},
 	},
 	methods: {
 		increment_crumb() {
-			if (this.current_crumb == 0 && !this.project_store.CurrentProject) return;
-			else if (this.current_crumb == 0 && !this.project_store.CurrentSurvey) return;
-			else if (this.current_crumb == 1 && !this.project_store.CurrentSchema) return;
-			else if (this.current_crumb == 1 && !this.project_store.CurrentHerdUnit) return;
-			else if (this.current_crumb == 1 && !this.project_store.CurrentModel) return;
+			if (this.current_crumb == 0 && !this.pStore.CurrentProject) return;
+			else if (this.current_crumb == 0 && !this.pStore.CurrentSurvey) return;
+			else if (this.current_crumb == 1 && !this.pStore.CurrentSchema) return;
+			else if (this.current_crumb == 1 && !this.pStore.CurrentHerdUnit) return;
+			else if (this.current_crumb == 1 && !this.pStore.CurrentModel) return;
 			else if (this.current_crumb <=3 && this.current_crumb != 2) this.current_crumb+=1;
 		},
 		decrement_crumb() {
@@ -97,8 +97,8 @@ export default defineComponent({
 			</button>
 		</h2>
 		<div class="Component-Container">
-			<Selector_1 v-if="current_crumb == 0"/>
-			<Selector_2 v-if="current_crumb == 1"/>
+			<selector1 v-if="current_crumb == 0"/>
+			<selector2 v-if="current_crumb == 1"/>
 			<Upload v-if="current_crumb == 2"/>
 			<div class="Instructions" v-if="current_crumb < 2">
 				<h1 style="align-self: center"> <u> Upload Utility </u> </h1>
