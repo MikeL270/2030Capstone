@@ -1,7 +1,7 @@
 # Class definition for objects used in the crop_generator module and database
 # Author: Michael B. Lance
 # created: April 4, 2025
-# updated: October 2025
+# updated: October 28, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import numpy as np
