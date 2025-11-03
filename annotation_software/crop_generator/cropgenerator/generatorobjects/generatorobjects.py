@@ -200,7 +200,7 @@ class Organization(CgOBJ):
 
 class User(UserMixin, CgOBJ):
 	def __init__(self, user_id: int, username: str, external_auth_id: str, external_auth_provider: str, status: str,
-				 created: datetime, modified: datetime, last_login: datetime,  locale: str, uuid: UUID, roles: Optional[list[Role]]=None):
+				created: datetime, modified: datetime, last_login: datetime,  locale: str, uuid: UUID, roles: Optional[list[Role]]=None):
 		self.id = str(uuid) # this is this way to make Flask-Login happy
 		self.user_id = user_id
 		self.username = username
@@ -243,18 +243,18 @@ class Box(CgOBJ):
 	''' A Box contains dimensional data for crops and predictions
 	
 	'''
-	def __init__(self, topLeft: tuple[int, int], bottomRight: tuple[int, int]):
-		self.topLeft = topLeft
-		self.bottomRight = bottomRight
+	def __init__(self, top_left: tuple[int, int], bottom_right: tuple[int, int]):
+		self.top_left = top_left
+		self.bottom_right = bottom_right
 
 	def getCenter(self) -> tuple:
-		x = np.mean([self.topLeft[0], self.bottomRight[0]])
-		y = np.mean([self.topLeft[1], self.bottomRight[1]])
+		x = np.mean([self.top_left[0], self.bottom_right[0]])
+		y = np.mean([self.top_left[1], self.bottom_right[1]])
 
 		return ((abs(x), abs(y)))
 
 	def getPoints(self) -> list[int]:
-		return [self.topLeft[0], self.topLeft[1], self.bottomRight[0], self.bottomRight[1]]
+		return [self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]]
 
 	def calcIou(self, box_2) -> float:
 		# Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
@@ -285,8 +285,8 @@ class Box(CgOBJ):
 	
 	def serialize(self) -> dict:
 		return {
-			'topLeft': {'x': self.topLeft[0], 'y': self.topLeft[1]},
-			'bottomRight': {'x': self.bottomRight[0], 'y': self.bottomRight[1]},
+			'top_left': {'x': self.top_left[0], 'y': self.top_left[1]},
+			'bottom_right': {'x': self.bottom_right[0], 'y': self.bottom_right[1]},
 		}
 
 @dataclass
@@ -357,7 +357,7 @@ class Image(CgOBJ):
 
 class Prediction(CgOBJ):
 	def __init__(self, pred_id: int, image_id: int, model_id: int, label: int, score: float, box_tx: int, box_ty: int,
-				 box_bx: int, box_by: int, created: datetime | None, reviewed_by_user_id: int, uuid: UUID):
+				box_bx: int, box_by: int, created: datetime | None, reviewed_by_user_id: int, uuid: UUID):
 		self.pred_id = pred_id
 		self.image_id = image_id
 		self.model_id = model_id
@@ -383,10 +383,11 @@ class Prediction(CgOBJ):
 	
 class Annotation(CgOBJ):
 	def __init__(self, label_id: int, image_id: int, herd_unit_id: int,
-			  	box_tx: int, box_ty: int, box_bx: int, box_by: int, annotation_id: int | None =None, created_by_user_id: int | None =None, 
-				created: datetime | None =None, modified: datetime | None =None, uuid: UUID | None =None):
+				box_tx: int, box_ty: int, box_bx: int, box_by: int, annotation_id: int | None =None, created_by_user_id: int | None =None, 
+				created: datetime | None =None, modified: datetime | None =None, uuid: UUID | None =None, pred_id: int | None=None):
 		self.annotation_id = annotation_id
 		self.label_id = label_id
+		self.pred_id = pred_id
 		self.image_id = image_id
 		self.herd_unit_id = herd_unit_id
 		self.dimensions = Box((box_tx, box_ty), (box_bx, box_by))
@@ -410,9 +411,10 @@ class Annotation(CgOBJ):
 
 class ReviewedArea(Image):
 	def __init__(self,  image_id: int, name: str,  area_tx: int, area_ty: int, area_bx: int, 
-			  	 area_by: int, reviewed_area_id: int | None =None, created: datetime | None =None , 
-				 modified: datetime | None =None, reviewed_by_user_id: int | None =None, 
-				 uuid: UUID | None =None):
+				area_by: int, reviewed_area_length_px: int, reviewed_area_width_px: int,
+				reviewed_area_id: int | None = None, created: datetime | None = None , 
+				modified: datetime | None = None, reviewed_by_user_id: int | None = None, 
+				uuid: UUID | None = None, ra_key: str | None = None):
 		self.reviewed_area_id = reviewed_area_id
 		self.image_id = image_id
 		self.name = name
@@ -423,19 +425,21 @@ class ReviewedArea(Image):
 		self.reviewed_area_width_px = abs(area_tx - area_bx)
 		self.reviewed_by_user_id = reviewed_by_user_id
 		self.uuid = uuid
+		self.ra_key = ra_key
 
-		def serialize(self) -> dict:
-			return {
-				'reviewed_area_id': self.reviewed_area_id,
-				'image_id': self.image_id,
-				'name': self.name,
-				'dimensions': self.dimensions.serialize(),
-				'created': self.created,
-				'modified': self.modified,
-				'reviewed_area_length_px': self.reviewed_area_length_px,
-				'reviewed_area_width_px': self.reviewed_area_width_px,
-				'uuid': self.uuid,
-			}
+	def serialize(self) -> dict:
+		return {
+			'reviewed_area_id': self.reviewed_area_id,
+			'image_id': self.image_id,
+			'name': self.name,
+			'dimensions': self.dimensions.serialize(),
+			'created': self.created,
+			'modified': self.modified,
+			'reviewed_area_length_px': self.reviewed_area_length_px,
+			'reviewed_area_width_px': self.reviewed_area_width_px,
+			'ra_key': self.ra_key,
+			'uuid': self.uuid,
+		}
 	
 class PredictionCrop(Image):
 	def __init__(self, image_id: int, pred_id: int, name: str, score: float, label: int, dimensions: Box, 

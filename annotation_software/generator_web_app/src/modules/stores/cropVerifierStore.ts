@@ -6,14 +6,14 @@
 
 import { defineStore } from 'pinia';
 import { useProjectStore } from '@/modules/stores/projectStore';
-import { usePreferenceStore } from '@/modules/stores/preferencesStore';
-import type { cropVerifierBatch } from '@/types/generatorobjects';
-import { fetchReviewedAreaBatch } from '@/modules/apiV1Methods';
+import type { cropVerifierBatch, ReviewedArea } from '@/types/generatorobjects';
+import { fetchReviewedArea, getReviewedAreaPresignedGetUrl } from '@/modules/apiV1Methods';
+import { useImage } from 'vue-konva';
+import { ref } from 'vue';
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
 const pStore = useProjectStore();
-const prefStore = usePreferenceStore();
 
 export const useCropVerifierStore = defineStore('cropVerifierStore', {
     state: () => ({
@@ -25,13 +25,45 @@ export const useCropVerifierStore = defineStore('cropVerifierStore', {
         cropIdx: 0,
         loading: false,
         bootStrapped: false,
+        testConf: {
+            x: 405,
+            y: 458,
+            width: 20,
+            height: 10,
+            stroke: 'orange',
+            strokeWidth: 2,
+            draggable: true
+        },
+
+        transformConfig: {
+
+        }
     }),
     getters: {
 
     },
     actions: {
-        async getbatch(batch_index: number) {
-            const resp = await fetchReviewedAreaBatch(pStore.CurrentHerdUnit?.uuid, pStore.CurrentSurvey?.uuid, prefStore.batch_size)
+        async getReviewedArea(batchIndex: number) {
+            const resp = await fetchReviewedArea(pStore.CurrentHerdUnit?.uuid, pStore.CurrentSurvey?.uuid);
+            if (resp == undefined) return;
+            if (!this.batches[batchIndex]) this.batches[batchIndex] = {
+                crops: [],
+                annotations: []
+            } as cropVerifierBatch;
+            await this.getReviewedAreaImage(resp);
+            this.batches[batchIndex]['crops'].push(resp);
+        },
+        async getReviewedAreaImage(crop: ReviewedArea) {
+            const resp = await getReviewedAreaPresignedGetUrl(crop.ra_key);
+            if (resp == undefined) return;
+            crop.url = resp;
+            crop.image = await useImage(resp);
+        },
+        async bootStrap() {
+            this.loading = true;
+            await this.getReviewedArea(0);
+            this.loading = false;
+            this.bootStrapped = true;
         }
     }
 })

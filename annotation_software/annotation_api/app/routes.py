@@ -268,7 +268,7 @@ def create_prediction():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Image and Prediction Mass Uploader
 
-@bp.route('/api/v1/upload/image/presigned-url', methods=['POST'])
+@bp.route('/api/v1/create/image/presigned-put-url', methods=['POST'])
 @login_required
 def get_presigned_url():
 	'''
@@ -470,10 +470,10 @@ def create_reviewed_area_and_annotations():
 			model_id = pred['model_id'],
 			label = pred['label'],
 			score = pred['score'],
-			box_tx = pred['dimensions']['topLeft'][0],
-			box_ty = pred['dimensions']['topLeft'][1],
-			box_bx = pred['dimensions']['bottomRight'][0],
-			box_by = pred['dimensions']['bottomRight'][1],
+			box_tx = pred['dimensions']['top_left'][0],
+			box_ty = pred['dimensions']['top_left'][1],
+			box_bx = pred['dimensions']['bottom_right'][0],
+			box_by = pred['dimensions']['bottom_right'][1],
 			created = datetime.fromisoformat(pred['created'].replace("Z", "+00:00")),
 			uuid = pred['uuid'],
 			reviewed_by_user_id = 0
@@ -488,18 +488,17 @@ def create_reviewed_area_and_annotations():
 	for area_set in reviewed_areas: 
 		reviewed_area: ReviewedArea = cast(ReviewedArea, area_set[0])
 		annotations: Annotation = cast(Annotation, area_set[1] )
-		
+		ra_key = f'reviewed_areas/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/reviewed_area/{reviewed_area.name}'
+		reviewed_area.ra_key = ra_key
 		reviewed_area_id = base.insert_reviewed_areas(reviewed_area)
 		annotation_ids = base.insert_annotations(annotations, cast(User, current_user))
 		res_1 = base.add_reviewed_area_annotations(cast(int, reviewed_area_id), annotation_ids)
 		
-		ra_key = f'reviewed_areas/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/reviewed_area/{reviewed_area.name}'
-		
 		try:
 			img_bytes = reviewed_area.serve('.JPG')
 		except Exception as e:
+			print(e)
 			abort(500, e)
-		
 
 		pathfinder.put_object(
 			Bucket=current_app.config['BUCKET_NAME'],
@@ -537,8 +536,8 @@ def close_crop_session():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Crop Review
-
-@bp.route('/api/v1/create/reviewed-area-batch')
+# This route name is kinda bad, but it cant be called getRA because thats a different kind of endpoint 
+@bp.route('/api/v1/create/reviewed-area-batch', methods=['POST'])
 @login_required
 def get_ra_batch():
 	'''
@@ -546,15 +545,32 @@ def get_ra_batch():
 	'''
 	data = request.get_json()
 	try:
-		ra_batch = base.get_reviewed_area_batch(
+		ra = base.get_crop_to_review(
 			cast(User, current_user), 
 			UUID(data['herd_unit_id']),
-			data['batch_size'],
 			UUID(data['survey_id']))
 	except Exception as e:
-		abort(404, 'Database returned nothing, perhaps there are no crops to review.')
-	serialized_crops = [ra.serialize() for ra in ra_batch]
-	return serialized_crops, 201
+		abort(404, str(e))
+	return ra.serialize(), 201
+
+@bp.route('/api/v1/create/reviewed-area/presigned-get-url', methods=['POST'])
+@login_required
+def create_ra_presigned_get():
+	'''
+	'''
+	data = request.get_json()
+	try:
+		response = pathfinder.generate_presigned_url(
+			'get_object',
+			Params={'Bucket': current_app.config['BUCKET_NAME'],
+					'Key': data['ra_key']
+			},
+			ExpiresIn=3600,
+		)
+	except Exception as e:
+		print(e)
+		abort(500)
+	return jsonify(response), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Inference

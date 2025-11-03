@@ -1395,16 +1395,16 @@ class Database:
 			case list() if isinstance(annotations[0], Annotation):
 				ids = []
 				for annot in annotations:
-					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.topLeft[0], annot.dimensions.topLeft[1], 
-									annot.dimensions.bottomRight[0], annot.dimensions.bottomRight[1], user.user_id))
+					cursor.execute(query, (annot.label_id, annot.image_id, annot.herd_unit_id, annot.dimensions.top_left[0], annot.dimensions.top_left[1], 
+									annot.dimensions.bottom_right[0], annot.dimensions.bottom_right[1], user.user_id))
 					annot_id = cursor.fetchone()
 					if annot_id is None:
 						raise Exception('Failed to insert annotation')
 					ids.append(annot_id[0])
 				return ids 
 			case Annotation():
-				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.topLeft[0], annotations.dimensions.topLeft[1], 
-										annotations.dimensions.bottomRight[0], annotations.dimensions.bottomRight[1], user.user_id))
+				cursor.execute(query, (annotations.label_id, annotations.image_id, annotations.herd_unit_id, annotations.dimensions.top_left[0], annotations.dimensions.top_left[1], 
+										annotations.dimensions.bottom_right[0], annotations.dimensions.bottom_right[1], user.user_id))
 				annot_ids = cursor.fetchall() 
 				ids = [annot_id[0] for annot_id in annot_ids]
 				return ids
@@ -1451,7 +1451,7 @@ class Database:
 
 	@connect
 	def _create_reviewed_area(self, cursor: psycopg.Cursor[ReviewedArea], image_id: Image | int | UUID, name: str, area_tx: int, area_ty: int, area_bx: int, area_by: int,
-						   	  user: User | int | UUID, returning: bool) -> ReviewedArea | None:
+							user: User | int | UUID, returning: bool) -> ReviewedArea | None:
 		'''
 		
 		'''
@@ -1480,21 +1480,21 @@ class Database:
 		
 		'''
 		query = sql.SQL(''' INSERT INTO core.reviewed_area (image_id, name, area_tx, area_ty, area_bx, area_by, 
-								reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)  VALUES (%s, %s, 
-								%s, %s, %s, %s, %s, %s, %s) RETURNING reviewed_area_id; ''')
+								reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id, ra_key) VALUES (%s, %s, 
+								%s, %s, %s, %s, %s, %s, %s, %s) RETURNING reviewed_area_id; ''')
 		match reviewed_areas:
 			case list() if isinstance(reviewed_areas[0], ReviewedArea):
 				ids = []
 				for ra in reviewed_areas:
-					cursor.execute(query, (ra.image_id, ra.name, ra.dimensions.topLeft[0], ra.dimensions.topLeft[1], 
-									ra.dimensions.bottomRight[0], ra.dimensions.bottomRight[1], ra.reviewed_area_length_px, 
-									ra.reviewed_area_width_px, 0))
+					cursor.execute(query, (ra.image_id, ra.name, ra.dimensions.top_left[0], ra.dimensions.top_left[1], 
+									ra.dimensions.bottom_right[0], ra.dimensions.bottom_right[1], ra.reviewed_area_length_px, 
+									ra.reviewed_area_width_px, 0, ra.ra_key))
 					ids.append(cursor.fetchone())
 				return ids if len(ids) > 1 else ids[0]
 			case ReviewedArea():
-				cursor.execute(query, (reviewed_areas.image_id, reviewed_areas.name, reviewed_areas.dimensions.topLeft[0], reviewed_areas.dimensions.topLeft[1], 
-									reviewed_areas.dimensions.bottomRight[0], reviewed_areas.dimensions.bottomRight[1], reviewed_areas.reviewed_area_length_px, 
-									reviewed_areas.reviewed_area_width_px, 0))
+				cursor.execute(query, (reviewed_areas.image_id, reviewed_areas.name, reviewed_areas.dimensions.top_left[0], reviewed_areas.dimensions.top_left[1], 
+									reviewed_areas.dimensions.bottom_right[0], reviewed_areas.dimensions.bottom_right[1], reviewed_areas.reviewed_area_length_px, 
+									reviewed_areas.reviewed_area_width_px, 0, reviewed_areas.ra_key))
 				ra_ids = cursor.fetchall()
 				ids = [ra_id[0] for ra_id in ra_ids]
 				return ids if len(ids) > 1 else ids[0]
@@ -1515,8 +1515,7 @@ class Database:
 		
 		'''
 		cursor.row_factory = class_row(ReviewedArea)
-		#Note: Cannot use select * due to discrepency in how length / width are handeled
-		query = sql.SQL(' SELECT reviewed_area_id, image_id, name, area_tx, area_ty, area_bx, area_by, reviewed_by_user_id, created, modified, uuid FROM core.reviewed_area WHERE {id_field} = %s ')
+		query = sql.SQL(' SELECT * FROM core.reviewed_area WHERE {id_field} = %s ')
 		match reviewed_area_ids:
 			case list() if isinstance(reviewed_area_ids[0], int):
 				cursor.executemany(query.format(id_field = sql.Identifier('reviewed_area_id')), [(ra_id,) for ra_id in reviewed_area_ids])
@@ -1633,7 +1632,7 @@ class Database:
 		
 	# 	'''
 	# 	query = sql.SQL("INSERT INTO usermanagement.organizations_users (user_id, organization_id) VALUES (%s, %s)")
-	   
+
 	# 	match orgs:
 	# 		case list() if all(isinstance(org, Organization) for org in orgs):
 	# 			org_objs = orgs
@@ -1736,7 +1735,7 @@ class Database:
 
 	# def remove_organization_users(self, organization_id: Organization | int | UUID, user_ids: User | int | UUID | list[int | UUID]) -> bool:
 	# 	'''
-		 
+
 	# 	'''
 	# 	self._remove_organization_users(organization_id = organization_id, user_ids = user_ids)
 
@@ -2182,7 +2181,7 @@ class Database:
 							'pred_id', P.pred_id,
 							'image_id', P.image_id,
 							'model_id', P.model_id,
-							'dimensions', json_build_object('topLeft', json_build_array(P.box_tx, P.box_ty), 'bottomRight', json_build_array(P.box_bx, P.box_by)),
+							'dimensions', json_build_object('top_left', json_build_array(P.box_tx, P.box_ty), 'bottom_right', json_build_array(P.box_bx, P.box_by)),
                             'score', P.score,
                             'label', P.label,
 							'created', P.created,
@@ -2340,8 +2339,8 @@ class Database:
 	# Functionality - Get crops and annotations
 
 	@connect
-	def _get_reviewed_area_batch(self, cursor: psycopg.Cursor[ReviewedArea], user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
-					batch_size: int, survey_id: Union[Survey, int, UUID]) -> list[ReviewedArea]:
+	def _get_crop_to_review(self, cursor: psycopg.Cursor[ReviewedArea], user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
+								survey_id: Union[Survey, int, UUID]) -> ReviewedArea:
 		''' Fetch a batch of reviewed areas and their associated annotations that have yet to be reviewed.
 
 		'''
@@ -2352,33 +2351,33 @@ class Database:
 		if not herd_unit or not survey or not user:
 			raise Exception('Could not fetch batch')
 
-		query = sql.SQL(''' SELECT * FROM core.reviewed_area as RA
+		query = sql.SQL(''' SELECT RA.* FROM core.reviewed_area as RA
 							JOIN core.images as I on ra.image_id = I.image_id
 							WHERE I.herd_unit_id = %(herd_unit_id)s
 								AND I.survey_id = %(survey_id)s
-							LIMIT %(batch_size)s
-								  ''')
+							LIMIT 1;
+						''')
 		params = {
 			'herd_unit_id': herd_unit.herd_unit_id,
 			'survey_id' : survey.survey_id,
-			'batch_size' : batch_size
 		}
 		
 		cursor.execute(query, params)
-		results = cursor.fetchall()
-
-		if results is None:
+		result = cursor.fetchone()
+		
+		if result is None:
 			raise Exception('No reviewed areas found')
 
-		ids = [ra.reviewed_area_id for ra in results]
-		query2 = sql.SQL(''' UPDATE core.images SET opened_by_user_id = %s WHERE image_id = ANY(%s); ''')
-		cursor.execute(query2, (user.user_id, ids))
+		print(result.serialize())
 
-		return results
+		query2 = sql.SQL(''' UPDATE core.images SET opened_by_user_id = %s WHERE image_id = %s; ''')
+		cursor.execute(query2, (user.user_id, result.reviewed_area_id))
+
+		return result
 	
-	def get_reviewed_area_batch(self, user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
-					batch_size: int, survey_id: Union[Survey, int, UUID]) -> list[ReviewedArea]:
+	def get_crop_to_review(self, user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
+								survey_id: Union[Survey, int, UUID]) -> ReviewedArea:
 		'''
 
 		'''
-		return self._get_reviewed_area_batch(user_id=user_id, herd_unit_id=herd_unit_id, batch_size=batch_size, survey_id=survey_id)
+		return self._get_crop_to_review(user_id=user_id, herd_unit_id=herd_unit_id, survey_id=survey_id)

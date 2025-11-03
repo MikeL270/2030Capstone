@@ -383,9 +383,9 @@ export async function createMultiPartUpload(image_key: string): Promise<string |
 	}
 }
 
-export async function getPresignedUrl(upload_id: string, part_number: number, image_key: string, chunk_size: number, chunk_md5: string): Promise<string | undefined> {
+export async function getImagePresignedPostUrl(upload_id: string, part_number: number, image_key: string, chunk_size: number, chunk_md5: string): Promise<string | undefined> {
 	try {
-		const response = await fetch(`${api_url}/upload/image/presigned-url`, {
+		const response = await fetch(`${api_url}/create/image/presigned-put-url`, {
 			method: 'POST',
 			credentials: 'include',
 			headers: {
@@ -399,7 +399,7 @@ export async function getPresignedUrl(upload_id: string, part_number: number, im
 				'chunk_md5': chunk_md5,
 			}),
 		});
-		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
+		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`);
 		const resp = await response.json();
 		return resp as string;
 	} catch (error: any) {
@@ -633,7 +633,7 @@ export async function closeCropSession(): Promise<boolean> {
 //---------------------------------------------------------------------------------------------------------------------------//
 // Area reviewing
 
-export async function fetchReviewedAreaBatch(herd_unit_id: string | undefined, survey_id: string | undefined, batch_size: number): Promise<ReviewedArea[] | undefined> {
+export async function fetchReviewedArea(herd_unit_id: string | undefined, survey_id: string | undefined): Promise<ReviewedArea | undefined> {
 	try {
 		const response = await fetch(`${api_url}/create/reviewed-area-batch`, {
 			method: 'POST',
@@ -644,22 +644,39 @@ export async function fetchReviewedAreaBatch(herd_unit_id: string | undefined, s
 			body: JSON.stringify({
 				'herd_unit_id': herd_unit_id,
 				'survey_id': survey_id,
-				'batch_size': batch_size
 			}),
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`);
 
 		const resp = await response.json();
-		const reviewed_areas: ReviewedArea[] = [];
-
-		for (const ra of resp) {
-			reviewed_areas.push(new ReviewedArea(ra as ReviewedArea_intf));
-		}
-		return reviewed_areas as ReviewedArea[];
+		let revieweArea = new ReviewedArea(resp as ReviewedArea_intf);
+		return revieweArea as ReviewedArea;
 
 	} catch (error: any) {
 		console.error("Error: ", error)
 		toast.error(`${error}`);
+		return undefined;
+	}
+}
+
+export async function getReviewedAreaPresignedGetUrl(ra_key: string): Promise<string | undefined> {
+	try {
+		const response = await fetch(`${api_url}/create/reviewed-area/presigned-get-url`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				'ra_key': ra_key
+			}),
+		});
+		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`);
+		const resp = await response.json();
+		return resp as string;
+	} catch (error: any) {
+		console.error("Error: ", error)
+		toast.error(`${error.message}`);
 		return undefined;
 	}
 }

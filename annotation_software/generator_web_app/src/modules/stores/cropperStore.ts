@@ -68,7 +68,7 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 		}
 	},
 	actions: {
-		async getbatch(batch_index: number) {
+		async getbatch(batchIndex: number) {
 			const resp = await fetchAutoCropperBatch(pStore.CurrentSurvey?.uuid,
 				pStore.CurrentHerdUnit?.uuid,
 				prefStore.batch_size,
@@ -76,13 +76,13 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 				pStore.CurrentLabelValues,
 				pStore.CurrentModel?.uuid)
 			if (resp == undefined) return;
-			if (!this.batches[batch_index]) this.batches[batch_index] = {
-				'images': [],
-				'predictions': [],
-				'predictionCrops': []
+			if (!this.batches[batchIndex]) this.batches[batchIndex] = {
+				images: [],
+				predictions: [],
+				predictionCrops: []
 			} as autoCropperBatch;
-			this.batches[batch_index]['images'] = resp[0];
-			this.batches[batch_index]['predictions'] = resp[1];
+			this.batches[batchIndex]['images'] = resp[0];
+			this.batches[batchIndex]['predictions'] = resp[1];
 		},
 		async nextBatch() {
 			// clear older batch 
@@ -95,9 +95,9 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			this.imageIdx = 0;
 			await this.getPredCrops(this.batchIdx, this.imageIdx + 1);
 		},
-		async getPredCrops(batch_index: number, image_index: number) {
-			const predCrops = await fetchPredCrops(this.batches[batch_index]['images'][image_index].uuid, pStore.CurrentSurvey?.uuid, pStore.CurrentHerdUnit?.uuid, this.batches[batch_index].predictions[image_index]);
-			if (predCrops) this.batches[batch_index]['predictionCrops'][image_index] = predCrops;
+		async getPredCrops(batchIdx: number, image_index: number) {
+			const predCrops = await fetchPredCrops(this.batches[batchIdx]['images'][image_index].uuid, pStore.CurrentSurvey?.uuid, pStore.CurrentHerdUnit?.uuid, this.batches[batchIdx].predictions[image_index]);
+			if (predCrops) this.batches[batchIdx]['predictionCrops'][image_index] = predCrops;
 		},
 		async bootstrap() {
 			this.loading = true;

@@ -4,7 +4,7 @@
 import { defineComponent } from "vue";
 import { ref } from "vue";
 import { HerdUnit, Project, Survey, Model, Schema } from "@/types/generatorobjects";
-import { abortMultipartUpload, createImage, createMultiPartUpload, getPresignedUrl, completeMultiPartUpload } from "@/modules/apiV1Methods";
+import { abortMultipartUpload, createImage, createMultiPartUpload, getImagePresignedPostUrl, completeMultiPartUpload } from "@/modules/apiV1Methods";
 import { useProjectStore } from "@/modules/stores/projectStore";
 import { mapState } from "pinia";
 import { Md5 } from "ts-md5";
@@ -22,15 +22,15 @@ export default defineComponent({
 		const schema = ref<Schema | undefined> (pStore.CurrentSchema);
 		if (!pStore.projects) pStore.get_projects();
 		return { pStore, project, herdunit, model, survey, schema };
-  	},
-  	mounted() {
+	},
+	mounted() {
 	if (this.pStore.CurrentProject) {
 		this.$router.push({
 		name: "upload",
 		params: { projects: "projects", uuid: this.pStore.CurrentProject.uuid },
 		});
 	}
-  },
+	},
 	data() {
 		return {
 		is_dragging: false,
@@ -42,7 +42,7 @@ export default defineComponent({
 		current_file_part: 0,
 		total_file_parts: 0,
 		};
-  	},
+	},
 	computed: {
 		uploadSize() {
 			if (this.files.length == 0) return filesize(0);
@@ -53,22 +53,22 @@ export default defineComponent({
 		numFiles() {
 			return this.files.length;
 		}
-  	},
-  methods: {
+	},
+	methods: {
 	on_change() {
 		if (this.$refs.file) {
 			const fileInput = this.$refs.file as HTMLInputElement;
 			if (fileInput.files) {
-		  		this.files.push(...fileInput.files);
+				this.files.push(...fileInput.files);
 			}
-	  	}
+		}
 	},
 	drag_over(event: Event) {
 		event.preventDefault();
 		this.is_dragging = true;
 	},
 	drag_leave() {
-	  	this.is_dragging = false;
+		this.is_dragging = false;
 	},
 	drop(event: Event) {
 		event.preventDefault();
@@ -81,7 +81,7 @@ export default defineComponent({
 		}
 	},
 	remove(index: number) {
-	  	this.files.splice(index, 1);
+		this.files.splice(index, 1);
 	},
 	async upload() {
 		// Cache relevant Ids from store (Current objects are computed getters in the store)
@@ -152,7 +152,7 @@ export default defineComponent({
 							);
 
 							// Request pre-signed url for chuck
-							const presigned_url = await getPresignedUrl(
+							const presigned_url = await getImagePresignedPostUrl(
 								upload_id,
 								partNumber,
 								image_key,
@@ -206,7 +206,7 @@ export default defineComponent({
 		this.is_uploading = false;
 		this.files = [];
 	},
-  },
+},
 });
 </script>
 <template>

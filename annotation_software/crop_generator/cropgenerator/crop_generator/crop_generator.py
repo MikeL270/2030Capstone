@@ -12,13 +12,13 @@ from ..generatorobjects.generatorobjects import Box, HerdUnit, Model, Prediction
 Annotation
 from sklearn.cluster import KMeans
 from uuid import UUID
-from typing import List
+from typing import Any, List
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
 # def load_training_image_names(train_json_path: str, prefix: str, suffix:str, crop_suffix: bool = False) -> set:
 # 	''' Loads training image names into a list
-	
+
 # 	Returns a set of filenames that were used to train the model 
 # 	''' 
 # 	with open(train_json_path) as f:
@@ -68,7 +68,7 @@ from typing import List
 # 			continue
 # 		pred = Prediction(
 # 			model = model,
-# 			dimensions = Box (topLeft=(int(box[0]),int(box[1])), bottomRight=(int(box[2]),int(box[3]))),
+# 			dimensions = Box (top_left=(int(box[0]),int(box[1])), bottom_right=(int(box[2]),int(box[3]))),
 # 			score = float(score),
 # 			label = int(label),
 # 		)
@@ -158,6 +158,8 @@ def auto_crop(image: Image, predictions: list[Prediction], labels_ids: dict[int,
 	centers = []
 	crops = [] # Structure to be returned
 	img = image.getImage()
+	if img is None:
+		raise Exception('could not get image')
 
 	# Get centers for all predictions 
 	for pred in predictions:
@@ -195,7 +197,7 @@ def auto_crop(image: Image, predictions: list[Prediction], labels_ids: dict[int,
 		centers = kmeans.cluster_centers_
 
 	points_in_crop = np.zeros(len(points))
-  
+
 	for crop_num, center in enumerate(centers):
 		x_start = max(0, int(center[0]) - crop_size // 2)
 		y_start = max(0, int(center[1]) - crop_size // 2)
@@ -215,8 +217,9 @@ def auto_crop(image: Image, predictions: list[Prediction], labels_ids: dict[int,
 			area_ty = y_start,
 			area_bx = x_end,
 			area_by = y_end,
+			reviewed_area_length_px = abs(y_start - y_end),
+			reviewed_area_width_px= abs(x_start - x_end)
 		)
-
 		crop.setImage(img[y_start:y_end, x_start:x_end].copy())
 		annotations = []
 
@@ -243,25 +246,24 @@ def auto_crop(image: Image, predictions: list[Prediction], labels_ids: dict[int,
 		return auto_crop(image=image, predictions=predictions, labels_ids=labels_ids, crop_size=crop_size, num_clusters=num_clusters +1)
 
 	else:
-		print('Could not generate any crops...')
-		plt.figure()
-		plt.imshow(image)
-		plt.title('Failed to crop')
-		plt.show()
+		raise Exception('Could not generate any crops...')
 		return crops 
 	
 #---------------------------------------------------------------------------------------------------------------------------#
 
-def create_subcrop(image: Image, predictions: list[dict[str, any]], crop_size: int=150, drawBox: bool=False) -> list[PredictionCrop]:
+def create_subcrop(image: Image, predictions: list[dict[str, Any]], crop_size: int=150, drawBox: bool=False) -> list[PredictionCrop]:
 		crops = []
 		img = image.getImage()
 		if len(predictions) == 0:        
-			return False  
+			raise Exception('Predictions cannot be zero')
 		
+		if img is None:
+			raise Exception('Could not get image')
+
 		img_height, img_width = img.shape[:2]
- 
+
 		for pred in predictions:
-			box = pred['dimensions']['topLeft'] + pred['dimensions']['bottomRight']
+			box = pred['dimensions']['top_left'] + pred['dimensions']['bottom_right']
 			center_x = (box[0] + box[2]) / 2
 			center_y = (box[1] + box[3]) / 2
 
@@ -283,7 +285,7 @@ def create_subcrop(image: Image, predictions: list[dict[str, any]], crop_size: i
 			elif ymax > img_height:
 				ymin -= (ymax - img_height) 
 				ymax = img_height
- 
+
 			crop = PredictionCrop(
 				image_id = image.image_id,
 				pred_id = pred['pred_id'],
