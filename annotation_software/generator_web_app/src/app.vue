@@ -1,7 +1,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue';
-import Header from './components/Header.vue'
-import Menu from './components/Menu.vue'
+import Header from './components/header.vue'
+import Menu from './components/menu.vue'
 import { RouterView } from 'vue-router'
 import { useUserStore } from './modules/stores/userStore';
 import { usePreferenceStore } from './modules/stores/preferencesStore';
@@ -27,7 +27,7 @@ export default defineComponent({
   async mounted() {
     await this.user_store.check_auth()
     if (this.user_store.logged_in) {
-      await this.user_store.get_current_user()
+      await this.user_store.getCurrentUser()
     }
   }
 })

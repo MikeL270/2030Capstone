@@ -4,7 +4,7 @@
 import { defineComponent } from "vue";
 import { ref } from "vue";
 import { HerdUnit, Project, Survey, Model, Schema } from "@/types/generatorobjects";
-import { abortMultipartUpload, createImage, createMultiPartUpload, getPresignedUrl, completeMultiPartUpload } from "@/modules/apiV1Methods";
+import { abortMultipartUpload, createImage, createMultiPartUpload, getImagePresignedPostUrl, completeMultiPartUpload } from "@/modules/apiV1Methods";
 import { useProjectStore } from "@/modules/stores/projectStore";
 import { mapState } from "pinia";
 import { Md5 } from "ts-md5";
@@ -13,24 +13,24 @@ import { filesize } from 'filesize';
 export default defineComponent({
 	name: "Upload-Utility",
 	setup() {
-		const project_store = useProjectStore();
-		if (project_store.CurrentProject && project_store.surveys == undefined) project_store.get_surveys();
-		const project = ref<Project | undefined> (project_store.CurrentProject);
-		const herdunit = ref<HerdUnit | undefined> (project_store.CurrentHerdUnit);
-		const model = ref<Model | undefined> (project_store.CurrentModel);
-		const survey = ref<Survey | undefined> (project_store.CurrentSurvey);
-		const schema = ref<Schema | undefined> (project_store.CurrentSchema);
-		if (!project_store.projects) project_store.get_projects();
-		return { project_store, project, herdunit, model, survey, schema };
-  	},
-  	mounted() {
-	if (this.project_store.CurrentProject) {
+		const pStore = useProjectStore();
+		if (pStore.CurrentProject && pStore.surveys == undefined) pStore.get_surveys();
+		const project = ref<Project | undefined> (pStore.CurrentProject);
+		const herdunit = ref<HerdUnit | undefined> (pStore.CurrentHerdUnit);
+		const model = ref<Model | undefined> (pStore.CurrentModel);
+		const survey = ref<Survey | undefined> (pStore.CurrentSurvey);
+		const schema = ref<Schema | undefined> (pStore.CurrentSchema);
+		if (!pStore.projects) pStore.get_projects();
+		return { pStore, project, herdunit, model, survey, schema };
+	},
+	mounted() {
+	if (this.pStore.CurrentProject) {
 		this.$router.push({
 		name: "upload",
-		params: { projects: "projects", uuid: this.project_store.CurrentProject.uuid },
+		params: { projects: "projects", uuid: this.pStore.CurrentProject.uuid },
 		});
 	}
-  },
+	},
 	data() {
 		return {
 		is_dragging: false,
@@ -42,7 +42,7 @@ export default defineComponent({
 		current_file_part: 0,
 		total_file_parts: 0,
 		};
-  	},
+	},
 	computed: {
 		uploadSize() {
 			if (this.files.length == 0) return filesize(0);
@@ -53,22 +53,22 @@ export default defineComponent({
 		numFiles() {
 			return this.files.length;
 		}
-  	},
-  methods: {
+	},
+	methods: {
 	on_change() {
 		if (this.$refs.file) {
 			const fileInput = this.$refs.file as HTMLInputElement;
 			if (fileInput.files) {
-		  		this.files.push(...fileInput.files);
+				this.files.push(...fileInput.files);
 			}
-	  	}
+		}
 	},
 	drag_over(event: Event) {
 		event.preventDefault();
 		this.is_dragging = true;
 	},
 	drag_leave() {
-	  	this.is_dragging = false;
+		this.is_dragging = false;
 	},
 	drop(event: Event) {
 		event.preventDefault();
@@ -81,15 +81,15 @@ export default defineComponent({
 		}
 	},
 	remove(index: number) {
-	  	this.files.splice(index, 1);
+		this.files.splice(index, 1);
 	},
 	async upload() {
 		// Cache relevant Ids from store (Current objects are computed getters in the store)
 		this.is_uploading = true;
-		const project_id = this.project_store.CurrentProject?.uuid;
-		const survey_id = this.project_store.CurrentSurvey?.uuid;
-		const herd_unit_id = this.project_store.CurrentHerdUnit?.uuid;
-		const model_id = this.project_store.CurrentModel?.uuid;
+		const project_id = this.pStore.CurrentProject?.uuid;
+		const survey_id = this.pStore.CurrentSurvey?.uuid;
+		const herd_unit_id = this.pStore.CurrentHerdUnit?.uuid;
+		const model_id = this.pStore.CurrentModel?.uuid;
 
 		for (const file of this.files) {
 			const extension = file.name.toLowerCase().split(".").pop();
@@ -152,7 +152,7 @@ export default defineComponent({
 							);
 
 							// Request pre-signed url for chuck
-							const presigned_url = await getPresignedUrl(
+							const presigned_url = await getImagePresignedPostUrl(
 								upload_id,
 								partNumber,
 								image_key,
@@ -206,7 +206,7 @@ export default defineComponent({
 		this.is_uploading = false;
 		this.files = [];
 	},
-  },
+},
 });
 </script>
 <template>
@@ -274,10 +274,10 @@ export default defineComponent({
 	</div>
 	<button
 		v-if="
-		project_store.CurrentProject &&
-		project_store.CurrentHerdUnit &&
-		project_store.CurrentSurvey &&
-		project_store.CurrentModel
+		pStore.CurrentProject &&
+		pStore.CurrentHerdUnit &&
+		pStore.CurrentSurvey &&
+		pStore.CurrentModel
 		"
 		@click="upload()">
 		Upload

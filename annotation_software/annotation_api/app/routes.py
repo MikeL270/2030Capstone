@@ -11,10 +11,12 @@ from datetime import datetime
 import io
 from uuid import UUID
 import cv2
-from flask import Blueprint, Response, abort, jsonify, request, session
+from flask import Blueprint, Response, abort, jsonify, request, session, current_app
 from cropgenerator import auto_crop, create_subcrop
 from cropgenerator.generatorobjects import Prediction, User, ReviewedArea, Annotation
-from app import login_manager, base, cache, pathfinder
+from app.extensions import login_manager, cache, base 
+from app import pathfinder
+from database import Database
 from typing import cast
 from flask_login import (
 	current_user,
@@ -23,9 +25,10 @@ from flask_login import (
 	logout_user,
 ) 
 
-BUCKET_NAME = 'pronghorn-count'
 
 bp = Blueprint('app', __name__)
+
+
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # User session management
@@ -47,8 +50,9 @@ def authenticate():
 		abort(400, 'malformed request')
 	try:
 		user = base.get_user(req_data['external-id'])
-	except Exception:
-		abort(404, 'user not found')
+		print(user.username)
+	except Exception as e:
+		abort(404, str(e))
 	else:
 		login_user(user)
 		if not user.last_login:
@@ -62,9 +66,9 @@ def authenticate():
 def check_auth():
 	return Response('true'), 201
 
-@bp.route('/api/v1/users/get_current_user', methods = ['GET'])
+@bp.route('/api/v1/users/getCurrentUser', methods = ['GET'])
 @login_required
-def get_current_user():
+def getCurrentUser():
 	try:
 		user = base.get_user(UUID(current_user.id))
 	except Exception:
@@ -232,7 +236,7 @@ def upload_image_to_db():
 
 # @bp.route('/app/v1/get/image', methods=['GET'])
 # @login_required
-# def get_image():
+# def getImage():
 # 	'''
 	
 # 	'''
@@ -264,7 +268,7 @@ def create_prediction():
 #---------------------------------------------------------------------------------------------------------------------------#
 # Image and Prediction Mass Uploader
 
-@bp.route('/api/v1/upload/image/presigned-url', methods=['POST'])
+@bp.route('/api/v1/create/image/presigned-put-url', methods=['POST'])
 @login_required
 def get_presigned_url():
 	'''
@@ -277,7 +281,7 @@ def get_presigned_url():
 		response = pathfinder.generate_presigned_url(
 		ClientMethod='upload_part', 
 		Params = {
-		'Bucket': BUCKET_NAME,
+		'Bucket': current_app.config['BUCKET_NAME'],
 		'Key': data['image_key'], 
 		'UploadId': data['upload_id'],
 		'PartNumber': data['part_number'],
@@ -303,7 +307,7 @@ def create_multipart_upload():
 	data = request.get_json()
 	try: 
 		response = pathfinder.create_multipart_upload(
-			Bucket = BUCKET_NAME,
+			Bucket = current_app.config['BUCKET_NAME'],
 			Key = data['image_key'],
 			ContentType = 'image/jpeg',
 		)
@@ -324,7 +328,7 @@ def complete_upload():
 	data = request.get_json()
 	try:
 		response = pathfinder.complete_multipart_upload(
-			Bucket = BUCKET_NAME,
+			Bucket = current_app.config['BUCKET_NAME'],
 			Key = data['image_key'],
 			MultipartUpload={
 				'Parts': data['parts']
@@ -346,7 +350,7 @@ def abort_upload():
 	data = request.get_json()
 	try:
 		response = pathfinder.abort_multipart_upload(
-			Bucket = BUCKET_NAME,
+			Bucket = current_app.config['BUCKET_NAME'],
 			Key = data['image_key'],
 			UploadId = data['upload_id'],
 		)
@@ -356,7 +360,8 @@ def abort_upload():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Auto Cropping
-@bp.route('/api/v1/create/batch', methods=['POST'])
+
+@bp.route('/api/v1/create/auto-crop-batch', methods=['POST'])
 @login_required
 def create_auto_crop_batch():
 	'''
@@ -368,7 +373,7 @@ def create_auto_crop_batch():
 			cache.delete(data['uuid'])
 		session.pop('pred_crop_data')
 	try:
-		img_batch = base.get_batch(
+		img_batch = base.get_auto_crop_batch(
 			UUID(data['survey_id']),
 			UUID(data['herd_unit_id']),
 			int(data['size']),
@@ -377,33 +382,32 @@ def create_auto_crop_batch():
 			UUID(data['model_id']),
 			cast(User, current_user))
 	except TypeError as e:
-		print(e)
 		abort(404, 'Database returned nothing, perhaps your confidence score is too high.')
 	except Exception:
 		abort(500)
 	return img_batch, 201
 
-@bp.route('/api/v1/create/prediction_crops', methods=['POST'])
+@bp.route('/api/v1/create/predictionCrops', methods=['POST'])
 @login_required
 def create_prediction_crops():
 	'''
 	
 	'''
 	data = request.get_json()
-	image = base.get_image(UUID(data['image_id']))
+	image = base.getImage(UUID(data['image_id']))
 	img_data = cache.get(image.uuid)
 
 	if not img_data:
 		img_key = f'images/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/image/{image.name}'
-		img_data = pathfinder.get_object(Bucket=BUCKET_NAME, Key=img_key)['Body'].read()
+		img_data = pathfinder.get_object(Bucket=current_app.config['BUCKET_NAME'], Key=img_key)['Body'].read()
 		cache.set(image.uuid, img_data, 360) 
 
-	image.set_image(img_data)
+	image.setImage(img_data)
 	pred_crops = create_subcrop(image, data['predictions'])
 	serialized_pred_crops = [] 
 
 	for crop in pred_crops: # Save crop image data into the session cache
-		cache.set(crop.uuid,  crop.get_image(), 3600)
+		cache.set(crop.uuid,  crop.getImage(), 3600)
 		serialized_pred_crops.append(crop.serialize())
 	
 	json_pred_crop_data = jsonify(serialized_pred_crops)
@@ -426,16 +430,15 @@ def get_pred_crop(image_id: str, pred_crop_id: str):
 	_, encoded_img = cv2.imencode('.webp', crop)
 	return Response(encoded_img.tobytes(), mimetype='image/webp'), 201
 
-@bp.route('/api/v1/update/image/no-annotations', methods=["POST"])
+@bp.route('/api/v1/update/image/set-closed', methods=["POST"])
 @login_required
 def no_annotations():
 	'''
 	
 	'''
 	data = request.get_json()
-	res_1 = base.close_image(UUID(data['image_id']))
-	res_2 = base.set_predictions_reviewed([UUID(pred_id) for pred_id in data['prediction_ids']], current_user.user_id)	 	
-	return '', 201 if res_1 and res_2 else abort(500, 'Update failed!')
+	res = base.close_image(UUID(data['image_id']))
+	return '', 201 if res  else abort(500, 'Update failed!')
 
 @bp.route('/api/v1/create/reviewed-area-and-annotations', methods=["PUT"])
 @login_required
@@ -445,14 +448,14 @@ def create_reviewed_area_and_annotations():
 	'''
 	data = request.get_json()
 	# Request image object from data in request
-	image = base.get_image(UUID(data['image_uuid']))
+	image = base.getImage(UUID(data['image_uuid']))
 	img_data = cache.get(image.uuid)
 
 	if not img_data:
 		img_key = f'images/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/image/{image.name}'
-		img_data = pathfinder.get_object(Bucket=BUCKET_NAME, Key=img_key)['Body'].read()
+		img_data = pathfinder.get_object(Bucket=current_app.config['BUCKET_NAME'], Key=img_key)['Body'].read()
 		cache.set(image.uuid, img_data, 360) 
-	image.set_image(img_data)
+	image.setImage(img_data)
 
 	# get label - id for schema
 	label_ids = { lbl['label'] : lbl['label_id'] for lbl in data['labels'] }
@@ -484,30 +487,39 @@ def create_reviewed_area_and_annotations():
 	for area_set in reviewed_areas: 
 		reviewed_area: ReviewedArea = cast(ReviewedArea, area_set[0])
 		annotations: Annotation = cast(Annotation, area_set[1] )
-		
+		ra_key = f'reviewed_areas/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/reviewed_area/{reviewed_area.name}'
+		reviewed_area.ra_key = ra_key
 		reviewed_area_id = base.insert_reviewed_areas(reviewed_area)
 		annotation_ids = base.insert_annotations(annotations, cast(User, current_user))
 		res_1 = base.add_reviewed_area_annotations(cast(int, reviewed_area_id), annotation_ids)
 		
-		ra_key = f'reviewed_areas/survey/{data['survey_id']}/herd_unit/{data['herd_unit_id']}/reviewed_area/{reviewed_area.name}'
-		
 		try:
 			img_bytes = reviewed_area.serve('.JPG')
 		except Exception as e:
+			print(e)
 			abort(500, e)
-		
 
 		pathfinder.put_object(
-			Bucket=BUCKET_NAME,
+			Bucket=current_app.config['BUCKET_NAME'],
 			Key=ra_key,
 			Body=io.BytesIO(img_bytes),  #type: ignore
 			ContentType='image/jpeg'
 		)
 
-	res_2 = base.set_predictions_reviewed(predictions, current_user.user_id)
 	res_3 = base.close_image(image)
 
-	return '', 201 if res_1 and res_2 and res_3 else abort(500, 'Cropping failed!')
+	return '', 201 if res_1 and res_3 else abort(500)
+
+@bp.route('/api/v1/update/predictions/set-reviewed', methods=['POST'])
+@login_required
+def mark_predictions_reviewed():
+	'''
+	'''
+	data = request.get_json()
+	ids = [UUID(predId) for predId in data['prediction_ids']]
+	res = base.set_predictions_reviewed(ids, cast(User, current_user).user_id)
+
+	return '', 201 if res else abort(500)
 
 @bp.route('/api/v1/end/crop_session', methods=['POST'])
 @login_required
@@ -522,26 +534,42 @@ def close_crop_session():
 	return '', 201 
 
 #---------------------------------------------------------------------------------------------------------------------------#
-# Review area
-
-@bp.route('/api/v1/create/reviewed_area_batch', methods=['POST'])
+# Crop Review
+# This route name is kinda bad, but it cant be called getRA because thats a different kind of endpoint 
+@bp.route('/api/v1/create/reviewed-area-batch', methods=['POST'])
 @login_required
-def create_ra_batch():
+def get_ra_batch():
 	'''
 
 	'''
 	data = request.get_json()
-	ra_batch = base.get_reviewed_area_batch(
-		cast(User, current_user),
-		data['herd_unit_id'],
-		data['batch_size'],
-		data['label_id'],
-		data['survey_id'],
-	)
-	if ra_batch is None:
-		abort(404, 'Cannot get batch')
-	
-	return ra_batch, 201
+	try:
+		ra = base.get_crop_to_review(
+			cast(User, current_user), 
+			UUID(data['herd_unit_id']),
+			UUID(data['survey_id']))
+	except Exception as e:
+		abort(404, str(e))
+	return ra.serialize(), 201
+
+@bp.route('/api/v1/create/reviewed-area/presigned-get-url', methods=['POST'])
+@login_required
+def create_ra_presigned_get():
+	'''
+	'''
+	data = request.get_json()
+	try:
+		response = pathfinder.generate_presigned_url(
+			'get_object',
+			Params={'Bucket': current_app.config['BUCKET_NAME'],
+					'Key': data['ra_key']
+			},
+			ExpiresIn=3600,
+		)
+	except Exception as e:
+		print(e)
+		abort(500)
+	return jsonify(response), 201
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Inference

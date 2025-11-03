@@ -11,7 +11,7 @@ import { idText } from "typescript";
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-export const useProjectStore = defineStore('projectStore', {
+export const useProjectStore = defineStore('pStore', {
     state: () => ({
         projects: [] as Project[],
         project_idx: undefined as number | undefined,

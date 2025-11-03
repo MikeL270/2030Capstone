@@ -1,62 +1,69 @@
 // cross component state management for crop verification functionality
 // Author: Michael B. Lance
 // Created: October 1, 2025
-// Updated: October 2, 2025
+// Updated: October 28, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
-import { Box } from "@/types/generatorobjects";
-import type { coord, ReviewedArea, Annotation } from "@/types/generatorobjects"
-import { defineStore } from "pinia";
+import { defineStore } from 'pinia';
+import { useProjectStore } from '@/modules/stores/projectStore';
+import type { cropVerifierBatch, ReviewedArea } from '@/types/generatorobjects';
+import { fetchReviewedArea, getReviewedAreaPresignedGetUrl } from '@/modules/apiV1Methods';
+import { useImage } from 'vue-konva';
+import { ref } from 'vue';
 
 //---------------------------------------------------------------------------------------------------------------------------//
 
-interface batch {
-    reviewed_areas: ReviewedArea[],
-    annotations: Annotation[][],
-}
+const pStore = useProjectStore();
 
 export const useCropVerifierStore = defineStore('cropVerifierStore', {
     state: () => ({
         batches: [{
-            'reviewed_areas': [],
-            'annotations': []
-        }] as batch[],
-        batch_idx: 0,
-        ra_idx: 0,
-        active_annot_idx: 0,
+            crops: [],
+            annotations: []
+        }] as cropVerifierBatch[],
+        batchIdx: 0,
+        cropIdx: 0,
         loading: false,
-        bootstrapped: false,
-        drawing: false,
-        mousePos: {} as coord,
-        boxes: [new Box({ top_left: { x: 0, y: 0 }, bottom_right: { x: 0, y: 0 } })] as Box[],
-        box_idx: 0,
+        bootStrapped: false,
+        testConf: {
+            x: 405,
+            y: 458,
+            width: 20,
+            height: 10,
+            stroke: 'orange',
+            strokeWidth: 2,
+            draggable: true
+        },
+
+        transformConfig: {
+
+        }
     }),
     getters: {
-        CurrentBatch: (state) => state.batches[state.batch_idx],
-        NextBatch: (state) => (state.batches[state.batch_idx + 1] != undefined) ? true : false,
-        LastBatch: (state) => (state.batches[state.batch_idx - 1] != undefined) ? true : false,
-        CurrentReviewedAreas(): ReviewedArea[] { return this.CurrentBatch.reviewed_areas },
-        CurrentAnnotations(state): Annotation[] { return this.CurrentBatch.annotations[state.ra_idx] },
-        currentBox: (state) => state.boxes[state.box_idx]
+
     },
     actions: {
-        getMousePos(e: MouseEvent) {
-            this.mousePos.x = e.offsetX;
-            this.mousePos.y = e.offsetY;
+        async getReviewedArea(batchIndex: number) {
+            const resp = await fetchReviewedArea(pStore.CurrentHerdUnit?.uuid, pStore.CurrentSurvey?.uuid);
+            if (resp == undefined) return;
+            if (!this.batches[batchIndex]) this.batches[batchIndex] = {
+                crops: [],
+                annotations: []
+            } as cropVerifierBatch;
+            await this.getReviewedAreaImage(resp);
+            this.batches[batchIndex]['crops'].push(resp);
         },
-        setBoxStart() {
-            const x = this.mousePos.x;
-            const y = this.mousePos.y;
-            this.currentBox.top_left = { x, y };
+        async getReviewedAreaImage(crop: ReviewedArea) {
+            const resp = await getReviewedAreaPresignedGetUrl(crop.ra_key);
+            if (resp == undefined) return;
+            crop.url = resp;
+            crop.image = await useImage(resp);
         },
-        setBoxEnd() {
-            const x = this.mousePos.x;
-            const y = this.mousePos.y;
-            this.currentBox.bottom_right = { x, y };
-        },
-        newBox() {
-            this.box_idx++;
-            this.boxes.push(new Box({ top_left: { x: 0, y: 0 }, bottom_right: { x: 0, y: 0 } }));
+        async bootStrap() {
+            this.loading = true;
+            await this.getReviewedArea(0);
+            this.loading = false;
+            this.bootStrapped = true;
         }
     }
 })

@@ -30,7 +30,7 @@ export const useUserStore = defineStore('userStore', {
             await deauthUser();
             this.clear_state();
         },
-        async get_current_user() {
+        async getCurrentUser() {
             this.user = await getCurrentUser() as User;
             if (this.user != undefined) this.logged_in = true;
         },

@@ -16,10 +16,10 @@ from dotenv import load_dotenv
 load_dotenv()
 # Default Values
 
-draw_box = True
+drawBox = True
 crop_size = 2100
 desired_class = 2
-min_confidence = 0.80
+minConfidence = 0.80
 batch_size = 10
 image_backend = 'matplot'
 approve_predictions = False
@@ -81,7 +81,7 @@ if approve_predictions:
     num_crops = 0
     while True:
         # Load a dictionary of model predictions into memory 
-        batch = base.retrieve_batch(batch_size=batch_size, desired_class=desired_class, min_confidence=min_confidence)
+        batch = base.retrieve_batch(batch_size=batch_size, desired_class=desired_class, minConfidence=minConfidence)
         if len(batch) == 0:
             continue
 

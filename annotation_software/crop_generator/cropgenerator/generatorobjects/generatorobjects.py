@@ -1,11 +1,10 @@
 # Class definition for objects used in the crop_generator module and database
 # Author: Michael B. Lance
 # created: April 4, 2025
-# updated: September 11 2025
+# updated: October 28, 2025
 #---------------------------------------------------------------------------------------------------------------------------#
 
 import numpy as np
-import os
 from flask.json.provider import JSONProvider
 import cv2
 from abc import ABC, abstractmethod
@@ -201,7 +200,7 @@ class Organization(CgOBJ):
 
 class User(UserMixin, CgOBJ):
 	def __init__(self, user_id: int, username: str, external_auth_id: str, external_auth_provider: str, status: str,
-				 created: datetime, modified: datetime, last_login: datetime,  locale: str, uuid: UUID, roles: Optional[list[Role]]=None):
+				created: datetime, modified: datetime, last_login: datetime,  locale: str, uuid: UUID, roles: Optional[list[Role]]=None):
 		self.id = str(uuid) # this is this way to make Flask-Login happy
 		self.user_id = user_id
 		self.username = username
@@ -215,10 +214,10 @@ class User(UserMixin, CgOBJ):
 		self.uuid = uuid
 		self.roles = roles
 	
-	def get_id(self) -> str:
+	def getId(self) -> str:
 		return self.id
 	
-	def has_role(self, role_name: str) -> bool:
+	def hasRole(self, role_name: str) -> bool:
 		if self.roles:
 			return role_name in self.roles
 		else:
@@ -248,20 +247,20 @@ class Box(CgOBJ):
 		self.top_left = top_left
 		self.bottom_right = bottom_right
 
-	def get_center(self) -> tuple:
+	def getCenter(self) -> tuple:
 		x = np.mean([self.top_left[0], self.bottom_right[0]])
 		y = np.mean([self.top_left[1], self.bottom_right[1]])
 
 		return ((abs(x), abs(y)))
 
-	def get_points(self) -> list[int]:
+	def getPoints(self) -> list[int]:
 		return [self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]]
 
-	def calc_iou(self, box_2) -> float:
+	def calcIou(self, box_2) -> float:
 		# Slightly modified from https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
 		#Extract bounding boxes coordinates
-		x0_A, y0_A, x1_A, y1_A = self.get_points()
-		x0_B, y0_B, x1_B, y1_B = box_2.get_points()
+		x0_A, y0_A, x1_A, y1_A = self.getPoints()
+		x0_B, y0_B, x1_B, y1_B = box_2.getPoints()
 		
 		# Get the coordinates of the intersection rectangle
 		x0_I = max(x0_A, x0_B)
@@ -311,31 +310,31 @@ class Image(CgOBJ):
 		self.uuid = uuid
 		self.image = None
 
-	def set_image(self, image_data: np.ndarray):
-		if isinstance(image_data, bytes):
+	def setImage(self, imageData: np.ndarray):
+		if isinstance(imageData, bytes):
 			try:
-				pil_image = PillowImage.open(io.BytesIO(image_data))
-				pil_image = pil_image.convert('RGB')
-				self.image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+				pilImage = PillowImage.open(io.BytesIO(imageData))
+				pilImage = pilImage.convert('RGB')
+				self.image = cv2.cvtColor(np.array(pilImage), cv2.COLOR_RGB2BGR)
 			except Exception as e:
 				print(f"Error converting bytes to image: {e}")
 				self.image = None
-		elif isinstance(image_data, np.ndarray):
-			self.image = image_data
+		elif isinstance(imageData, np.ndarray):
+			self.image = imageData
 		else:
-			print(f"Unsupported type: {type(image_data)}")
+			print(f"Unsupported type: {type(imageData)}")
 			self.image = None
 
-	def get_image(self) -> Optional[np.ndarray]:
+	def getImage(self) -> Optional[np.ndarray]:
 		if self.image is not None:
 			return self.image
 
-	def delete_image(self):
+	def deleteImage(self):
 		del self.image
 
 	def serve(self, img_format: str):
 		if self.image is not None:
-			_, self.img_encoded = cv2.imencode(img_format, self.get_image()) #type: ignore
+			_, self.img_encoded = cv2.imencode(img_format, self.getImage(), [cv2.IMWRITE_JPEG_QUALITY, 100]) #type: ignore
 		else:
 			raise Exception(f'{self.name} has no image data')
 		return self.img_encoded.tobytes()
@@ -358,7 +357,7 @@ class Image(CgOBJ):
 
 class Prediction(CgOBJ):
 	def __init__(self, pred_id: int, image_id: int, model_id: int, label: int, score: float, box_tx: int, box_ty: int,
-				 box_bx: int, box_by: int, created: datetime | None, reviewed_by_user_id: int, uuid: UUID):
+				box_bx: int, box_by: int, created: datetime | None, reviewed_by_user_id: int, uuid: UUID):
 		self.pred_id = pred_id
 		self.image_id = image_id
 		self.model_id = model_id
@@ -384,10 +383,11 @@ class Prediction(CgOBJ):
 	
 class Annotation(CgOBJ):
 	def __init__(self, label_id: int, image_id: int, herd_unit_id: int,
-			  	box_tx: int, box_ty: int, box_bx: int, box_by: int, annotation_id: int | None =None, created_by_user_id: int | None =None, 
-				created: datetime | None =None, modified: datetime | None =None, uuid: UUID | None =None):
+				box_tx: int, box_ty: int, box_bx: int, box_by: int, annotation_id: int | None =None, created_by_user_id: int | None =None, 
+				created: datetime | None =None, modified: datetime | None =None, uuid: UUID | None =None, pred_id: int | None=None):
 		self.annotation_id = annotation_id
 		self.label_id = label_id
+		self.pred_id = pred_id
 		self.image_id = image_id
 		self.herd_unit_id = herd_unit_id
 		self.dimensions = Box((box_tx, box_ty), (box_bx, box_by))
@@ -411,9 +411,10 @@ class Annotation(CgOBJ):
 
 class ReviewedArea(Image):
 	def __init__(self,  image_id: int, name: str,  area_tx: int, area_ty: int, area_bx: int, 
-			  	 area_by: int, reviewed_area_id: int | None =None, created: datetime | None =None , 
-				 modified: datetime | None =None, reviewed_by_user_id: int | None =None, 
-				 uuid: UUID | None =None):
+				area_by: int, reviewed_area_length_px: int, reviewed_area_width_px: int,
+				reviewed_area_id: int | None = None, created: datetime | None = None , 
+				modified: datetime | None = None, reviewed_by_user_id: int | None = None, 
+				uuid: UUID | None = None, ra_key: str | None = None):
 		self.reviewed_area_id = reviewed_area_id
 		self.image_id = image_id
 		self.name = name
@@ -424,30 +425,32 @@ class ReviewedArea(Image):
 		self.reviewed_area_width_px = abs(area_tx - area_bx)
 		self.reviewed_by_user_id = reviewed_by_user_id
 		self.uuid = uuid
+		self.ra_key = ra_key
 
-		def serialize(self) -> dict:
-			return {
-				'reviewed_area_id': self.reviewed_area_id,
-				'image_id': self.image_id,
-				'name': self.name,
-				'dimensions': self.dimensions.serialize(),
-				'created': self.created,
-				'modified': self.modified,
-				'reviewed_area_length_px': self.reviewed_area_length_px,
-				'reviewed_area_width_px': self.reviewed_area_width_px,
-				'uuid': self.uuid,
-			}
+	def serialize(self) -> dict:
+		return {
+			'reviewed_area_id': self.reviewed_area_id,
+			'image_id': self.image_id,
+			'name': self.name,
+			'dimensions': self.dimensions.serialize(),
+			'created': self.created,
+			'modified': self.modified,
+			'reviewed_area_length_px': self.reviewed_area_length_px,
+			'reviewed_area_width_px': self.reviewed_area_width_px,
+			'ra_key': self.ra_key,
+			'uuid': self.uuid,
+		}
 	
 class PredictionCrop(Image):
 	def __init__(self, image_id: int, pred_id: int, name: str, score: float, label: int, dimensions: Box, 
-				bounding_box: Box, uuid: UUID, url: Optional[str]=None):
+				boundingBox: Box, uuid: UUID, url: Optional[str]=None):
 		self.image_id = image_id
 		self.pred_id = pred_id
 		self.name = name
 		self.score = score
 		self.label = label 
 		self.dimensions = dimensions
-		self.bounding_box = bounding_box
+		self.boundingBox = boundingBox
 		self.approved = False
 		self.uuid = uuid
 	
@@ -459,7 +462,7 @@ class PredictionCrop(Image):
 			'score': self.score,
 			'label': self.label,
 			'dimensions': self.dimensions.serialize(),
-			'bounding_box': self.bounding_box.serialize(),
+			'boundingBox': self.boundingBox.serialize(),
 			'approved': self.approved,
 			'uuid': self.uuid,
 		}
