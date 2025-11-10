@@ -69,7 +69,6 @@ export default defineComponent({
 			else if (this.current_crumb == 0 && !this.pStore.CurrentSurvey) return;
 			else if (this.current_crumb == 1 && !this.pStore.CurrentSchema) return;
 			else if (this.current_crumb == 1 && !this.pStore.CurrentHerdUnit) return;
-			else if (this.current_crumb == 1 && !this.pStore.CurrentModel) return;
 			else if (this.current_crumb <=3 && this.current_crumb != 2) this.current_crumb+=1;
 		},
 		decrement_crumb() {

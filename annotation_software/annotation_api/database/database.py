@@ -106,7 +106,7 @@ class Database:
 
 	def bootstrap(self) -> bool:
 		''' Create tables detailed in sql file
-		 
+
 		'''
 		return self._bootstrap()
 	
@@ -124,7 +124,7 @@ class Database:
 		return org
 	
 	def create_organizaztion(self, name: str, logo_url: str | None = None) -> Organization | None:
-	   
+
 		return self._create_organization(name = name, logo_url = logo_url)
 		
 
@@ -163,7 +163,7 @@ class Database:
 
 	@connect
 	def _update_organization(self, cursor: psycopg.Cursor[Organization], orgId: Organization | int | UUID,
-							 name: str | None = None, logo_url: str | None = None) -> bool:
+							name: str | None = None, logo_url: str | None = None) -> bool:
 		''' Internal helper function, do not call directly
 		
 		'''
@@ -191,7 +191,7 @@ class Database:
 		return True if cursor.rowcount > 0 else False
 	
 	def update_organization(self,  organization_id: Organization | int | UUID,
-							 name: str | None = None, logo_url: str | None = None) -> bool:
+							name: str | None = None, logo_url: str | None = None) -> bool:
 		''' Augment an organization in the database by providing either a modified Organization object or a valid id and a new name and or a new logo_url
 		
 		Args:
@@ -225,12 +225,12 @@ class Database:
 			case _:
 				raise TypeError('organization_ids must be an Organization, int, uuid, string, or a list consisting of ONE of the three')
 		return True if cursor.rowcount > 0 else False
-	   
+
 	def delete_organization(self, organization_ids: Organization | int | UUID | list[int | UUID]) -> bool:
 		''' Delete an organization object from the database
 		
 		Args:
-			 organization_id: either an Organization object, a database id, or a universally unique identifier
+			organization_id: either an Organization object, a database id, or a universally unique identifier
 		'''
 		return self._delete_organization(organization_ids = organization_ids)
 
@@ -348,7 +348,7 @@ class Database:
 		''' Delete a role object from the database
 		
 		Args:
-			 role_id: either a Role object, a database id, or a universally unique identifier
+			role_id: either a Role object, a database id, or a universally unique identifier
 		
 		'''
 		return self._delete_role(role_ids = role_ids)
@@ -368,7 +368,7 @@ class Database:
 		return user if isinstance(user, User) else None
 	
 	def create_user(self, username: str, external_auth_id: str, external_auth_provider, locale: str, 
-					 roles: list[ Role | str | int | UUID] | None = None, organizations: list[Organization | int | UUID] | None = None) -> User | None:
+					roles: list[ Role | str | int | UUID] | None = None, organizations: list[Organization | int | UUID] | None = None) -> User | None:
 		''' Insert a new user object into the database
 		
 		Args:
@@ -457,8 +457,8 @@ class Database:
 
 	@connect 
 	def _update_user(self, cursor: psycopg.Cursor[User], user_id: User | int | UUID, username: str | None = None, 
-					 external_auth_id: str | None = None, external_auth_provider: str | None = None,
-					 status: str | None = None, locale: str | None = None) -> bool:
+					external_auth_id: str | None = None, external_auth_provider: str | None = None,
+					status: str | None = None, locale: str | None = None) -> bool:
 		''' Internal helper function, do not call directly
 		
 		'''
@@ -485,8 +485,8 @@ class Database:
 		return True if cursor.rowcount > 0 else False
 	
 	def update_user(self, user_id: User | int | UUID, username: str | None = None, 
-					 external_auth_id: str | None = None, external_auth_provider: str | None = None,
-					 status: str | None = None, locale: str | None = None) -> bool:
+					external_auth_id: str | None = None, external_auth_provider: str | None = None,
+					status: str | None = None, locale: str | None = None) -> bool:
 		''' Augment a user in the database by providing a modified User object or a valid id and a new username, and or external_auth_id, and or external_auth_provider, and or status, and or locale
 		
 		Args:
@@ -526,7 +526,7 @@ class Database:
 		''' Delete a user object from the database
 		
 		Args:
-			 user_ids: either a user object, a database id, or a universally unique identifier or a list consisting of ONE of the two
+			user_ids: either a user object, a database id, or a universally unique identifier or a list consisting of ONE of the two
 		'''
 		return self._delete_user(user_ids = user_ids)
 		
@@ -553,7 +553,7 @@ class Database:
 		'''
 		return self._create_project(name = name)
 		
-	   
+
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# 
 
 	@connect
@@ -633,7 +633,7 @@ class Database:
 		''' Delete a project object from the database
 		
 		Args:
-			 project_id: either a project object, a database id, or a universally unique identifier
+			project_id: either a project object, a database id, or a universally unique identifier
 		'''
 		return self._delete_project(project_id = project_id)
 		
@@ -796,7 +796,7 @@ class Database:
 
 	@connect
 	def _update_label(self, cursor: psycopg.Cursor[Label], label_id: Label | int | UUID, name: str | None = None, 
-					  label: int | None = None, color: str | None = None, image_link: str | None = None) -> bool:
+					label: int | None = None, color: str | None = None, image_link: str | None = None) -> bool:
 		''' Internal helper function, do not call directly
 		
 		'''
@@ -864,7 +864,7 @@ class Database:
 		''' Delete a label object from the database
 		
 		Args:
-			 label: either a label object, a database id, or a universally unique identifier 
+			label: either a label object, a database id, or a universally unique identifier 
 		'''
 
 		return self._delete_label(label_ids = label_ids)
@@ -975,7 +975,7 @@ class Database:
 		''' Delete a herd unit object from the database
 		
 		Args:
-			 herd_unit_id: either a herd unit object, a database id, or a universally unique identifier
+			herd_unit_id: either a herd unit object, a database id, or a universally unique identifier
 		'''
 		return self._delete_herd_unit(herd_unit_ids = herd_unit_ids)
 
@@ -1088,7 +1088,7 @@ class Database:
 		''' Delete a model object from the database
 		
 		Args:
-			 model_id: either a model object, a database id, or a universally unique identifier
+			model_id: either a model object, a database id, or a universally unique identifier
 		'''
 		return self._delete_model(model_ids = model_ids)
 
@@ -1213,7 +1213,7 @@ class Database:
 		''' Delete a survey object from the database
 		
 		Args:
-			 survey_id: either a survey object, a database id, or a universally unique identifier
+			survey_id: either a survey object, a database id, or a universally unique identifier
 		'''
 		return self._delete_survey(survey_ids = survey_ids)
 
@@ -1307,7 +1307,7 @@ class Database:
 
 	@connect
 	def _create_prediction(self, cursor: psycopg.Cursor[Prediction], image_id: Image | int | UUID, model_id: Model | int | UUID, 
-						   label: int, score: float, box_tx: int, box_ty: int, box_bx: int, box_by: int, returning: bool) -> Optional[Prediction]:
+							label: int, score: float, box_tx: int, box_ty: int, box_bx: int, box_by: int, returning: bool) -> Optional[Prediction]:
 		'''
 		
 		'''
@@ -1315,19 +1315,19 @@ class Database:
 		image = self._get_image(image_id) if image_id is not isinstance(image_id, Image) else image_id
 		model = self._get_model(model_id) if model_id is not isinstance(model_id, Model) else model_id
 		cursor.execute(sql.SQL(''' INSERT INTO core.predictions (image_id, model_id, label, score, box_tx, box_ty, 
-								   box_bx, box_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), 
-								   (cast(Image, image).image_id, cast(Model, model).model_id, label, score, box_tx, box_ty, box_bx, box_by))
+									box_bx, box_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), 
+									(cast(Image, image).image_id, cast(Model, model).model_id, label, score, box_tx, box_ty, box_bx, box_by))
 		if returning:
 			prediction = cursor.fetchone()
 			return prediction
 
 	def create_prediction(self, image_id: Image | int | UUID, model_id: Model | int | UUID, 
-						   label: int, score: float, box_tx: int, box_ty: int, box_bx: int, box_by: int, returning: bool) -> Optional[Prediction]:		   
+							label: int, score: float, box_tx: int, box_ty: int, box_bx: int, box_by: int, returning: bool) -> Optional[Prediction]:		   
 		'''
 		
 		'''
 		return self._create_prediction(image_id = image_id, model_id = model_id, label = label, score = score, box_tx = box_tx, box_ty = box_ty,
-									   box_bx = box_bx, box_by = box_by, returning = returning)
+									box_bx = box_bx, box_by = box_by, returning = returning)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
