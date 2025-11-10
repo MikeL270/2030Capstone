@@ -29,8 +29,9 @@ export default defineComponent({
         });
 
         const stageConfig = {
-            width: 700,
+            width: 1200,
             height: 700,
+            draggable: true
         };
 
         return {
@@ -193,10 +194,36 @@ export default defineComponent({
                 y: e.target.y(),
             }
         },
-        handleWheel(e: Event) {
-            e.preventDefault();
+        handleWheel(e: WheelEvent) {
             // @ts-ignore
-            const stage = (this.$refs.stageRef as Konva.Stage).value.getNote();
+            e.evt.preventDefault();
+            // @ts-ignore
+            const stage = (this.$refs.stageRef as Konva.Stage).getNode();
+            const oldScale = stage.scaleX() 
+            const pointer = stage.getPointerPosition();
+
+            const mousePointTo = {
+                x: (pointer.x - stage.x()) / oldScale,
+                y: (pointer.y - stage.y()) / oldScale,
+            };
+
+            // @ts-ignore
+            let direction = e.evt.deltaY > 0 ? 1 : -1;
+
+            if (e.ctrlKey) {
+                direction = -direction;
+            }
+
+            const scaleBy = 1.10;
+            const newScale = direction > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+
+            stage.scale({ x: newScale, y: newScale });
+
+            const newPos = {
+                x: pointer.x - mousePointTo.x * newScale,
+                y: pointer.y - mousePointTo.y * newScale,
+            };
+            stage.position(newPos);
 
         }
     },
@@ -258,8 +285,8 @@ export default defineComponent({
                         ...angle,
                         name: 'rect',
                         draggable: true,
-                        stroke: 'red',
-                        strokeWidth: 2
+                        stroke: 'rgba(255, 16, 0, 0.63)',
+                        strokeWidth: 1
                     }"
                     @dragend="(e: MouseEvent) => handleDragEnd(e, i)"
                     @transformend="(e: MouseEvent) => handleTransformEnd(e, i)"

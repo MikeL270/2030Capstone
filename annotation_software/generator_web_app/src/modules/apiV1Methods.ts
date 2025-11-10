@@ -12,7 +12,7 @@ import type { PredictionIntf, User_intf, ImageIntf, PredictionCrop_intf, Reviewe
 import { useToast } from 'vue-toastification'
 
 
-const api_url_base = import.meta.env.VITE_API_URL || 'https://pronghorn-count.arcc.uwyo.edu/api/v1';
+const api_url_base = import.meta.env.VITE_API_URL || 'https://pronghorn-count-dev.arcc.uwyo.edu/api/v1';
 const api_url: URL = new URL(api_url_base);
 
 const toast = useToast()

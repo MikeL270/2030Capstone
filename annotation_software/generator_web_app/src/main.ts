@@ -18,8 +18,6 @@ app.use(pinia);
 app.use(router);
 app.use(VueKonva);
 
-await router.isReady();
-
 const options: PluginOptions = {
     position: POSITION.BOTTOM_RIGHT,
     transition: "Vue-Toastification__bounce",

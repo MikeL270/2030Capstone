@@ -45,7 +45,7 @@ export default defineComponent({
 	async mounted() { 
 		document.addEventListener('keydown', this.handleKeyPress);
 	},
-	async unmounted() {
+	async beforeUnmount() {
 		await this.cStore.endPession();
 		document.removeEventListener('keydown', this.handleKeyPress);
 	},
