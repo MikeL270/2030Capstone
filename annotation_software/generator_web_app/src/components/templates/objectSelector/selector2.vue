@@ -11,8 +11,8 @@ export default defineComponent({
 })
 </script>
 <template>
-    <div class="configurationContainer" :class="{ 'tallConfigurationContainer': $route.name == 'crop-verifier' }">
-        <div class="configurationMenu" :class="{ 'wideConfigurationMenu': $route.name == 'upload', 'tallConfigurationMenu': $route.name == 'crop-verifier'}">
+    <div class="configurationContainer" :class="{ 'tallConfigurationContainer': $route.name == 'crop-verifier' || 'upload' }">
+        <div class="configurationMenu" :class="{ 'tallConfigurationMenu': $route.name == 'crop-verifier' || 'upload'}">
             <h2> Schema Selection </h2>
             <div class="Table-Title"> 
                 <p> Name </p>
@@ -69,7 +69,7 @@ export default defineComponent({
 				</p>
 			</figure>
         </div>
-        <div class="configurationMenu" :class="{ 'tallConfigurationMenu': $route.name == 'crop-verifier'}">
+        <div class="configurationMenu" :class="{ 'tallConfigurationMenu': $route.name == 'crop-verifier' || 'upload'}">
             <h2> Herd Unit Selection </h2>
             <div class="Table-Title"> 
                 <p> Name </p>
@@ -94,7 +94,7 @@ export default defineComponent({
                 </button>
             </figure>
         </div>
-        <div class="configurationMenu" v-if="$route.name != 'crop-verifier'">
+        <div class="configurationMenu" v-if="$route.name == 'auto-cropper'">
             <h2> Model Selection </h2>
             <div class="Table-Title"> 
                 <p> Name </p>
