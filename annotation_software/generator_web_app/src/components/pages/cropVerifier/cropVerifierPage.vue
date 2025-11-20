@@ -1,5 +1,4 @@
 <script lang="ts">
-import '@/assets/selector.css'
 import { defineComponent, defineAsyncComponent, ref } from "vue";
 import { useProjectStore } from "@/modules/stores/projectStore";
 import { Project, Survey, Schema, HerdUnit, Label, Model } from '@/types/generatorobjects';
@@ -138,8 +137,8 @@ export default defineComponent({
 
 </script>
 <template>
-    <div class="Page-Container">
-		<h2 class="Utility-Title">
+    <div class="pageContainer">
+		<h2 class="utilityTitle">
 			Crop Verifier 
 			<button @click="current_crumb = 0" title="Project Selection">
 				&gt;
@@ -154,11 +153,11 @@ export default defineComponent({
 				Crop Verification
 			</button>
 		</h2>
-		<div class="Component-Container">
+		<div class="componentContainer">
 			<selector1 v-if="current_crumb == 0"/>
 			<selector2 v-if="current_crumb == 1" />
 			<Validate v-if="current_crumb == 2" />
-			<div class="Instructions" v-if="current_crumb < 2">
+			<div class="instructions" v-if="current_crumb < 2">
 				<h1 style="align-self: center"><u>Crop Verifier</u></h1>
 					<br/>
 					<details>
@@ -238,12 +237,12 @@ export default defineComponent({
 						</li>
 					</ol>
 					<br/>
-					<div id="Configuration-Verification" v-if="pStore.CurrentLabels && pStore.CurrentModel && pStore.CurrentHerdUnit">
+					<div id="configurationVerification" v-if="pStore.CurrentLabels && pStore.CurrentModel && pStore.CurrentHerdUnit">
 						<hr/>
 						
 					</div> 
 				</div> 
-				<div id="NavigationButtons">
+				<div id="navigationButtons">
 					<button @click="decrement_crumb()">
 						<Icon icon="ooui:next-rtl" width="16" height="16"/>
 						Back

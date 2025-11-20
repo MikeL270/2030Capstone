@@ -46,7 +46,7 @@ export default defineComponent({
 		document.addEventListener('keydown', this.handleKeyPress);
 	},
 	async beforeUnmount() {
-		await this.cStore.endPession();
+		await this.cStore.endSession();
 		document.removeEventListener('keydown', this.handleKeyPress);
 	},
 	methods: {
@@ -362,7 +362,7 @@ export default defineComponent({
 	box-shadow: 0 8px 12px 4px var(--color-background);
 	display: flex;
 	justify-content: space-between;
-	margin-bottom: 2% 0 2% 0;
+	margin: 2% 0 2% 0;
 	align-items: center;
 	background-color: var(--wygf-bg-blue)
 }
@@ -383,7 +383,7 @@ export default defineComponent({
 }
 #Tool-Bar .Tool:hover {
 	color: var(--wygf-yellow);
- }
+}
 #Tool-Bar .Tool button {
 	background: none;
 	display: flex;
@@ -396,11 +396,10 @@ export default defineComponent({
 	border: none;
 	font-size: 1em;
 }
-#Tool-Bar .Tool button:hover {
+#Tool-Bar .Tool :hover {
 	cursor: pointer;
 }
 #Tool-Bar .Tool  svg {
     margin: 2%;
 }
-
 </style>

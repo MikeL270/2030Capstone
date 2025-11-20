@@ -58,32 +58,6 @@ export default defineComponent({
 </template>
 
 <style scoped>
-    .Menu {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        width: 4vw;
-        background-color: var(--wygf-bg-blue);
-        box-shadow: 0 4px 6px 2px var(--color-background-soft);
-    }
-    nav {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-    }
-    .Menu:hover {
-        align-items: flex-start;
-        padding-right: 5px;
-		width: 10vw;
-		opacity: 95%;
-		.Item {
-			justify-content: flex-start;
-		}
-    }
     .Item {
         display: flex;
         align-items: center;

@@ -1,59 +1,60 @@
-<!-- Heavily adapted from this demo: https://codesandbox.io/p/sandbox/wwyjl2 -->
 <script lang="ts">
-import { defineComponent, reactive, ref } from 'vue';
-import type { Ref } from 'vue';
+// Heavily adapted from several excellent Konva demos https://konvajs.org/
+// TS ignores because Konva has bad TS support, it works though.
+
+import { defineComponent, ref } from 'vue';
+import { type konvaBoxConf, type tempRect, Label } from '@/types/generatorobjects';
 import { useCropVerifierStore } from '@/modules/stores/cropVerifierStore';
 import Konva from 'konva';
-
-interface konvaBoxConf {
-    width: number;
-    height: number;
-    x: number;
-    y: number;
-    rotation: number;
-}
+import { useProjectStore } from '@/modules/stores/projectStore';
 
 export default defineComponent({
     name: 'crop-verifier',
     setup() {
         const cvs = useCropVerifierStore();
-        const testAngles = ref([
-            { x: 60, y: 60, width: 100, height: 90, id: 'testangle1', rotation: 0 },
-            { x: 250, y: 100, width: 150, height: 90, id: 'rect2', rotation: 0 },
-        ]);
-        const rectRefs = ref([]);
-        const selectedIds = ref<string[]>([]); 
-        const isSelecting = ref(false); 
-        const selectionRectangle = reactive({ 
-            visible: false, x1: 0, y1: 0, x2: 0, y2: 0,
-        });
-
-        const stageConfig = {
-            width: 1200,
-            height: 700,
-            draggable: true
-        };
-
-        return {
-            cvs,
-            stageConfig,
-            testAngles,
-            selectedIds,
-            rectRefs,
-            isSelecting,
-            selectionRectangle,
-        };
+        const pStore = useProjectStore();
+        return { cvs, pStore };
     },
     data() {
         return {
-            stageConfig: {
-                width: 700,
-                height: 700,
-            }
+            scaleX: 1,
+            scaleY: 1,
+            // Note: these numbers dont matter because the resize event listener will overwrite them
+            sceneWidth: 200,
+            sceneHeight: 200,
+            selectedIds: [] as string[],
+            resizeo: undefined as undefined | ResizeObserver,
+            isDrawing: false,
+            drawingRect: {
+                startPointX: 0,
+                startPointY: 0,
+                width: 0,
+                height:0
+            } as tempRect,
+            drawingLabel: undefined as undefined | Label
         }
     },
-    mounted() {
-        if (this.cvs.bootStrapped == false) this.cvs.bootStrap();
+    async mounted() {
+        if (this.cvs.bootStrapped == false) await this.cvs.bootStrap();
+
+        await this.$nextTick(() => {
+            this.updateSize();
+            window.addEventListener('resize', this.updateSize);
+
+            this.resizeo = new ResizeObserver(this.updateSizeX);
+            this.resizeo.observe((this.$refs.stagewrapper as HTMLDivElement));
+        });
+        document.addEventListener('keydown', this.handleKeyPress);
+    },
+    async beforeUnmount() {
+        window.removeEventListener('resize', this.updateSize);
+        this.resizeo?.unobserve((this.$refs.stagewrapper as HTMLDivElement));
+        document.removeEventListener('keydown', this.handleKeyPress);
+        await this.cvs.endSession();
+    },
+    computed: {
+        stageWidth() { return this.sceneWidth * this.scaleX },
+        stageHeight() { return this.sceneHeight * this.scaleY }
     },
     methods: {
         degToRad: (angle: number) => (angle / 180) * Math.PI,
@@ -64,6 +65,7 @@ export default defineComponent({
             const y = pivotY + distance * Math.sin(angle);
             return { x, y };
         },
+        //--------------------------------------------------------------------------------------//
         getClientRect(element: konvaBoxConf) {
             const { x, y, width, height, rotation = 0 } = element;
             const rad = this.degToRad(rotation);
@@ -85,117 +87,71 @@ export default defineComponent({
                 height: maxY - minY,
             };
         },
-        handleStageClick(e: MouseEvent) {
-            if (this.selectionRectangle.visible) return;
-            // @ts-ignore
-            if (e.target === e.target.getStage()) {
-                this.selectedIds = [];
-                return;
-            }
-            // @ts-ignore
-            if (!e.target.hasName('rect')) return;
-            // @ts-ignore
-            const clickedId = e.target.attrs.id;
+        //--------------------------------------------------------------------------------------//
+        handleTransformEnd(e: MouseEvent) {
+            if (!e.target) return;
+            const uuid = this.cvs.selectedShapeName;
+            const node = (e.target as unknown as Konva.Rect); 
 
-            const metaPressed = e.shiftKey || e.ctrlKey || e.metaKey;
-            const isSelected = this.selectedIds.includes(clickedId)
-
-            if (!metaPressed && !isSelected) {
-                this.selectedIds = [clickedId];
-            } else if (metaPressed && isSelected) {
-                this.selectedIds = this.selectedIds.filter(id => id !== clickedId);
-            } else if (metaPressed && !isSelected) {
-                this.selectedIds = [...this.selectedIds, clickedId];
-            }
-        },
-        handleTransformEnd(e: MouseEvent, index: number) {
-            // @ts-ignore
-            const node = e.target; 
-            // @ts-ignore
             const scaleX = node.scaleX();
-            // @ts-ignore
             const scaleY = node.scaleY();
-
-            // @ts-ignore
-            node.scaleX(1);
-
-            // @ts-ignore
-            node.scaleY(1);
             
-            const rects = [...this.testAngles];
-            rects[index] = {
-                ...rects[index],
-                // @ts-ignore
-                x: node.x(),
-                // @ts-ignore
-                y: node.y(),
-                // @ts-ignore
-                width: Math.max(5, node.width() * scaleX),
-                // @ts-ignore
-                height: Math.max(5, node.height() * scaleY), 
-                // @ts-ignore
-                rotation: node.rotation(),
-            };
-         // To update the ref correctly in the Options API context:
-            this.testAngles = rects;
+            node.scaleX(1);
+            node.scaleY(1);
+
+            this.cvs.updateBoxScale(uuid, node.width() * scaleX, node.height() * scaleY);
+            this.cvs.updateBoxPosition(uuid, node.x(), node.y())
+            
         },
+        //--------------------------------------------------------------------------------------//
         handleMouseDown(e: MouseEvent) {
             // @ts-ignore
-            if (e.target != e.target.getStage()) {
-                console.log(e.target)
+            if (e.target === e.target.getStage()) {
+                this.cvs.selectedShapeName = '';
+                this.updateTransformer();
+                return;
+            }
+                // @ts-ignore
+                const clickedOnTransformer = e.target.getParent().className === 'Transformer';
+                if (clickedOnTransformer) {
                 return;
             }
 
-            this.isSelecting = true;
             // @ts-ignore
-            const pos = e.target.getStage().getPointerPosition();
-            this.selectionRectangle.visible = true;
-            this.selectionRectangle.x1 = pos.x;
-            this.selectionRectangle.y1 = pos.y;
-            this.selectionRectangle.x2 = pos.x;
-            this.selectionRectangle.y2 = pos.y;
+            const name = e.target.name();
+            const rect = this.cvs.currentBoxConfs[name];
+            if (rect) {
+            this.cvs.selectedShapeName= name;
+            } else {
+            this.cvs.selectedShapeName = '';
+            }
+            this.updateTransformer();
         },
-        handleMouseMove(e: MouseEvent) {
-            if (!this.isSelecting) return;
+        //--------------------------------------------------------------------------------------//
+        updateTransformer() {
+            const transformerNode = (this.$refs.transformerRef as Konva.Transformer).getNode();
+            const stage = transformerNode.getStage();
+            const selected = this.cvs.selectedShapeName;
+
+            if (!stage) return;
+            
+            const selectedNode = stage.findOne('.' + selected);
             // @ts-ignore
-            const pos = e.target.getStage().getPointerPosition();
-            this.selectionRectangle.x2 = pos.x;
-            this.selectionRectangle.y2 = pos.y;
-        },
-        handleMouseUp(e: MouseEvent) {
-            if (!this.isSelecting) return;
-            this.isSelecting = false;
+            if (selectedNode === transformerNode.node()) {
+                return;
+            }
 
-            const selectionRect = this.selBox;
-            const newSelectedIds: string[] = [];
-
-            this.testAngles.forEach((rect) => {
-                const rectClientBox = this.getClientRect(rect); 
-
-                if (Konva.Util.haveIntersection(selectionRect, rectClientBox)) {
-                    newSelectedIds.push(rect.id);
-                }
-            });
-
-            this.selectedIds = newSelectedIds;
-
-            setTimeout(() => {
-                this.selectionRectangle.visible = false;
-            });
-        },
-        handleDragEnd(e: MouseEvent, index: number) {
-            if (e.target == undefined) return;
-            const rects = [...this.testAngles];
-            rects[index] = {
-                ...rects[index],
-                // @ts-ignore
-                x: e.target.x(),
-                // @ts-ignore
-                y: e.target.y(),
+            if (selectedNode) {
+                 // @ts-ignore
+                transformerNode.nodes([selectedNode]);
+            } else {
+                 // @ts-ignore
+                transformerNode.nodes([]);
             }
         },
+        //--------------------------------------------------------------------------------------//
         handleWheel(e: WheelEvent) {
-            // @ts-ignore
+            // @ts-ignore (idk why ts is unaware of evt, so ignore)
             e.evt.preventDefault();
             // @ts-ignore
             const stage = (this.$refs.stageRef as Konva.Stage).getNode();
@@ -225,105 +181,619 @@ export default defineComponent({
             };
             stage.position(newPos);
 
-        }
-    },
-    computed: {
-        selBox() {
-            return {
-                x: Math.min(this.selectionRectangle.x1, this.selectionRectangle.x2),
-                y: Math.min(this.selectionRectangle.y1, this.selectionRectangle.y2),
-                width: Math.abs(this.selectionRectangle.x2 - this.selectionRectangle.x1),
-                height: Math.abs(this.selectionRectangle.y2 - this.selectionRectangle.y1)
+        },
+        //--------------------------------------------------------------------------------------//
+        updateSize() {
+            const stagewrapper = (this.$refs.stagewrapper as HTMLDivElement);
+            if (!stagewrapper) return
+            this.sceneHeight = stagewrapper.offsetHeight;
+            this.sceneWidth = stagewrapper.offsetWidth;      
+        },
+        //--------------------------------------------------------------------------------------//
+        updateSizeX() {
+            /* This function only exists because the resize observer was getting wild with the y scale, 
+            probably because our css sucks */
+            const stagewrapper = (this.$refs.stagewrapper as HTMLDivElement);
+            if (!stagewrapper) return
+            this.sceneWidth = stagewrapper.offsetWidth;                  
+        },
+        //--------------------------------------------------------------------------------------//
+        handleDragEnd(e: MouseEvent) {
+            if (!e.target) return
+            
+            const uuid = this.cvs.selectedShapeName;
+            const node = (e.target as unknown as Konva.Rect);
+
+            this.cvs.updateBoxPosition(uuid, node.x(), node.y());
+        },
+        //--------------------------------------------------------------------------------------//
+        cancelDraw() {
+            if (!this.isDrawing) return;
+            const stageContainer = (this.$refs.stageRef as Konva.Stage).getStage().container();
+            
+            stageContainer.removeEventListener('mousedown', this.drawMouseDown);
+            stageContainer.removeEventListener('mousemove', this.drawMouseMove);
+            stageContainer.removeEventListener('mouseup', this.drawMouseUp);
+
+            stageContainer.style.cursor = 'default';
+            stageContainer.style.opacity = '1'; 
+            
+            // Reset drawingRect to prevent last annotation's ghost from appearing on next draw
+            this.drawingRect = {
+                startPointX: 0,
+                startPointY: 0,
+                width: 0,
+                height: 0,
+            };
+            this.isDrawing = false;
+        },
+        //--------------------------------------------------------------------------------------//
+        drawMouseDown(e: MouseEvent) {
+            const stageContainer = (this.$refs.stageRef as Konva.Stage).getStage().container();
+            // @ts-ignore
+            const stageNode = (this.$refs.stageRef as Konva.Stage).getNode();
+
+            const pos = stageNode.getRelativePointerPosition();
+            this.drawingRect = {startPointX: pos.x, startPointY: pos.y, width: 0, height: 0};
+            
+
+            stageContainer.addEventListener('mousemove', this.drawMouseMove);
+            stageContainer.addEventListener('mouseup', this.drawMouseUp);
+        },
+        //--------------------------------------------------------------------------------------//
+        drawMouseUp(e: MouseEvent) {
+
+            if (!this.drawingLabel) return;
+            const stageContainer = (this.$refs.stageRef as Konva.Stage).getStage().container();
+
+            if (this.drawingRect.width != 0 || this.drawingRect.height != 0) {
+                this.cvs.createNewAnnotation(this.drawingRect, this.drawingLabel);
+            }
+
+            stageContainer.style.cursor = 'default';
+            stageContainer.style.opacity = '1';
+                
+            stageContainer.removeEventListener('mousedown', this.drawMouseDown);
+            stageContainer.removeEventListener('mousemove', this.drawMouseMove);
+            stageContainer.removeEventListener('mouseup', this.drawMouseUp);
+
+            this.drawingRect = {
+                startPointX: 0,
+                startPointY: 0,
+                width: 0,
+                height: 0,
+            };
+            this.isDrawing = false;
+        },
+        //--------------------------------------------------------------------------------------//
+        drawMouseMove( ) {
+            if (!this.isDrawing) return;
+            // @ts-ignore
+            const stageNode = (this.$refs.stageRef as Konva.Stage).getNode()
+
+            // Relative position is very important to this working right
+            let point = stageNode.getRelativePointerPosition();
+            this.drawingRect.width = this.drawingRect.startPointX - point.x;
+            this.drawingRect.height = this.drawingRect.startPointY - point.y;
+        },
+        //--------------------------------------------------------------------------------------//
+        startDrawing(label: Label) {
+            const stageContainer = (this.$refs.stageRef as Konva.Stage).getStage().container();
+            stageContainer.style.cursor = 'crosshair';
+            stageContainer.style.opacity = '0.5'; 
+            this.isDrawing = true;
+            this.drawingLabel = label;
+            stageContainer.addEventListener('mousedown', this.drawMouseDown); 
+        },
+        //--------------------------------------------------------------------------------------//
+        handleDelete() {
+            if (this.cvs.selectedShapeName === '') return;
+            const transformerNode = (this.$refs.transformerRef as Konva.Transformer).getNode();
+            this.cvs.deleteAnnotation(this.cvs.selectedShapeName);
+            this.cvs.selectedShapeName = '';
+            //@ts-ignore
+            transformerNode.nodes([]);
+            const stageContainer = (this.$refs.stageRef as Konva.Stage).getStage().container();
+            stageContainer.style.cursor = 'default';
+        },
+        //--------------------------------------------------------------------------------------//
+        async handleRightArrow() {
+            await this.cvs.nextImage();
+        },
+        //--------------------------------------------------------------------------------------//
+        async handleLeftArrow() {
+            await this.cvs.previousImage();
+        },
+        //--------------------------------------------------------------------------------------//
+        async handleEnter() {
+            await this.cvs.submit();
+        },
+        //--------------------------------------------------------------------------------------//
+        decodeDigit(event: KeyboardEvent) { 
+            if (this.isDrawing) return;
+            const label_num = +event.key;
+            const label = this.pStore.labels.find((label) => label.label == label_num);
+            if (!label) return;
+
+            if (this.cvs.selectedShapeName != '') {
+                this.cvs.currentAnnotations[this.cvs.selectedShapeName].label_id = label.label_id;
+            } else {
+                this.startDrawing(label);
             }
         },
-    },
-    watch: {
-        selectedIds: function (newSelectedIds: string[]) {
-            // @ts-ignore 
-            const transformerNode = this.$refs.transformerRef?.getNode();
-
-            if (!transformerNode) return;
-
-            // @ts-ignore
-            const rectNodes = this.rectRefs.map(ref => ref.getNode());
-
-            const nodesToAttach = rectNodes
-                .filter((node: Konva.Node) => newSelectedIds.includes(node.attrs.id));
-
-            transformerNode.nodes(nodesToAttach);
+        //--------------------------------------------------------------------------------------//
+        handleKeyPress(event: KeyboardEvent) {
+            switch (true) {
+                case event.code === 'Escape': {
+                    this.cancelDraw();
+                    break;
+                };
+                case event.code === 'Delete': {
+                    this.handleDelete();
+                    break;
+                };
+                case event.code.startsWith('Digit'): {
+                    this.decodeDigit(event);
+                    break;
+                };
+                case event.code === 'ArrowRight': {
+                    this.handleRightArrow();
+                    break;
+                };
+                case event.code === 'ArrowLeft': {
+                    this.handleLeftArrow();
+                    break;
+                };
+                case event.code === 'Enter': {
+                    this.handleEnter();
+                    break;
+                };
+            }
         }
+        //--------------------------------------------------------------------------------------//
     }
 });
-
 </script>
 <template>
-    <div v-if="cvs.bootStrapped" id="cropContainer">
-        <v-stage :config="stageConfig"
-        @mousedown="handleMouseDown"
-        @mousemove="handleMouseMove"
-        @mouseup="handleMouseUp"
-        @click="handleStageClick"
-        @wheel="handleWheel"
-        ref="stageRef"
-        >
-            <v-layer ref="imageLayer" :config="{listening: false}">
-                <!-- TODO: modify the v-if to not be so terrifying -->
-                <v-image
-                v-if="cvs.batches[0].crops[0].image && cvs.batches[0].crops[0].image[1].value === 'loaded'" 
-                :config="{
-                    image: cvs.batches[0].crops[0].image[0].value,
-                    scaleX: 0.35,
-                    scaleY: 0.35,
-                }"
-                />
-            </v-layer>
-            <v-layer ref="annotationLayer">
-                <v-rect
-                    v-for="(angle, i) in testAngles"
-                    :key="i"
+    <div v-if="cvs.bootStrapped && !cvs.loading" id="cropContainer">
+        <div id="layerContainer">
+            <h2>Labels</h2>
+            <div
+            v-for="label in pStore.labels"
+            class="labelSection"
+            >
+                <div class="item">
+                    <h3 
+                    :style="{ color: label.color, borderColor: label.color }"
+                    class="label"
+                    >{{ label.label }}</h3>
+                    <p>{{ label.name }}</p>
+                    <button @click="startDrawing(label)">
+                        <Icon icon="material-symbols:add"/>
+                    </button>
+                </div>
+                
+                <div class="wrapper">
+                    <button 
+                        v-for="annot, count in cvs.annotationsByLabelId(label.label_id)"
+                        :class="{hovered: annot.uuid === cvs.hoveredUuid}"
+                        class="item subItem"
+                        @mouseover="(e: MouseEvent) => {
+                            //@ts-ignore
+                            cvs.currentBoxConfs[annot.uuid].fill = 'rgba(255, 255, 255, 0.35)';
+                            (e.target as HTMLButtonElement).style.cursor = 'pointer';
+                            
+                        }"
+                        @mouseout="(e: MouseEvent) => {
+                            //@ts-ignore
+                            cvs.currentBoxConfs[annot.uuid].fill = '';
+                            (e.target as HTMLButtonElement).style.cursor = 'default';
+                        }"
+                        @click="console.log('clicked')"
+                    >
+                        <div 
+                            :style="{ backgroundColor: pStore.labels.find(label => label.label_id === annot.label_id)?.color }"
+                            class="label" 
+                        ></div>
+                        <p>{{ count + 1 }} - {{ pStore.labels.find(label => label.label_id === annot.label_id)?.name }}</p>
+                        <button @click="cvs.deleteAnnotation(annot.uuid )">
+                            <Icon icon="material-symbols:delete"/>
+                        </button>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="stagewrapper" ref="stagewrapper">
+            <v-stage :config="{
+                width: stageWidth,
+                height: stageHeight,
+                draggable: true,
+                scaleX: scaleX, 
+                scaleY: scaleY,
+                dragBoundFunc: function (pos: number, e: MouseEvent) {
+                    //@ts-ignore
+                    return isDrawing ? this.getAbsolutePosition() : pos;
+                }
+            }"
+            @wheel="handleWheel"
+            @mousedown="handleMouseDown"
+            ref="stageRef"
+            >
+                <v-layer 
+                ref="imageLayer" 
+                :config="{listening: false}">
+                    <v-image
+                    v-if="cvs.currentImage && cvs.currentImage[1].value == 'loaded'" 
                     :config="{
-                        ...angle,
-                        name: 'rect',
-                        draggable: true,
-                        stroke: 'rgba(255, 16, 0, 0.63)',
-                        strokeWidth: 1
-                    }"
-                    @dragend="(e: MouseEvent) => handleDragEnd(e, i)"
-                    @transformend="(e: MouseEvent) => handleTransformEnd(e, i)"
-                    ref="rectRefs"
-                />
-                <v-transformer
-                    ref="transformerRef"
-                    :config="{
-                        boundingBoxFunc: (oldBox: konvaBoxConf, newBox: konvaBoxConf) => {
-                            if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                            }
-                            return newBox;
-                        },
-                        rotateEnabled: false
+                        image: cvs.currentImage[0].value,
                     }"
                     />
-                <v-rect
-                    v-if="selectionRectangle.visible"
-                    :config = "{
-                        x: Math.min(selectionRectangle.x1, selectionRectangle.x2),
-                        y: Math.min(selectionRectangle.y1, selectionRectangle.y2),
-                        width: Math.abs(selectionRectangle.x2 - selectionRectangle.x1),
-                        height: Math.abs(selectionRectangle.y2 - selectionRectangle.y1),
-                        fill: 'rgba(0,0,255,0.5)'
-                    }"
-                />
-            </v-layer>
-        </v-stage>
+                </v-layer> 
+                <v-layer ref="annotationLayer">
+                    <v-rect
+                        v-for="(conf, uuid) in cvs.currentBoxConfs"
+                        :key="uuid"
+                        :config="{
+                            ...conf,
+                            name: uuid,
+                            draggable: true,
+                            // TODO: Beg for forgiveness from above for creating this next line
+                            stroke: (conf.stroke == '') ? pStore.labels.find((label) => label.label_id === cvs.currentAnnotations[uuid].label_id)?.color : conf.stroke,
+                            strokeWidth: 2,
+                            strokeScaleEnabled: false,
+                            rotation: 0
+                        }"
+                        
+                        ref="rectRefs"
+                        @transformend="handleTransformEnd"
+                        @mouseover="(e: MouseEvent) => {
+                            if (!e.target) return
+                            // @ts-ignore
+                            e.target.getStage().container().style.cursor = 'move'
+                            // @ts-ignore
+                            cvs.hoveredUuid = e.target.attrs.name
+                            // @ts-ignore
+                            e.target.attrs['fill'] =  e.target.attrs.stroke + '66' 
+                        }"
+                        @mouseout="(e: MouseEvent) => {
+                            if (!e.target) return
+                            // @ts-ignore
+                            e.target.getStage().container().style.cursor = 'default'
+                            cvs.hoveredUuid = ''
+                            // @ts-ignore
+                            e.target.attrs['fill'] = ''
+                        }" 
+                        @dragend="handleDragEnd"
+                        /> 
+                        <v-rect
+                        v-if="isDrawing"
+                        :config="{
+                            x: Math.min(drawingRect.startPointX, drawingRect.startPointX - drawingRect.width),
+                            y: Math.min(drawingRect.startPointY, drawingRect.startPointY - drawingRect.height),
+                            width: Math.abs(drawingRect.width),
+                            height: Math.abs(drawingRect.height),
+                            stroke: (drawingLabel?.color) ? drawingLabel.color: 'red',
+                            strokeWidth: 1,
+                        }">
+
+                        </v-rect>
+                    <v-transformer
+                        ref="transformerRef"
+                        :config="{
+                            rotateEnabled: false,
+                            padding: 1,
+                            ignoreStroke: true,
+                            anchorStroke: '#ffffff',
+                            anchorFill: '#ffffff',
+                            anchorStrokeWidth: 2,
+                            anchorSize: 10,
+                            anchorCornerRadius: 50,
+                            keepRatio: false,
+                            borderStroke: 'rgba(0, 154, 222, 0.45)',
+                            borderStrokeWidth: 1,
+                            boundingBoxFunc: (oldBox: konvaBoxConf, newBox: konvaBoxConf) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                    return oldBox;
+                                }
+                                return newBox;
+                            },
+                        }"
+                        @mouseover="(e: MouseEvent) => {
+                             // @ts-ignore
+                            e.target.parent._nodes[0].attrs['fill'] =  e.target.parent._nodes[0].attrs.stroke + '66' 
+                        }"
+                        @mouseout="(e: MouseEvent) => {
+                            // @ts-ignore
+                            e.target.parent._nodes[0].attrs['fill'] = ''
+                        }"
+                        />
+                </v-layer>
+            </v-stage>
+            <div
+                v-if="cvs.selectedShapeName != ''"
+                id="annotationInfo"
+            >
+                <h2>UUID: {{ cvs.currentAnnotations[cvs.selectedShapeName].uuid }} (eventually clicking the annotation will center it above this)</h2>
+                <div class="annotationSection">
+                    <h3>Label</h3>
+                    <div class="content">
+                        <label for="labelSelector">Select Label:</label>
+                        <select id="labelSelector" v-model="cvs.currentAnnotations[cvs.selectedShapeName].label_id">
+                            <option v-for="label in pStore.labels" :key="label.label_id" :value="label.label_id">
+                                {{ label.name }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div class="vl"></div>
+                <div class="annotationSection">
+                    <h3>Transformation and Translation</h3>
+                    <div class="content" style="flex-direction: row;">
+                        <div style="display: flex; gap: 5%; flex-direction: column; justify-content: center;">
+                            <div>
+                                <label for="xPos">X</label>
+                                <input 
+                                    id="xPos"
+                                    type="number"
+                                    v-model="cvs.currentBoxConfs[cvs.selectedShapeName].x"
+                                />
+                            </div>
+                            <div>
+                                <label for="yPos">Y</label>
+                                <input 
+                                    id="yPos"
+                                    type="number"
+                                    v-model="cvs.currentBoxConfs[cvs.selectedShapeName].y"
+                                />
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 5%; flex-direction: column; justify-content: center;">
+                                <div>
+                                    <label for="yPos">Width</label>
+                                <input 
+                                    id="yPos"
+                                    type="number"
+                                    v-model="cvs.currentBoxConfs[cvs.selectedShapeName].width"
+                                />
+                                </div>
+                                <div>
+                                    <label for="yPos">Height</label>
+                                <input 
+                                    id="yPos"
+                                    type="number"
+                                    v-model="cvs.currentBoxConfs[cvs.selectedShapeName].height"
+                                />
+                                </div>
+                            </div>
+
+                    </div>
+                </div>
+                <div class="vl"></div>
+                <div class="annotationSection">
+                    <h3>Section 3</h3>
+                    <div class="content">
+                        <p>reset button, edit history?</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="cropExplorer">
+            <button 
+                class="explorerButton"
+                @click="handleLeftArrow()"
+            >
+                <Icon icon="ooui:next-rtl"/>
+                Previous Crop
+            </button>
+            <button 
+                class="explorerButton"
+            >
+                <Icon icon="material-symbols:undo"/>
+                Undo
+            </button>
+            <button 
+                class="explorerButton"
+            >
+                <Icon icon="material-symbols:redo"/>
+                Redo
+            </button>
+            <button 
+                class="explorerButton" 
+                @click="handleEnter()"
+            >
+                <Icon icon="vaadin:enter-arrow"/>
+                Submit
+            </button>
+            <button 
+                class="explorerButton"
+                @click="handleRightArrow()"
+            >
+                <Icon icon="ooui:next-ltr"/> 
+                Next Crop
+            </button>
+            </div>
+    </div>
+    <div id="cropContainer" v-else>
+        <Icon icon="eos-icons:three-dots-loading" width="96" height="96"/> 
     </div>
 </template>
+<!-- TODO: fix css to not suck so hard -->
 <style scoped>
     #cropContainer {
         display: flex;
-        justify-content: center;
+        justify-content: flex-start;
         width: 100%;
-
+        overflow: hidden;
+        height: 100%;
+        padding-bottom: 5vh;
+        
+    }
+    #cropContainer svg {
+        justify-self: center !important;
+        align-self: center;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    #stagewrapper {
+        position: relative;
+        width: 100%;
+        margin: 0.5% 0.5% 0.5% 0.25%;
+        overflow: hidden;    
+        background-color: var(--color-background-soft);
+        border-radius: 8px;
+    }
+    
+    #layerContainer {
+        width: 20%;
+        display: flex;
+        margin: 0.5% 0.25% 0.5% 0.5%;
+        border-radius: 8px;
+        flex-direction: column;
+        background-color: var(--color-background-mute);
+        overflow-wrap: normal;
+        padding: 1%;
+        text-align: center;
+        align-items: center;
+        flex-grow: 0;
+        overflow-y: auto;
+        scrollbar-color: var(--color-text) transparent;
+    }
+    .hovered {
+        color: var(--wygf-yellow);
+    }
+    .wrapper {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        position: relative;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-color: var(--color-text) transparent;
+    }
+    .item { 
+        display: flex;
+        border: 1px solid var(--color-background-mute);
+        margin: 2%;
+        padding: 1%;
+        width: 100%;
+        height: 5vh;
+        border-radius: 8px;
+        justify-content: space-between;
+        align-items: center;
     }
 
+    button svg {
+        width: 1.25vw;
+        height: 1.25vw;
+    }
+    .item .label {
+        border: solid 1px white;
+        width: 2vw;
+        height: 2vw;
+        border-radius: 4px;
+        text-align: center;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .labelSection {
+        display: flex;
+        width: 100%;
+        flex-direction: column;
+        max-height: 40%;
+    }
+    .subItem {
+        width: 90%
+    }
+    #annotationInfo {
+        position: absolute;
+        width: 63vw;
+        height: 20vh; 
+        z-index: 9999;
+        margin-left: auto;
+        margin-right: auto;
+        background-color: var(--color-background-mute);
+        border-radius: 8px;
+        opacity: 85%;
+        box-shadow: 0 4px 6px 2px var(--color-background);
+        align-self: center;
+        bottom: -10%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        justify-content: center;
+        padding: 2%;
+        gap: 5px;
+        align-items: center;
+    }
+    #annotationInfo h2 {
+        position: absolute;
+        top: 2%;
+        font-size: medium;
+        text-decoration: underline;
+    }
+    .vl {
+        border-left: 1px solid white;
+        height: 100%;
+        width: 0%;
+        opacity: 50%;
+        margin-top: 3%;
+    }
+    .annotationSection{
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        justify-content: flex-start;
+        align-items: center;
+        height: 100%;
+        margin-top: 3%;
+    }
+    .content {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        padding: 1%;
+    }
+    .content select {
+        border-radius: 8px;
+        background-color: var(--color-background-mute);
+        color: var(--color-text)
+    }
+    .content input {
+        border-radius: 8px;
+        border: solid 1px white;
+        height: 40%;
+        width: 50%;
+        background-color: var(--color-background-mute);
+        color: var(--color-text);
+        height: fit-content;
+        margin-left: 5%;
+    }
+    .cropExplorer{
+        position: absolute;
+        height: 5vh;
+        width: 100%;
+        background-color: var(--color-background-mute);
+        bottom: 0;
+        display: flex;
+        justify-content: space-between;
+        padding: 0 5% 0 5%
+    }
+
+    .explorerButton {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    .explorerButton :hover {
+            cursor: pointer;
+            color: var(--wygf-yellow) !important;
+        }
+
+    .explorerButton svg {
+        margin: 2%;
+    }
 </style>

@@ -56,14 +56,15 @@ class Database:
 	def create_pool(self, min_size: int=2, max_size: int=4):
 		if self._pool is not None: # dispose of existing pool
 			self.close_pool()
+			
 		self.pool_uuid = uuid.uuid4()
 		self._pool = ConnectionPool(
-			kwargs = self._config,
-			min_size = min_size,
-			max_size = max_size,
-			open = True,
-			max_lifetime = 290,
-			check=ConnectionPool.check_connection 
+		kwargs = self._config,
+		min_size = min_size,
+		max_size = max_size,
+		open = True,
+		max_lifetime = 290,
+		check=ConnectionPool.check_connection 
 		)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -208,7 +209,7 @@ class Database:
 		''' Internal helper function, do not call directly
 		
 		'''
-		query = sql.SQL(' DELETE FROM usermanagement.organizations WHERE {id_field} = %s ')
+		query = sql.SQL(' DELETE FROM usermanagement.organizations WHERE {id_field} = %s; ')
 		match organization_ids:
 			case list() if isinstance(organization_ids[0], Organization):
 				cursor.executemany(query.format(id_field = sql.Identifier('organization_id')), [(cast(Organization, org).organization_id,) for org in organization_ids])
@@ -1267,15 +1268,23 @@ class Database:
 	
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-	#Important!: Not fully implemented
+	#TODO: finish KW arg population
 	@connect 
-	def _update_image(self, cursor: psycopg.Cursor, image_id: Image | int | UUID, name: str, img_key: str) -> bool:
+	def _update_image(self, cursor: psycopg.Cursor, image_id: Image | int | UUID, name: str | None, img_key: str | None, opened_by_user_id: int | None) -> bool:
 		''' Not fully implemented, do
 		
 		'''
 		query = sql.SQL(''' UPDATE core.images SET {augmented_field}, modified = CURRENT_TIMESTAMP
 							WHERE {id_field} = %s; ''')
-		kw_augmented_field = sql.SQL(',').join([sql.SQL("{} = '%s'" % (value).format(sql.Identifier(key)) for key, value, in locals().items() if key in set(['name', 'img_key', 'image_length_px', 'image_width_px', 'herd_unit_id', 'survey_id']) and value is not None)]) # type: ignore
+		kw_augmented_field = sql.SQL(',').join(
+			[
+				sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key))
+				for key, value, in locals().items() 
+				if key in set(['name', 'img_key', 'image_length_px', 'image_width_px', 'herd_unit_id', 'survey_id', 'opened_by_user_id'])
+				and value is not None
+			]
+		) 
+
 		match image_id:
 			case Image():
 				cursor.execute(query.format(
@@ -1294,13 +1303,13 @@ class Database:
 				), (image_id,))
 			case _:
 				raise TypeError('image_id must be an Image, int, or UUID')
-		return True if cursor.rowcount > 0 else False
+		return True
 	
-	def update_image(self, image_id: Image | int | UUID) -> bool:
+	def update_image(self, image_id: Image | int | UUID, name: str | None=None, img_key: str | None=None, opened_by_user_id: int | None=None) -> bool:
 		'''
 		
 		'''
-		return self._update_image(image_id = image_id)
+		return self._update_image(image_id = image_id, name=name, img_key=img_key, opened_by_user_id=opened_by_user_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Core - Predictions
@@ -1363,28 +1372,32 @@ class Database:
 
 	@connect
 	def _create_annotation(self, cursor: psycopg.Cursor[Annotation], label_id: Label | int | UUID, image_id: Image | int | UUID,
-						herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID, returning: bool) -> Annotation | None:
+						herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID, uuid: UUID | None, returning: bool) -> Annotation | None:
 		'''
 		
 		
 		'''
 		cursor.row_factory = class_row(Annotation)
 		user = self._get_user(user_id) if not isinstance(user_id, User) else user_id
-		cursor.execute(sql.SQL(''' INSERT INTO core.annotations (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, created_by_user_id),
-						 		   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, user.user_id))
+
+		# stop gap until I have time to be creative
+		uuid = UUID() if uuid is None else uuid
+
+		cursor.execute(sql.SQL(''' INSERT INTO core.annotations (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, created_by_user_id, uuid)
+						 		   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *; '''), (label_id, image_id, herd_unit_id, box_tx, box_ty, box_bx, box_by, user.user_id, uuid))
 		if returning:
 			annotation = cursor.fetchone()
 			return annotation if isinstance(annotation, Annotation) else None
 
 	def create_annotation(self, label_id: Label | int | UUID, image_id: Image | int | UUID,
-						herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID) -> Annotation | None:
+						herd_unit_id: HerdUnit | int | UUID, box_tx: int, box_ty: int, box_bx: int, box_by: int, user_id: User | int | UUID, uuid: UUID | None=None, returning: bool=False) -> Annotation | None:
 		'''
 		
 		'''
-		return self._create_annotation(label_id = label_id, image_id = image_id, herd_unit_id = herd_unit_id, box_tx = box_tx, box_ty = box_ty, box_bx = box_bx, box_by = box_by, user_id = user_id )
+		return self._create_annotation(label_id = label_id, image_id = image_id, herd_unit_id = herd_unit_id, box_tx = box_tx, box_ty = box_ty, box_bx = box_bx, box_by = box_by, user_id = user_id, uuid=uuid, returning = returning )
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
+	# TODO: replace with create_annotation -- not a nessacary function 
 	@connect
 	def _insert_annotations(self, cursor: psycopg.Cursor, annotations: list[Annotation] | Annotation, user_id: User | int | UUID) -> list[int]:
 		'''
@@ -1447,6 +1460,114 @@ class Database:
 		
 		'''
 		return self._get_annotation(annotation_ids = annotation_ids)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect 
+	def _get_annotation_exists(self, cursor: psycopg.Cursor, annotation_id: Annotation | int | UUID) -> bool:
+		'''
+
+		'''
+		query = sql.SQL(' SELECT EXISTS (SELECT image_id FROM core.annotations where {id_field} = %s); ')
+		result = False
+		match annotation_id:
+			case int():
+				cursor.execute(query.format(id_field = sql.Identifier('annotation_id')), (annotation_id,))
+			case Annotation():
+				cursor.execute(query.format(id_field = sql.Identifier('annotation_id')), (annotation_id.annotation_id,))
+			case UUID():
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (annotation_id,))
+			case _: 
+				raise TypeError('annotation_id must be of type int, Annotation or uuid')
+
+		result = cursor.fetchone()
+		
+		if result is None: 
+			return False
+
+		return result[0]
+
+	def get_annotation_exists(self, anntoation_id: Annotation | int | UUID):
+		'''
+
+		'''
+		return self._get_annotation_exists(annotation_id=anntoation_id)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect 
+	def _update_annotation(self, cursor: psycopg.Cursor, annotation_id: Annotation | int | UUID, label_id: int | None, image_id: int | None, 
+		pred_id: int | None, herd_unit_id: int | None, box_tx: int | None, box_ty: int | None, box_bx: int | None,
+		box_by: int | None):
+		'''
+
+		'''
+		query = sql.SQL(''' UPDATE core.annotations SET {augmented_field}, modified = CURRENT_TIMESTAMP
+							WHERE {id_field} = %s; ''')
+
+		# Generate comma separated string containing kwargs for use in update query
+		kw_augmented_field = sql.SQL(',').join(
+			[
+				sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key))
+				for key, value in locals().items()
+				if key in set(['label_id', 'image_id', 'pred_id', 'herd_unit_id', 'box_tx', 'box_ty', 'box_bx', 'box_by'])
+				and value is not None
+			]
+		)
+
+		match annotation_id:
+			case Annotation():
+				cursor.execute(query.format(
+					augmented_field = sql.SQL(f""), # TODO: Complete this field
+					id_field = sql.Identifier('annotation_id')
+				), (annotation_id.annotation_id,))
+			case int():
+				cursor.execute(query.format(
+					augmented_field = kw_augmented_field,
+					id_field = sql.Identifier('annotation_id')
+				), (annotation_id,))
+			case UUID():
+				cursor.execute(query.format(
+					augmented_field = kw_augmented_field,
+					id_field = sql.Identifier('uuid')
+				), (annotation_id,))
+			case _:
+				raise TypeError('annotation_id must be an Annotation, int, or UUID')
+		
+		return True
+
+	def update_annotation(self, annotation_id: Annotation | int | UUID, label_id: int | None=None, image_id: int | None=None, 
+		pred_id: int | None=None, herd_unit_id: int | None=None, box_tx: int | None=None, box_ty: int | None=None, box_bx: int | None=None,
+		box_by: int | None=None):
+		'''
+
+		'''
+		return self._update_annotation(annotation_id, label_id, image_id, pred_id, herd_unit_id, box_tx, box_ty, box_bx, box_by)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect
+	def _delete_annotation(self, cursor: psycopg.Cursor, annotation_id: Annotation | int | UUID):
+		'''
+
+		'''
+		query = sql.SQL(' DELETE FROM core.annotations WHERE {id_field} = %s; ')
+		match annotation_id:
+			case Annotation():
+				cursor.execute(query.format(id_field = sql.Identifier('annotation_id')), (annotation_id.annotation_id,))
+			case int():
+				cursor.execute(query.format(id_field = sql.Identifier('annotation_id')), (annotation_id,))
+			case UUID():
+				cursor.execute(query.format(id_field = sql.Identifier('uuid')), (annotation_id,))
+			case _:
+				raise TypeError('annotation_id must be an Annotation, int, or uuid')
+		return True
+
+	def delete_annotation(self, annotation_id: Annotation | int | UUID):
+		'''
+
+		'''
+		return self._delete_annotation(annotation_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 	# Core - reviewed_area
@@ -1540,6 +1661,56 @@ class Database:
 		'''
 		return self._get_reviewed_area(reviewed_area_ids = reviewed_area_ids)
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+	@connect
+	def _update_reviewed_area(self, cursor: psycopg.Cursor, reviewed_area_id: ReviewedArea | int | UUID, image_id: int | None, name: str | None, ra_key: str | None, 
+		area_tx: int | None, area_ty: int | None, area_bx: int | None, area_by: int | None, reviewed_area_length_px: int | None, reviewed_area_width_px: int | None, 
+		reviewed_by_user_id: int | None) -> bool:
+		'''
+
+		'''
+		query = sql.SQL(''' UPDATE core.reviewed_area SET {augmented_field}, modified = CURRENT_TIMESTAMP
+							WHERE {id_field} = %s; ''')
+
+		kw_augmented_field = sql.SQL(',').join(
+			[
+				sql.SQL("{} = '%s'" % (value)).format(sql.Identifier(key))
+				for key, value in locals().items()
+				if key in set(['image_id', 'name', 'ra_key', 'area_tx', 'area_ty', 'area_bx', 'area_by', 
+							'reviewed_area_length_px', 'reviewed_area_width_px', 'reviewed_by_user_id'])
+				and value is not None
+			]
+		)
+		match reviewed_area_id:
+			case ReviewedArea():
+				cursor.execute(query.format(
+					augmented_field = sql.SQL(''), #TODO Finish this line
+					id_field = sql.Identifier('reviewed_area_id')
+				), (reviewed_area_id.reviewed_area_id,))
+			case int():
+				cursor.execute(query.format(
+					augmented_field = kw_augmented_field,
+					id_field = sql.Identifier('reviewed_area_id')
+				), (reviewed_area_id,))
+			case UUID():
+				cursor.execute(query.format(
+					augmented_field = kw_augmented_field,
+					id_field = sql.Identifier('uuid')
+				), (reviewed_area_id,))
+			case _:
+				raise TypeError('reviewed_area_id must be a ReviewedArea, int, or UUID')
+		return True
+
+	def update_reviewed_area(self, reviewed_area_id: ReviewedArea | int | UUID, image_id: int | None=None, name: str | None=None, ra_key: str | None=None, 
+		area_tx: int | None=None, area_ty: int | None=None, area_bx: int | None=None, area_by: int | None=None, reviewed_area_length_px: int | None=None, reviewed_area_width_px: int | None=None, 
+		reviewed_by_user_id: int | None=None) -> bool:
+		'''
+
+		'''
+		return self._update_reviewed_area(reviewed_area_id, image_id, name, ra_key, area_tx, area_ty, area_bx, area_by, reviewed_area_length_px, reviewed_area_width_px, reviewed_by_user_id)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
 	# Relationship Management - usermanagement <-> usermanagement: users <-> roles
 
 	@connect
@@ -2228,16 +2399,16 @@ class Database:
 
 		'''
 		return self._get_auto_crop_batch(survey_id = survey_id, herd_unit_id = herd_unit_id, batch_size = batch_size, user_id = user_id, labels = labels, score = score, model_id = model_id)
-
+ 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-	# Functionality - Close image
+	# Functionality - Set image closed
 
 	@connect
 	def _close_image(self, cursor: psycopg.Cursor, image_id: Image | int | UUID) -> bool:
 		'''
 		
 		'''
-		query = sql.SQL('UPDATE core.images SET opened_by_user_id = 0 WHERE {id_field} = %s; ')
+		query = sql.SQL(' UPDATE core.images SET opened_by_user_id = 0 WHERE {id_field} = %s; ')
 		match image_id: 
 			case int():
 				cursor.execute(query.format(id_field = sql.Identifier('image_id')), (image_id,))
@@ -2338,12 +2509,12 @@ class Database:
 		return self._get_survey_images(survey_id = survey_id)
 
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-	# Functionality - Get crops and annotations
+	# Functionality - Get crops to review
 
 	@connect
 	def _get_crop_to_review(self, cursor: psycopg.Cursor[ReviewedArea], user_id: Union[User, int, UUID], herd_unit_id: Union[HerdUnit, int, UUID], 
 								survey_id: Union[Survey, int, UUID]) -> ReviewedArea:
-		''' Fetch a batch of reviewed areas and their associated annotations that have yet to be reviewed.
+		''' Fetch a batch of reviewed areas that have yet to be reviewed.
 
 		'''
 		cursor.row_factory = class_row(ReviewedArea)
@@ -2357,6 +2528,8 @@ class Database:
 							JOIN core.images as I on ra.image_id = I.image_id
 							WHERE I.herd_unit_id = %(herd_unit_id)s
 								AND I.survey_id = %(survey_id)s
+								AND I.opened_by_user_id = 0
+								AND RA.reviewed_by_user_id = 0
 							LIMIT 1;
 						''')
 		params = {
@@ -2368,12 +2541,10 @@ class Database:
 		result = cursor.fetchone()
 		
 		if result is None:
-			raise Exception('No reviewed areas found')
-
-		print(result.serialize())
+			raise Exception('No reviewed areas found') 
 
 		query2 = sql.SQL(''' UPDATE core.images SET opened_by_user_id = %s WHERE image_id = %s; ''')
-		cursor.execute(query2, (user.user_id, result.reviewed_area_id))
+		cursor.execute(query2, (user.user_id, result.image_id))
 
 		return result
 	
@@ -2383,3 +2554,34 @@ class Database:
 
 		'''
 		return self._get_crop_to_review(user_id=user_id, herd_unit_id=herd_unit_id, survey_id=survey_id)
+
+	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	# Functionality - Get annotations for crop 
+
+	@connect
+	def _get_crop_annotations(self, cursor: psycopg.Cursor[Annotation], ra_id: ReviewedArea | int | UUID) -> list[Annotation]: 
+		'''
+		'''
+		cursor.row_factory = class_row(Annotation)
+		query = sql.SQL(''' SELECT * FROM core.annotations WHERE annotation_id IN (
+								SELECT annotation_id FROM core.annotations_reviewed_area
+								WHERE reviewed_area_id = %s ); ''')
+		match ra_id:
+			case ReviewedArea():
+				cursor.execute(query, (ra_id.reviewed_area_id,))
+			case int():
+				cursor.execute(query, (ra_id,))
+			case UUID():
+				ra = self._get_reviewed_area(ra_id)
+				cursor.execute(query, (ra.reviewed_area_id,))
+			case _:
+				raise TypeError('ra_id must be of type ReviewedArea, int, or UUID')
+		annotations = cursor.fetchall()
+		if annotations is None:
+			raise Exception('Crop has no annotations')
+		return annotations
+
+	def get_crop_annotations(self,  ra_id: ReviewedArea | int | UUID) -> list[Annotation]:
+		'''
+		'''
+		return self._get_crop_annotations(ra_id=ra_id)

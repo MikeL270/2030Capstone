@@ -3,7 +3,7 @@
 # because I have never done this before
 # Author: Michael B. Lance
 # Created: April 7, 2025
-# Updated: September 29, 2025
+# Updated: November 11, 2025
 
 #---------------------------------------------------------------------------------------------------------------------------#
 
@@ -34,7 +34,6 @@ bp = Blueprint('app', __name__)
 # User session management
 
 @login_manager.user_loader
-@cache.cached(300)
 def load_user(session_user_id):
 	user = base.get_user(UUID(session_user_id))
 	return user 
@@ -52,7 +51,7 @@ def authenticate():
 		user = base.get_user(req_data['external-id'])
 		print(user.username)
 	except Exception as e:
-		abort(404, str(e))
+		abort(401, str(e))
 	else:
 		login_user(user)
 		if not user.last_login:
@@ -96,7 +95,7 @@ def get_user_organizations():
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Role CRUD
- 
+
 #---------------------------------------------------------------------------------------------------------------------------#
 # Project CRUD
 
@@ -154,7 +153,7 @@ def get_schema_labels(project_id: str, schema_id: str):
 
 #---------------------------------------------------------------------------------------------------------------------------#
 # Herd Unit Crud
- 
+
 @bp.route('/api/v1/request/projects/<string:project_id>/herd_units/all', methods=['GET'])
 @login_required
 def get_project_herdunits(project_id: str):
@@ -480,7 +479,7 @@ def create_reviewed_area_and_annotations():
 		)
 		predictions.append(prediction)
 
-	# Create reviewed area(s) from auto_crop() funchtion
+	# Create reviewed area(s) from auto_crop() function
 	reviewed_areas = auto_crop(image=image, predictions=predictions, labels_ids=label_ids)
 
 	#Create reviewed area and predictions objects
@@ -551,6 +550,10 @@ def get_ra_batch():
 			UUID(data['survey_id']))
 	except Exception as e:
 		abort(404, str(e))
+
+	# set image open 
+	user_id = cast(User, current_user).user_id
+	base.update_image(ra.image_id, opened_by_user_id=user_id)
 	return ra.serialize(), 201
 
 @bp.route('/api/v1/create/reviewed-area/presigned-get-url', methods=['POST'])
@@ -572,10 +575,80 @@ def create_ra_presigned_get():
 		abort(500)
 	return jsonify(response), 201
 
+@bp.route('/api/v1/get/reviewed-area/<string:reviewed_area_id>/annotations', methods=['GET'])
+@login_required
+def get_ra_annotations(reviewed_area_id: str):
+	'''
+	'''
+	annotations = base.get_crop_annotations(UUID(reviewed_area_id))
+	return [annot.serialize() for annot in annotations], 201
+
+@bp.route('/api/v1/update/reviewed-area/approve-annotations', methods=['POST', 'PUT'])
+@login_required
+def approve_annotations():
+	'''
+	
+	'''
+	data = request.get_json()
+	reviewed_area = data['reviewed_area']
+	res_1 = False
+	res_2 = False
+
+	# loop over incoming annotation data
+	for annot in data['annotations']:
+		res_i = False
+		# check if annotation in the database
+		if base.get_annotation_exists(UUID(annot['uuid'])):
+			
+			# TODO: check if annotation still inersects prediction in threshold
+			# update annotation
+			res_i = base.update_annotation(
+				annot['annotation_id'],
+				label_id=annot['label_id'],
+				box_tx=annot['dimensions']['top_left']['x'],
+				box_ty=annot['dimensions']['top_left']['y'],
+				box_bx=annot['dimensions']['bottom_right']['x'],
+				box_by=annot['dimensions']['bottom_right']['y'],	
+			)
+		# else
+		else:
+			# create annotation
+			res_i = base.create_annotation(
+				label_id = annot['label_id'],
+				image_id = annot['image_id'], 
+				herd_unit_id = annot['herd_unit_id'],
+				box_tx = annot['dimensions']['top_left']['x'],
+				box_ty = annot['dimensions']['top_left']['y'],
+				box_bx = annot['dimensions']['bottom_right']['x'],
+				box_by = annot['dimensions']['bottom_right']['y'],
+				user_id = cast(User, current_user),
+				uuid = annot['uuid']
+			)
+
+		if res_i == False:
+			abort(500, 'failed to make or update annotations')
+
+	# loop over deleted annotations
+	for annot in data['deleted_annotations']:
+		base.delete_annotation(annot['annotation_id'])
+
+	# set crop reviewed 
+	res_1 = base.update_reviewed_area(reviewed_area['reviewed_area_id'], reviewed_by_user_id = cast(User, current_user).user_id)
+
+	# set image closed
+	res_2 = base.update_image(reviewed_area['image_id'], opened_by_user_id=0)
+
+	if res_1 == False or res_2 == False:
+		abort(500, 'failed to set image crop reviewed and image closed')
+
+	return '', 201
+
+
+
 #---------------------------------------------------------------------------------------------------------------------------#
 # Inference
 
-@bp.route('/api/v1/get/survey/<string:survey_id>/images/all')
+@bp.route('/api/v1/get/survey/<string:survey_id>/images/all', methods=['GET'])
 @login_required
 def get_survey_images(survey_id: str):
 	'''

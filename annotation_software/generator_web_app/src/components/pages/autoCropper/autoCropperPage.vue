@@ -1,5 +1,4 @@
 <script lang="ts">
-import '@/assets/selector.css';
 import { defineComponent, defineAsyncComponent, ref } from 'vue';
 import { useProjectStore } from '@/modules/stores/projectStore';
 import { useAutoCropperStore } from '@/modules/stores/cropperStore';
@@ -141,8 +140,8 @@ export default defineComponent({
 </script>
 
 <template>
-	<div class="Page-Container">
-		<h2 class="Utility-Title">
+	<div class="pageContainer">
+		<h2 class="utilityTitle">
 			Auto Cropper 
 			<button @click="current_crumb = 0" title="Project Selection">
 				&gt;
@@ -157,15 +156,15 @@ export default defineComponent({
 				Cropper
 			</button>
 		</h2>
-		<div class="Component-Container">
+		<div class="componentContainer">
 			<selector1 v-if="current_crumb == 0"/>
 			<selector2 v-if="current_crumb == 1" />
 			<Crop v-if="current_crumb == 2" />
-			<div class="Instructions" v-if="current_crumb < 2">
+			<div class="instructions" v-if="current_crumb < 2">
 				<h1 style="align-self: center"> <u> Auto Cropper </u> </h1>
 					<br/>
 					<details>
-						<summary style="font-weight: bold"> Description: </summary>
+						<summary style="font-weight: bold">Description:</summary>
 						<p>
 							The auto cropper utility is used to rapidly produce human 
 							labeled training data for a computer vision model. In order
@@ -242,7 +241,7 @@ export default defineComponent({
 						</li>
 					</ol>
 					<br/>
-					<div id="Configuration-Verification" v-if="pStore.CurrentLabels.length > 0 && pStore.CurrentModel && pStore.CurrentHerdUnit">
+					<div id="configurationVerification" v-if="pStore.CurrentLabels.length > 0 && pStore.CurrentModel && pStore.CurrentHerdUnit">
 						<h2> Auto Cropper Session Configuration </h2>
 						<label for="minConfidence">Minimum Confidence: <strong>{{ cStore.minConfidence }}</strong></label>
 						<br>
@@ -267,7 +266,7 @@ export default defineComponent({
 						</p>
 					</div> 
 				</div> 
-				<div id="NavigationButtons">
+				<div id="navigationButtons">
 					<button @click="decrement_crumb()">
 						<Icon icon="ooui:next-rtl" width="16" height="16"/>
 						Back

@@ -1,7 +1,7 @@
 // Methods for interacting with the version 1 of the crop generator API 
 // Author: Michael B. Lance
 // Created: April 20, 2025
-// Updated: October 21, 2025
+// Updated: November 11, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import {
@@ -122,7 +122,7 @@ export async function getUserOrganizations(): Promise<Organization[] | undefined
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var organizations = [];
+		let organizations = [];
 		for (const organization of resp) organizations.push(new Organization(organization));
 		return organizations;
 	} catch (error: any) {
@@ -152,7 +152,7 @@ export async function getProjects(): Promise<Project[] | undefined> {
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var projects = [];
+		let projects = [];
 		for (const project of resp) projects.push(new Project(project));
 		return projects;
 	} catch (error: any) {
@@ -176,7 +176,7 @@ export async function getProjectSchemas(project_id: string | undefined): Promise
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var schemas = [];
+		let schemas = [];
 		for (const schema of resp) schemas.push(new Schema(schema));
 		return schemas;
 	} catch (error: any) {
@@ -200,7 +200,7 @@ export async function getSchemaLabels(project_id: string | undefined, schema_id:
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var labels = [];
+		let labels = [];
 		for (const label of resp) labels.push(new Label(label));
 		return labels;
 	} catch (error: any) {
@@ -224,7 +224,7 @@ export async function getProjectHerdUnits(project_id: string | undefined): Promi
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var herd_units = [];
+		let herd_units = [];
 		for (const herd_unit of resp) herd_units.push(new HerdUnit(herd_unit));
 		return herd_units;
 	} catch (error: any) {
@@ -245,7 +245,7 @@ export async function getCropperHerdUnits(survey_id: string | undefined): Promis
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var herd_units = [];
+		let herd_units = [];
 		for (const herd_unit of resp) herd_units.push(new HerdUnit(herd_unit));
 		return herd_units;
 	} catch (error: any) {
@@ -269,7 +269,7 @@ export async function getProjectModels(project_id: string | undefined): Promise<
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var models = [];
+		let models = [];
 		for (const model of resp) models.push(new Model(model));
 		return models;
 	} catch (error: any) {
@@ -290,7 +290,7 @@ export async function getCropperModels(survey_id: string | undefined, herd_unit_
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var models = [];
+		let models = [];
 		for (const model of resp) models.push(new Model(model));
 		return models;
 	} catch (error: any) {
@@ -314,7 +314,7 @@ export async function getProjectSurveys(project_id: string | undefined): Promise
 		});
 		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`)
 		const resp = await response.json();
-		var surveys = [];
+		let surveys = [];
 		for (const survey of resp) surveys.push(new Survey(survey));
 		return surveys;
 	} catch (error: any) {
@@ -678,5 +678,54 @@ export async function getReviewedAreaPresignedGetUrl(ra_key: string): Promise<st
 		console.error("Error: ", error)
 		toast.error(`${error.message}`);
 		return undefined;
+	}
+}
+
+export async function getReviewedAreaAnnotations(ra_id: string): Promise<Annotation[] | undefined> {
+	try {
+		const response = await fetch(`${api_url}/get/reviewed-area/${ra_id}/annotations`, {
+			method: 'GET',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+		});
+		if (!response.ok) throw new Error(`${(await response.json() as apiError).message}`);
+		const resp = await response.json();
+		let annotations: Annotation[] = [];
+		for (const annot of resp) annotations.push(new Annotation(annot));
+		return annotations;
+
+	} catch (error: any) {
+		console.error("Error: ", error)
+		toast.error(`${error.message}`);
+		return undefined;
+	}
+}
+
+export async function submitApprovedAreaAnnotations(reviewedArea: ReviewedArea, annotations: Annotation[], deletedAnnotations: Annotation[]): Promise<boolean> {
+	try {
+		const response = await fetch(`${api_url}/update/reviewed-area/approve-annotations`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				reviewed_area: reviewedArea,
+				annotations: annotations,
+				deleted_annotations: deletedAnnotations,
+			})
+		});
+		if (!response.ok) {
+			throw new Error(`${(await response.json() as apiError).message}`);
+		} else {
+			return true;
+		}
+
+	} catch (error: any) {
+		console.error("Error: ", error)
+		toast.error(`${error.message}`);
+		return false;
 	}
 }

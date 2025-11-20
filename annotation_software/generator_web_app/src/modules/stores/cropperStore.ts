@@ -178,7 +178,7 @@ export const useAutoCropperStore = defineStore('autoCropperStore', {
 			this.loading = false;
 			await this.nextImage();
 		},
-		async endPession() {
+		async endSession() {
 			this.$reset();
 			this.bootStrapped = false;
 			await closeCropSession();

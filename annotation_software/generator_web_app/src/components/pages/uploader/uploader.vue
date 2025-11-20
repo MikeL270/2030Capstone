@@ -276,9 +276,7 @@ export default defineComponent({
 		v-if="
 		pStore.CurrentProject &&
 		pStore.CurrentHerdUnit &&
-		pStore.CurrentSurvey &&
-		pStore.CurrentModel
-		"
+		pStore.CurrentSurvey"
 		@click="upload()">
 		Upload
 	</button>
@@ -286,9 +284,6 @@ export default defineComponent({
 </div>
 </template>
 <style scoped>
-	.Page-Container {
-		flex-direction: column;
-	}
 	#Page-Title {
 		margin-bottom: auto;
 		width: 100%;

@@ -1,4 +1,5 @@
 import './assets/main.css';
+import './assets/layout.css';
 import 'vue-toastification/dist/index.css';
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
@@ -9,6 +10,7 @@ import { Icon } from '@iconify/vue';
 import Toast from 'vue-toastification';
 import { POSITION, type PluginOptions } from 'vue-toastification';
 import VueKonva from 'vue-konva';
+import { useUserStore } from './modules/stores/userStore';
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
@@ -24,6 +26,10 @@ const options: PluginOptions = {
     maxToasts: 5,
     newestOnTop: true
 };
+
+const userStore = useUserStore();
+
+await userStore.check_auth();
 
 app.use(Toast, options);
 

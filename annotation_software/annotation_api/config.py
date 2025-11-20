@@ -7,22 +7,24 @@ from boto3.s3.transfer import TransferConfig
 load_dotenv()
 
 class FlaskConfig:
-    SECRET_KEY = os.environ.get('SECRET_KEY')
-    SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE') or 'Strict'
-    SESSION_COOKIE_SECURE = (os.environ.get('SESSION_COOKIE_SECURE') or 'true').lower() in ['true', '1', 't', 'y', 'yes']
-    SESSION_TYPE = 'redis'
-    SESSION_PERMANENT = (os.environ.get('SESSION_PERMANENT') or 'true').lower() in ['true', '1', 't', 'y', 'yes']
-    SESSION_USE_SIGNER = (os.environ.get('SESSION_USE_SIGNER') or 'true').lower() in ['true', '1', 't', 'y', 'yes']
-    SESSION_REDIS = redis.from_url(os.environ.get('SESSION_REDIS'))
-    ORIGIN_URL = os.environ.get('ORIGIN_URL')
-    BUCKET_NAME = os.environ.get('BUCKET_NAME')
+	SECRET_KEY = os.environ.get('SECRET_KEY')
+	SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE') or 'Strict'
+	SESSION_COOKIE_SECURE = (os.environ.get('SESSION_COOKIE_SECURE') or 'true').lower() in ['true', '1', 't', 'y', 'yes']
+	SESSION_TYPE = 'redis'
+	SESSION_PERMANENT = (os.environ.get('SESSION_PERMANENT') or 'true').lower() in ['true', '1', 't', 'y', 'yes']
+	PERMANENT_SESSION_LIFETIME = 86400 # 24 hours
+	SESSION_USE_SIGNER = (os.environ.get('SESSION_USE_SIGNER') or 'true').lower() in ['true', '1', 't', 'y', 'yes']
+	SESSION_REDIS = redis.from_url(os.environ.get('SESSION_REDIS'))
+	ORIGIN_URL = os.environ.get('ORIGIN_URL')
+	BUCKET_NAME = os.environ.get('BUCKET_NAME')
 
 db_config = {
 	'dbname': os.environ.get('DB_NAME'),
 	'user': os.environ.get('DB_USER'),              
 	'password': os.environ.get('DB_PASS'),    
 	'host': os.environ.get('DB_HOST'),           
-	'port': os.environ.get('DB_PORT'),              
+	'port': os.environ.get('DB_PORT'),      
+	'options': '-c statement_timeout=5000'        
 }
 
 cache_config={

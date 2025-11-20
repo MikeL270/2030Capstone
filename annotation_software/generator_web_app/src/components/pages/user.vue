@@ -11,7 +11,7 @@ export default defineComponent({
 });
 </script>
 <template>
-  <div class="Page-Container">
-	<h2 class="Utility-Title"> User </h2>
+  <div class="pageContainer">
+	<h2 class="utilityTitle"> User </h2>
   </div>
 </template>

@@ -13,13 +13,9 @@ export default defineComponent({
 })
 </script>
 <template>
-	<div class="Page-Container">
-		<h2 class="Utility-Title"> Dashboard </h2>
+	<div class="pageContainer">
+		<h2 class="utilityTitle"> Dashboard </h2>
 	</div>
 </template>
-<style scoped>
-	.Page-Container {
-		flex-direction: column;
-	}
-</style>
+
 
