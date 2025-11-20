@@ -24,10 +24,10 @@ export default defineComponent({
 
 </script>
 <template>
-   <header>
-       <h1> Pronghorn Census Software / {{ $route.name }}</h1>
-       <p v-if="isDev" style="color: red; margin-left: 0.5%; "> Development Mode  </p>
-	   <div id="User-Quick-Actions-Holder" v-if="user_store.logged_in">
+    <header>
+        <h1> Pronghorn Census Software / {{ $route.name }}</h1>
+        <p v-if="isDev" style="color: red; margin-left: 0.5%; "> Development Mode  </p>
+	    <div id="User-Quick-Actions-Holder" v-if="user_store.logged_in">
 			<label class="switch" for="theme-toggle" title="Toggle Theme">
 					<input id="theme-toggle" type="checkbox" @change="pref_store.toggleTheme()" v-model="is_toggled"> 
 					<div class="slider round">
@@ -37,43 +37,12 @@ export default defineComponent({
 			<Icon icon="material-symbols:dark-mode-outline" width="24" height="24 " v-else></Icon>
 			<p> {{ user_store.user?.username }} </p>
             <button id="logout" @click="logout()"><Icon icon="mdi:logout"></Icon></button>
-			</div>
-   </header>
+        </div>
+    </header>
 </template>
 
 <style scoped>
-header {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    position: fixed;
-    width: 100%;
-    height: 4.5vh;
-    top: 0;
-    left: 0;
-    margin-right: auto;
-    color: var(--color-heading);
-    background-color: var(--wygf-bg-blue);
-    border-bottom: 1px solid var(--color-border);
-    box-shadow: 0 4px 6px 2px var(--color-background-soft);
-    h1 {
-            font-size: 1.25em;
-            margin-left: 1%;
-        }
-	#User-Quick-Actions-Holder {
-		margin-left: auto;
-		margin-right: 1%;
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		overflow: visible;
-		details {		
-			cursor: pointer;	
-			width: 6vw;
-			background-color: var(--wygf-bg-blue);
-		}
-	}
-	}
+
 	p {
 		margin: 1%;
 	}
@@ -97,7 +66,7 @@ header {
         bottom: 0;
         background-color: #ccc;
         -webkit-transition: 0.4s;
-         transition: 0.4s;
+        transition: 0.4s;
 }
     .slider:before {
         position: absolute;

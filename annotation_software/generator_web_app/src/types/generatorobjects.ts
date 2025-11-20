@@ -1,13 +1,31 @@
 // Typescript Class definition analogues for crop_generator objects 
 // Author: Michael B. Lance
 // Created: April 9, 2025
-// Updated: October 28, 2025
+// Updated: November, 2025
 //---------------------------------------------------------------------------------------------------------------------------//
 
 import { mean } from 'lodash';
 import type { Ref } from 'vue';
 
 //---------------------------------------------------------------------------------------------------------------------------//
+
+export interface konvaBoxConf {
+    width: number;
+    height: number;
+    x: number;
+    y: number;
+    scaleX: number,
+    scaleY: number,
+    rotation: number;
+    stroke: string;
+}
+
+export interface tempRect {
+    startPointX: number,
+    startPointY: number,
+    width: number,
+    height: number
+}
 
 export interface coord {
     x: number,
@@ -164,9 +182,9 @@ export class Prediction implements PredictionIntf {
 export interface Annotation_intf {
     annotation_id: number;
     label_id: number;
+    image_id: number;
     herd_unit_id: number;
     dimensions: Box;
-    score: number;
     created: Date;
     modified: Date;
     uuid: string;
@@ -175,9 +193,9 @@ export interface Annotation_intf {
 export class Annotation implements Annotation_intf {
     annotation_id: number;
     label_id: number;
+    image_id: number;
     herd_unit_id: number;
     dimensions: Box;
-    score: number;
     created: Date;
     modified: Date;
     uuid: string;
@@ -185,9 +203,9 @@ export class Annotation implements Annotation_intf {
     constructor(annotation: Annotation_intf) {
         this.annotation_id = annotation.annotation_id;
         this.label_id = annotation.label_id;
+        this.image_id = annotation.image_id;
         this.herd_unit_id = annotation.herd_unit_id;
         this.dimensions = new Box(annotation.dimensions);
-        this.score = annotation.score;
         this.created = new Date(annotation.created);
         this.modified = new Date(annotation.modified);
         this.uuid = annotation.uuid;
@@ -222,10 +240,6 @@ export class ReviewedArea implements ReviewedArea_intf {
     reviewed_area_width_px: number;
     uuid: string;
     url: string;
-    image!: readonly [
-        Ref<HTMLImageElement | null, HTMLImageElement | null>,
-        Ref<"loading" | "error" | "loaded", "loading" | "error" | "loaded">
-    ];
 
     constructor(crop: ReviewedArea_intf) {
 
@@ -514,8 +528,22 @@ export interface autoCropperBatch {
 }
 
 export interface cropVerifierBatch {
-    crops: ReviewedArea[],
-    annotations: Annotation[][],
+    crops: {
+        [crop_uuid: string]: {
+            'crop': ReviewedArea,
+            'image'?: readonly [
+                Ref<HTMLImageElement | null, HTMLImageElement | null>,
+                Ref<"loading" | "error" | "loaded", "loading" | "error" | "loaded">
+            ];
+            'annotations': {
+                [annotation_uuid: string]: Annotation
+            },
+            'annotationBoxes': {
+                [annotation_uuid: string]: konvaBoxConf
+            }
+        }
+    },
+
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//

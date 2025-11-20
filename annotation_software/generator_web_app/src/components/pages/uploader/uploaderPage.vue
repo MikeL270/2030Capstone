@@ -1,5 +1,4 @@
 <script lang="ts">
-import '@/assets/selector.css';
 import { defineComponent, defineAsyncComponent, ref } from 'vue';
 import { useProjectStore } from '@/modules/stores/projectStore';
 import { Project, Schema } from '@/types/generatorobjects';
@@ -79,8 +78,8 @@ export default defineComponent({
 </script> 
 
 <template>
-	<div class="Page-Container">
-		<h2 class="Utility-Title">
+	<div class="pageContainer">
+		<h2 class="utilityTitle">
 			Upload Utility 
 			<button @click="current_crumb = 0" title="Project and Survey">
 				&gt;
@@ -95,11 +94,11 @@ export default defineComponent({
 				Uploader
 			</button>
 		</h2>
-		<div class="Component-Container">
+		<div class="componentContainer">
 			<selector1 v-if="current_crumb == 0"/>
 			<selector2 v-if="current_crumb == 1"/>
 			<Upload v-if="current_crumb == 2"/>
-			<div class="Instructions" v-if="current_crumb < 2">
+			<div class="instructions" v-if="current_crumb < 2">
 				<h1 style="align-self: center"> <u> Upload Utility </u> </h1>
 				<br/>
 				<details>
@@ -180,7 +179,7 @@ export default defineComponent({
 						</li>
 					</ol>
 				</div>
-				<div id="NavigationButtons">
+				<div id="navigationButtons">
 					<button @click="decrement_crumb()">
 						<Icon icon="ooui:next-rtl" width="16" height="16"/>
 						Back

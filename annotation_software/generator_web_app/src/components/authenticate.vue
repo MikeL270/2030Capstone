@@ -68,7 +68,7 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="Page-Container">
+    <div class="pageContainer">
         <div id="auth-wrapper">
             <div id="wrapper-title">
                 <h2> Authentication Required </h2>
@@ -83,10 +83,6 @@ export default defineComponent({
     </div>
 </template>
 <style scoped>
-.Page-Container {
-        flex-direction: column;
-        
-    }
     #wrapper-title {
         display: flex;
         justify-content: center;

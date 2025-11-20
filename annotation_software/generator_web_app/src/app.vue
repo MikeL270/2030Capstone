@@ -25,7 +25,6 @@ export default defineComponent({
     return { user_store, pref_store }
   },
   async mounted() {
-    await this.user_store.check_auth()
     if (this.user_store.logged_in) {
       await this.user_store.getCurrentUser()
     }
