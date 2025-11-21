@@ -1,5 +1,6 @@
 services:
   pronghorn-api:
+    contianer_name: prong_api
     build:
       context: .
       dockerfile: production.prongapi.containerfile
@@ -22,7 +23,7 @@ services:
     networks: 
       - pronghorn_app_network 
   valkey:
-    container_name: prong-valkey
+    container_name: prong_valkey
     image: docker.io/valkey/valkey:8.1.1
     healthcheck:
       test: valkey-cli ping || exit 1
@@ -31,6 +32,7 @@ services:
     networks: 
       - pronghorn_app_network 
   web-app:
+    container_name: prong_webapp
     build:
       context: .
       dockerfile: production.prongwebapp.containerfile
@@ -64,7 +66,9 @@ services:
 
 volumes:
   nginx_conf:
+    external: true
   nginx_certs:
+    external: true
 
 networks: 
   pronghorn_app_network:
