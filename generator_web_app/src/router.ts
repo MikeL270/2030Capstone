@@ -1,12 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import Authenticate from '@/components/authenticate.vue';
+import Authenticate from '@/pages/authenticate.vue';
 import { useUserStore } from '@/modules/stores/userStore';
+import { checkApiBootstrapped } from './modules/api/apiV1Methods';
 
+let bootStrapped: boolean | null = null;
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-
+    {
+      path: '/setup',
+      name: 'setup',
+      component: () => import('@/pages/intialSetup.vue'),
+      meta: {
+        requiresAuth: false,
+        requiresNoLayout: true
+      },
+    },
     {
       path: '/authenticate',
       name: 'authenticate',
@@ -23,9 +33,9 @@ const router = createRouter({
       },
     },
     {
-      path: '/user/:uuid?',
-      name: 'user',
-      component: () => import('@/pages/user.vue'),
+      path: '/users/:uuid?',
+      name: 'users',
+      component: () => import('@/pages/users.vue'),
       meta: {
         requiresAuth: true,
         requiresNoLayout: false,
@@ -79,28 +89,36 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to) => {
   const user_store = useUserStore();
 
-  if (to.meta.requiresAuth) {
-
-    if (user_store.logged_in) {
-      next();
-    } else {
-      await user_store.check_auth();
-      if (user_store.logged_in) {
-        next();
-      } else {
-        next({
-          name: 'authenticate',
-          query: { redirect: to.fullPath },
-        });
-      }
-    }
-  } else {
-    next()
+  if (bootStrapped === null || bootStrapped === undefined) {
+    bootStrapped = await checkApiBootstrapped();
   }
+
+  if (!bootStrapped) {
+    return to.name === "setup" ? true : { name: 'setup' };
+  }
+
+  if (bootStrapped && to.name === "setup") {
+    return { name: 'authenticate' };
+  }
+
+  if (to.meta.requiresAuth) {
+    if (!user_store.logged_in) {
+      await user_store.check_auth();
+    }
+
+    if (!user_store.logged_in) {
+      return {
+        name: 'authenticate',
+        query: { redirect: to.fullPath }
+      };
+    }
+  }
+
+  return true;
 });
 
-
 export default router;
+
