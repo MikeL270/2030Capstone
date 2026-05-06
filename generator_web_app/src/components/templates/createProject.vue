@@ -1,24 +1,34 @@
 <script setup lang="ts">
 import { ref, type PropType } from "vue";
-import { type createOrganizationOptions } from "@/modules/api/organizations";
+import { type createProjectOptions } from "@/modules/api/projects";
 import { useToast } from "bootstrap-vue-next";
 import { type apiError } from "@/modules/api/errors";
+import { Organization, User } from "@/types/generatorobjects";
 
 const { create } = useToast();
 
 const props = defineProps({
   submitAction: {
     type: Function as PropType<
-      (payload: createOrganizationOptions) => Promise<boolean>
+      (payload: createProjectOptions) => Promise<boolean>
     >,
+    required: true,
+  },
+  user: {
+    type: User,
+    required: true,
+  },
+  organization: {
+    type: Organization,
     required: true,
   },
 });
 
 const emit = defineEmits(["creationSuccessful"]);
 
-const options = ref<createOrganizationOptions>({
+const options = ref<createProjectOptions>({
   name: "",
+  organization_id: props.organization.uuid,
 });
 
 const submitReq = async () => {
@@ -29,11 +39,12 @@ const submitReq = async () => {
       variant: "danger",
       position: "bottom-start",
     });
+    return;
   });
 
   create({
-    title: `Organization ${options.value.name} created successfully`,
-    message: "Organization created successfully",
+    title: `Project ${options.value.name} created successfully`,
+    message: `The project was created successfully.`,
     variant: "success",
     position: "bottom-start",
   });
@@ -43,35 +54,25 @@ const submitReq = async () => {
 </script>
 <template>
   <div class="d-flex mb-3">
-    <Icon icon="octicon:organization-16" width="12%" height="100%" />
+    <Icon icon="ix:projects" width="15%" height="100%" />
     <div class="d-flex flex-column">
       <span>Name: {{ options.name }}</span>
+      <span>Organization: {{ props.organization.name }}</span>
+      <span>Administrator: {{ props.user.username }}</span>
     </div>
   </div>
-  <BForm
-    class="d-flex gap-4 flex-column flex-grow-1"
-    autocomplete="off"
-    data-bwingore="true"
-    @submit.prevent="submitReq"
-  >
+  <BForm class="d-flex gap-4 flex-column flex-grow-1" autocomplete="off" data-bwignore="true"
+    @submit.prevent="submitReq">
     <BInputGroup>
       <template #prepend>
         <BInputGroupText>
-          <Icon icon="octicon:organization-16" width="24" />
+          <Icon icon="ix:projects" width="24" />
         </BInputGroupText>
       </template>
       <BFormFloatingLabel label="Name" label-for="name">
-        <BFormInput
-          id="name"
-          type="text"
-          trim
-          required
-          data-bwignore="true"
-          v-model="options.name"
-          placeholder=" "
-        />
+        <BFormInput type="text" id="name" required trim data-bwignore="true" v-model="options.name" placeholder=" " />
       </BFormFloatingLabel>
     </BInputGroup>
-    <BButton type="submit" variant="primary" class="mt-auto"> Submit </BButton>
+    <BButton type="submit" variant="primary" class="mt-auto">Submit</BButton>
   </BForm>
 </template>
