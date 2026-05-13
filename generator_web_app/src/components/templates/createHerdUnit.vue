@@ -1,38 +1,25 @@
 <script setup lang="ts">
-import { ref, type PropType } from "vue";
-import { type createProjectOptions } from "@/modules/api/projects";
+import { ref } from "vue";
+import { type createHerdUnitOptions } from "@/modules/api/herdunits";
 import { useToast } from "bootstrap-vue-next";
 import { type apiError } from "@/modules/api/errors";
-import { Organization, User } from "@/types/generatorobjects";
+import { Project } from "@/types/generatorobjects";
 
 const { create } = useToast();
 
-const props = defineProps({
-  submitAction: {
-    type: Function as PropType<
-      (payload: createProjectOptions) => Promise<boolean>
-    >,
-    required: true,
-  },
-  user: {
-    type: User,
-    required: true,
-  },
-  organization: {
-    type: Organization,
-    required: true,
-  },
-  showSummary: {
-    type: Boolean,
-    default: true,
-  },
+const props = withDefaults(defineProps<{
+  submitAction: (payload: createHerdUnitOptions) => Promise<void>;
+  project: Project;
+  showSummary?: boolean;
+}>(), {
+  showSummary: true
 });
 
 const emit = defineEmits(["creationSuccessful"]);
 
-const options = ref<createProjectOptions>({
+const options = ref<createHerdUnitOptions>({
   name: "",
-  organization_id: props.organization.uuid,
+  project_id: props.project.uuid
 });
 
 const submitReq = async () => {
@@ -47,8 +34,8 @@ const submitReq = async () => {
   });
 
   create({
-    title: `Project ${options.value.name} created successfully`,
-    body: `The project was created successfully.`,
+    title: `Herd Unit ${options.value.name} created successfully`,
+    body: `The Herd Unit was created successfully.`,
     variant: "success",
     position: "bottom-start",
   });
@@ -59,11 +46,10 @@ const submitReq = async () => {
 </script>
 <template>
   <div class="d-flex mb-3" v-if="props.showSummary">
-    <Icon icon="ix:projects" width="15%" height="100%" />
+    <Icon icon="token:area" width="15%" height="100%" />
     <div class="d-flex flex-column">
       <span>Name: {{ options.name }}</span>
-      <span>Organization: {{ props.organization.name }}</span>
-      <span>Administrator: {{ props.user.username }}</span>
+      <span>Project: {{ props.project.name }}</span>
     </div>
   </div>
   <BForm class="d-flex gap-4 flex-column flex-grow-1" autocomplete="off" data-bwignore="true"
