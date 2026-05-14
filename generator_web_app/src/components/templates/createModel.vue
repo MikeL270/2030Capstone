@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { type createHerdUnitOptions } from "@/modules/api/herdunits";
 import { useToast } from "bootstrap-vue-next";
 import { type apiError } from "@/modules/api/errors";
-import { Project } from "@/types/generatorobjects";
+import { Project, Schema } from "@/types/generatorobjects";
+import { type createModelOptions } from "@/modules/api/models";
 
 const { create } = useToast();
 
 const props = withDefaults(
   defineProps<{
-    submitAction: (payload: createHerdUnitOptions) => Promise<void>;
+    submitAction: (payload: createModelOptions) => Promise<void>;
     project: Project;
+    schemas: Schema[];
     showSummary?: boolean;
   }>(),
   {
@@ -20,9 +21,10 @@ const props = withDefaults(
 
 const emit = defineEmits(["creationSuccessful"]);
 
-const options = ref<createHerdUnitOptions>({
+const options = ref<createModelOptions>({
   name: "",
   project_id: props.project.uuid,
+  schema_id: "",
 });
 
 const submitReq = async () => {
@@ -49,7 +51,7 @@ const submitReq = async () => {
 </script>
 <template>
   <div class="d-flex mb-3" v-if="props.showSummary">
-    <Icon icon="token:area" width="15%" height="100%" />
+    <Icon icon="octicon:ai-model-16" width="15%" height="100%" />
     <div class="d-flex flex-column">
       <span>Name: {{ options.name }}</span>
       <span>Project: {{ props.project?.name }}</span>
@@ -78,6 +80,19 @@ const submitReq = async () => {
           placeholder=" "
         />
       </BFormFloatingLabel>
+    </BInputGroup>
+    <BInputGroup>
+      <BInputGroupText>Select Schema</BInputGroupText>
+
+      <BFormSelect id="schema-selection" v-model="options.schema_id">
+        <option
+          v-for="schema in props.schemas"
+          :value="schema.uuid"
+          :key="schema.uuid"
+        >
+          {{ schema.name }}
+        </option>
+      </BFormSelect>
     </BInputGroup>
     <BButton type="submit" variant="primary" class="mt-auto">Submit</BButton>
   </BForm>

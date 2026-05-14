@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { type createHerdUnitOptions } from "@/modules/api/herdunits";
 import { useToast } from "bootstrap-vue-next";
 import { type apiError } from "@/modules/api/errors";
-import { Project } from "@/types/generatorobjects";
+import { Model, Project } from "@/types/generatorobjects";
+import type { createSchemaOptions } from "@/modules/api/schemas";
 
 const { create } = useToast();
 
 const props = withDefaults(
   defineProps<{
-    submitAction: (payload: createHerdUnitOptions) => Promise<void>;
+    submitAction: (payload: createSchemaOptions) => Promise<void>;
     project: Project;
+    model: Model;
     showSummary?: boolean;
   }>(),
   {
@@ -20,9 +21,10 @@ const props = withDefaults(
 
 const emit = defineEmits(["creationSuccessful"]);
 
-const options = ref<createHerdUnitOptions>({
+const options = ref<createSchemaOptions>({
   name: "",
   project_id: props.project.uuid,
+  model_id: props.model.uuid,
 });
 
 const submitReq = async () => {
@@ -37,8 +39,8 @@ const submitReq = async () => {
   });
 
   create({
-    title: `Herd Unit ${options.value.name} created successfully`,
-    body: `The Herd Unit was created successfully.`,
+    title: `Schema ${options.value.name} created successfully`,
+    body: `The Schema was created successfully.`,
     variant: "success",
     position: "bottom-start",
   });
@@ -49,10 +51,11 @@ const submitReq = async () => {
 </script>
 <template>
   <div class="d-flex mb-3" v-if="props.showSummary">
-    <Icon icon="token:area" width="15%" height="100%" />
+    <Icon icon="material-symbols:schema" width="15%" height="100%" />
     <div class="d-flex flex-column">
       <span>Name: {{ options.name }}</span>
-      <span>Project: {{ props.project?.name }}</span>
+      <span>Project: {{ props.project.name }}</span>
+      <span>Model: {{ props.model.name }}</span>
     </div>
   </div>
   <BForm
@@ -64,7 +67,11 @@ const submitReq = async () => {
     <BInputGroup>
       <template #prepend>
         <BInputGroupText>
-          <Icon icon="fluent:rename-16-regular" width="24" />
+          <Icon
+            icon="fluent:rename-16-regular"
+            fluent:rename-16-regular
+            width="24"
+          />
         </BInputGroupText>
       </template>
       <BFormFloatingLabel label="Name" label-for="name">
