@@ -93,6 +93,8 @@ The following is a collection of screenshots from pgadmin4 and the front end dat
 _A lot of users_
 
 ### Example Query output
+<img width="1920" height="936" alt="Screenshot_20260514_183131" src="https://github.com/user-attachments/assets/ed655c50-463e-4bcc-b83c-16c9cd531027" />
+_The data managmeent dashboard_
 
 ## Project Reflection
 
