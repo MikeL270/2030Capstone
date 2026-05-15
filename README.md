@@ -90,11 +90,11 @@ The following is a collection of screenshots from pgadmin4 and the front end dat
 
 ### Results of ETL pipeline 
 <img width="1651" height="882" alt="Screenshot_20260514_175745" src="https://github.com/user-attachments/assets/7da2aa6c-8d37-45bf-b47a-8973b66456b4" />
-_A lot of users_
 
 ### Example Query output
 <img width="1920" height="936" alt="Screenshot_20260514_183131" src="https://github.com/user-attachments/assets/ed655c50-463e-4bcc-b83c-16c9cd531027" />
-_The data managmeent dashboard_
+
+Note that this output is rendered in the front end. The queryies are executed by my database abstraction layer and sent to the front end by the API.
 
 ## Project Reflection
 
