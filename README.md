@@ -1,107 +1,107 @@
-## Capstone Milestone 2: ETL Prototype
-This repo holds my submission for the SDEV-2030 Capstone Milestone 2 assignment. This repo is a fork from the pronghorn-census repo becuase the submission is reliant on the greateer context of the project. I am not attempting to submit the entire repo as the pipeline, I will clearly list the relevant new code in this readme. 
+# SDEV2030 Capstone 
 
-## Data Source & Transform Notice (important)
-In order to assist you in finding what to grade, I have outlined my thinking. I worked as close to the letter of the assignment as I could. **The reflection is found at the end of this file.**
+This repository contains the ETL Prototype submission for the SDEV-2030 Capstone Milestone 2 assignment. It is a fork of the `pronghorn-census` repository, as the prototype is integrated into the broader Airial project architecture.
+
+---
+
+## Project Overview
+The goal of this project is to provide a repeatable process for deploying the AIrial software suite, and tooling for managing the data inside the system. Due to the size of the schema involved, and the scale of a fully featured system, currently the system only supports basic operations. The API supports full CRUD across most object domains, and the UI implements a sligthly smaller set of those operations. The goal is to strategically provide functionality as the need is encountered to ensure that important work is not bottlenecked by unfocused development. 
+
+This submission includes three components.
+ 1. An explicit ETL pipeline for ingesting user records from a `csv` file. The rest of the system relies on data restored from a Postgresql directory backup. This enables the system to use a hybrid of real and generated data. THis is optimal compared to attempting to demo an entire computer vision pipeline, which is the real world implementation developed by Drs Koger, and Martin, which makes use of my API to populate predictions in real time. This requries significant compute resources and time due to the complexity of convolutional neural networks. 
+ 2. An empty initial setup first run wizard that configures the system properly for use.
+ 3. A comparatively `basic` datamanagement system that supports manaing container types present in the schema. This is the core of the management system where query outputs will be most visible. This serves as a solid starting point for a more advanced implementation in the future, and addresses a common pain point found in the current production version of Airial.
 
 ### Data Source
-The data source is described as either:
-* CSV file(s)
-* API
-* Multiple files or _generated data_
+The ETL pipeline is primarily detailed in a Juptyer notebook that ingests user data into the system, this goes beyond basic insert statements, and uses generated fields like Universally Unique Identifiers to tie into SpiceDB to enable the Relational Based Access Control that enables this project to support a number of agencies. 
 
-**Important:** User generated data (input) qualifies as 'generated' data. The data caputured in the forms found in the wizard satisfy the non-trivial requirement, please keep in mind that not all complexity is immediately evident when simply interacting with the wizard.
+### Transformation Logic
+The data is transformed in several ways during ingest. Transformations include reshaping query output into more processing friendly forms, and the inclusion of derived fields like UUIDs and password hashes. The system also handles potentially invalid data, like a username that is too long. 
 
-### Transformation
-If it is not immediately obvious, the data is **NOT** just pushed into the respective tables. The pipeline flows **through the whole stack**, from user input -> validation -> authorization -> insertion -> response. This requires multiple complex steps to process / fetch required data in order to construct the final objects. For instance, the organization_id and role_ids found in the createUserOptions interface are used to make separate requests to fetch data from the database needed to create the user object. 
+---
 
-#### Where to find transformation
-Start with _'/generator_web_app/src/pages/intialSetup.vue'_, this file provides a paper trail to the various typescript modules and pinia stores used in the transformation of input. The following is a list of notable examples for transormation: 
-* **User Store:** _'/generator_web_app/src/modules/stores/userSTore.ts'_ Acts as a seam between front end components and is the central repository for data relating to users in the context of this prototype. The store resturctures data from the API, such as organizations and roles, and exposes an api contract used to interact with that data.
-* **create<object>.vue"** _'/generator_web_app/src/components/templates/create<object>.vue'_ Are vue components that take user input, validate it, then kick it back to the store in order to be sent asynchronously to the API.
-* **API Routers:** _'airial_api/app/routers/<object>.py'_ Are flask blueprints that expose the api routes used by the userStore from the front end. They call methods from _database.py_.
-* **Database.py:** _'airial_api/database/database.py'_ Is a database abstraction layer built with psycopg3 that interacts with a postgres database defined in the various compose options. This file is 3,648 lines long, I suggest you find the relevant methods by insepcting the routers and then using 'go to definition'.
-* **Data classes and Pydantic classes:** _'/airial_api/database/ojbect_models/*'_ Are a set of python scripts containing definitions for objects from the database and definitions for request bodies and query parameters. 
- 
-## Running the prototype 
-Since my prototype is directly integrated into Airial, this repo is a fork of the original project. 
+## Deployment & Setup
 
-### Requirements
+The primary system is ran by a set of compose files, depending on the intended workflow. The compose `development.compose.yml` is used for development and demonstration of a system that is already populated with data. The compose `bootstrap-dev.compose.yml` is a special compose used for testing the empty initialization flow, which includes a startup wizard that walks a user through software set up. 
 
-* **Some Computer, Somewhere:** Thanks to our microservice architecture, this tool can be hosted on one big computer, or a few smaller computers. This guide assumes you will be using one big computer. It will be up to you to alter the compose files if they wish to alter the configuration. We do not want your custom compose files, so please do not commit them back to us.
-  
-* **Podman and Podman-Compose **OR** Docker and Compose Version:**
-	* *podman: 5.7.1*
-  	* *podman-compose: 1.5.0*
-  	* *docker: 28.3.3* 
-  	* *docker compose: 2.39.1* 
+The ETL pipeline for ingesting user data is ran with a jupyter kernel. There is a requirement.txt file included with the notebook for building a virtual environment to be used as a juptyer kernel. The `development.compose.yml` compose group should be running. You can also run this pipeline with `bootstrap-dev.compose.yml`, but only after initial set up has been completed.
 
-### Secrets
+### System Requirements
+* **Hardware:** This tool is designed with a microservice architecture and can be hosted on a single machine or distributed across multiple nodes.
+* **Container Orchestration:**
+    * **Podman:** version 5.7.1+ (with Podman-Compose 1.5.0+)
+    * **Docker:** version 28.3.3+ (with Docker Compose 2.39.1+)
 
-Below is a list of *secrets* that must be provided to the application in order for it work correctly. These secrets should be placed inside of a *.env* file in the same directory as the compose files. These secrets must either sourced or produced by the end user for their instance of the application. Note that the entirety of this application can be hosted on-prem, in the cloud, or in a hybrid structure, where you choose to host components will determine how you source quite a few of these secrets. 
+### Environment Configuration (Secrets)
+Create a `.env` file in the root directory with the following variables:
 
-* **APPLICATION_URL** -- This is the url the application will be served from. 
+* `APPLICATION_URL`: The base URL for the application.
+* `ORIGIN_URL`: This key determies the allowed host for `CORS`.
+* `SECRET_KEY`: A unique, high-entropy string used for cryptographic signing and CSRF protection.
+* `VALKEY_HOST`: The URL or container name for the Valkey instance.
+* `VALKEY_PASS`: Access password for the Valkey cache.
+* `DB_HOST`: The URL or container name for the PostgreSQL database.
+* `DB_USER`: Database username for API access.
+* `DB_PASS`: Password for the database user.
+* `DB_NAME`: Name of the PostgreSQL database.
+* `AWS_ENDPOINT_URL_S3`: URL for the S3-compliant object storage provider.
+* `AWS_ACCESS_KEY_ID`: Storage provider access key.
+* `AWS_SECRET_ACCESS_KEY`: Storage provider secret key.
+* `SESSION_COOKIE_SAMESITE`: Should be `Lax` for testing, and `Strict` for production.
+* `SESSION_COOKIE_SECURE`: Should be `false` for development mode, and `true` in production.
+* `SESSION_PERMANENT`: Ultimately up to your organizations policy.
+* `SPICEDB_GRPC_LOGLEVEL`: Set to 'debug' for testing.
+* `SPICEDB_DATASTORE_ENGINE`: This project uses postgres for spicedb's datastore.
+* `SPICEDB_DATASTORE_CONN_URI`: The URI for spicedb to be able to talk to its datastore.
+* `SPICEDB_GRPC_PRESHARED_KEY`: Do not share this with anyone. This key is used to authorize access to spicedb.
+* `SPICE_URL`: Usually `localhost:50051` is sufficient. Spicedb should not be accessible external to the server, unless you are deploying across several different computers. 
 
-* **SECRET_KEY** -- The secret key is used by *flask_session* to cryptographically sign user session tokens to protect against common types of attacks such as Cross Site Request Forgery (CSRF) and ensure *cookie* integrity. This key is simply a unique, random string with a high degree of *entropy* that should not be reused between deployments. Reccomending a source to generate this key would be counter productive, and eventually we will implement a system for auto-generating this key for you.
-  
-* **VALKEY_HOST** -- The valkey host secret stores the URL for the valkey instance. If your database is one of the containers then you can simply use the name of the container. 
+---
 
-* **VALKEY_PASS** -- The valkey pass is used to control access to the cache server. Even if your valkey cache is on-prem it is still important to keep it secure.
+## Local Development Setup
 
-* **AWS_ENDPOINT_S3** -- This secret stores the URL for your S3 compliant object storage provider of choice. Note that you are not required to use AWS, but you can if you want to.
+To facilitate testing and contributions, a containerized environment is provided that simulates the enterprise architecture on a single host. An internet connection is required to access the sample imagery dataset. 
 
-* **DB_HOST** -- This secret stores the URL for the postgres database. If your database is one of the containers then you can simply use the name of the container.
+> **Note for Windows/macOS Users:** A virtualization-capable system is required. Intel-based Mac users are encouraged to use Docker due to known compatibility issues with Podman machine stability on those platforms.
 
-* **DB_USER** -- This is the user in the database that will be used by the API to access data.
+### Running the Environment
+Ensure your `.env` file is populated before running these commands.
 
-* **DB_PASS** -- This is the password associated with the above user.
-
-* **DB_NAME** -- This is the name of the database.
-
-* **AWS_ACCESS_KEY_ID** -- This is a key provided by your S3 compliant storage provider.
-
-* **AWS_SECRET_ACCESS_KEY** -- This is another key provided by your S3 compliant storage provider. 
-
-## Local development mode set up
-
-Airial is designed to be ran in an enterprise environment consisting of multiple servers, this is largely due to the sheer volume of data its designed to handle. In order to scale out who can test and contribute to our software we have produced a set of containers built to be ran on a single host. Note that an internet connection is still required as we determined virtualizing a ceph cluster on the average laptop would somewhat- entirely futile. To get around this we have made a publicly accessible sampleset of imagery and a directory archive of a database relevant to those images available publicly. 
-
-To run the local dev environment you must have a container orchestration tool installed on your system. The reccomended container orchestration platform is Podman with Podman-Compose. However, note that there currently is an issue on intel based macbooks that cause the podman machine to hang indefinitey, so intel mac users are reccomended to use docker. The commands are the same for both tool. Note that for both windows and macOS users a virtualization capable computer is required since those operating systems still do not support native containerization. 
-
-After cloning down the repository, **you must create and populate a .env file in the root of the directory. Failrue to do so will result in a non functional prototype due to user error.** 
-
-Once you have a propperly populated .env file standing up the system should go off without a hitch. 
-
-### Linux & Applie Silicon Mac systems running Podman
-
+**Linux & Apple Silicon (Podman):**
 ```sh
-	podman compose --f bootstrap-dev.compose.yml up -d
+podman compose -f bootstrap-dev.compose.yml up -d
 ```
 
-### Intel based Mac systems running Docker
-
+**Intel-based Mac (Docker):**
 ```sh
-	docker compose --f bootstrap-dev.compose.yml up -d
+docker compose -f bootstrap-dev.compose.yml up -d
 ```
 
-### Windows system 
-
-**Important:** _Windows may automatically convert the restore.sh script in the local_db directory to use **CRLF** insead of **LF** ensure that this file is restored to use **LF** or never converted at all. Additional for some reason Windows podman's file flag uses one dash instead of two._
-
+**Windows (Podman):**
+*Note: Ensure the `restore.sh` script in `local_db` uses **LF** line endings.*
 ```powershell
-	podman compose -f bootstrap-dev.compose.yml up -d
+podman compose -f bootstrap-dev.compose.yml up -d
 ```
 
-## Reflection
+---
 
-### What part of your pipeline is currently working?
-The first few steps of the initial set up wizard, creating a super user, creating an organization, and then creating an admin for that organization. The whole pipeline for these steps is fully integrated.
+## Sample Output
+The following is a collection of screenshots from pgadmin4 and the front end datamanagement system that shows query output and the results of transformation.
 
-### What parts are incomplete or simplified?
-Right now the wizard is not fully complete. This is because of assignments like this that force us to rush our work and rob us of our weekends. The rest of the wizard will be completed for the full submission. 
+### Results of ETL pipeline 
+<img width="1651" height="882" alt="Screenshot_20260514_175745" src="https://github.com/user-attachments/assets/7da2aa6c-8d37-45bf-b47a-8973b66456b4" />
+_A lot of users_
 
-### What challenges did you encounter?
-Tight deadlines. This assignment being given alongside the regular weekend slogfest made it incredibly difficult with long hours to build anything. I am sure this assignment is justified as being "for my benefit," but the amount of caffiene I had to consume to meet this deadline had a non trivial impact on my health. The fact that working a national lab this summer feels relaxxing compared to these stress-tumor inducing weekend crams is seriously disturbing. 
+### Example Query output
 
-### What are your next steps before the final submission?
-Next steps include polishing the existing steps as well as creating the last few steps in the wizard. After that I will create the data manager interface that must be graded in the traditional development mode with propper access ARCC s3. The multi org structure of the system makes this a challenging, multifaceted task.
+## Project Reflection
+
+### Current Status
+I am submitting a "good enough" version of my datamanagement vision that still falls short of complete. It is missing a number of featues that will greatly improve front end performance and development experience. 
+
+### Incomplete or Simplified Elements
+The data management interface is missing elements like update controls, and searching. I would additionaly like to explore data dependence via a graph visualization using D3, and retrofit my frotend stores to improve performance and decrease memory usage. `ProjectStore.ts` has become bloated in comparison to the more simple and much faster and much newer `cropVerifierStore.ts`. I would like to create a universal framework to support undo and redo behavior across the different layers of my system.  
+
+### Challenges Encountered
+The primary challenge came from reconciling the state of the database with SpiceDB for authorization. This applies to the ETL pipeline present in this submission, and to the other pipelines such as prediction creation. An API that can keep up with a GH200 GPU is not an easy feat. My future work at Argonne National Laboratory will see me attempting to better "feed the beast" to the point that my API becomes the bottleneck.
+
