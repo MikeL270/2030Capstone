@@ -18,6 +18,10 @@ The ETL pipeline is primarily detailed in a Juptyer notebook that ingests user d
 ### Transformation Logic
 The data is transformed in several ways during ingest. Transformations include reshaping query output into more processing friendly forms, and the inclusion of derived fields like UUIDs and password hashes. The system also handles potentially invalid data, like a username that is too long. 
 
+### SChema ERD
+<img width="2027" height="1650" alt="Pronghorn " src="https://github.com/user-attachments/assets/9202016f-909d-4fec-bc19-7087c93d23d8" />
+
+
 ---
 
 ## Deployment & Setup
